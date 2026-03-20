@@ -1,0 +1,27 @@
+[package]
+name = "fourdeers"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "fourdeers"
+path = "src/main.rs"
+
+[dependencies]
+egui = "0.33"
+nalgebra = "0.33"
+bytemuck = { version = "1.15", features = ["derive"] }
+
+# Platform-specific dependencies
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+console_error_panic_hook = "0.1"
+getrandom = { version = "0.2", features = ["js"] }
+web-sys = { version = "0.3", features = ["Window", "Document", "HtmlCanvasElement", "Element"] }
+
+[dependencies.eframe]
+version = "0.33"
