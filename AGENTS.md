@@ -8,6 +8,7 @@
 
 ## Agent Behavior
 
+* If there is any ambiguity in the interpretation of a user request, ask the user. Do not assume anything if you are not sure or need more details.
 * Never guess. Think through issues, read documentation and existing code.
 * If documentation is missing, try installing it or ask the user for help.
 
@@ -19,7 +20,8 @@
 * Write small functions that ideally fit on a single screen.
 * Avoid deep nesting, use more helper functions instead.
 
-* Avoid code duplication, factor out a common function instead.
+* Avoid data duplication, all constants like numeric values and strings and use the constant variable.
+* Avoid code duplication, factor out a common function instead
 * Before writing any new non-trivial code, check whether similar functionality already exists.
 * Always try to write code that can be cleanly reused in a different context.
 
