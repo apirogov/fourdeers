@@ -4,7 +4,9 @@ pub mod app;
 pub mod camera;
 pub mod geometry;
 pub mod input;
+pub mod rotation4d;
 pub mod state;
+pub mod tetrahedron;
 pub mod ui;
 
 #[cfg(target_arch = "wasm32")]

@@ -5,14 +5,15 @@ use nalgebra::Vector3;
 
 use crate::geometry::{apply_so4_rotation, create_tesseract, Vertex4D};
 use crate::input::Zone;
-use crate::state::AppState;
+use crate::state::{AppState, TetraId};
+use crate::tetrahedron::{get_tetrahedron_layout, TetrahedronGadget, ZoneDirection};
 
 /// Draw the control panel
 pub fn draw_controls(ui: &mut egui::Ui, state: &mut AppState, on_close: impl FnOnce()) {
     ui.horizontal(|ui| {
-        ui.heading("🦌 FourDeers");
+        ui.heading("FourDeers");
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if ui.button("✕").on_hover_text("Close sidebar").clicked() {
+            if ui.button("X").on_hover_text("Close sidebar").clicked() {
                 on_close();
             }
         });
@@ -249,8 +250,8 @@ pub fn render_visualization(ui: &mut egui::Ui, state: &mut AppState, rect: egui:
 
     let ctx = prepare_render_context(state);
 
-    render_eye_view(ui, &ctx, left_rect, -1.0);
-    render_eye_view(ui, &ctx, right_rect, 1.0);
+    render_eye_view(ui, &ctx, left_rect, -1.0, true);
+    render_eye_view(ui, &ctx, right_rect, 1.0, false);
 
     if state.show_debug {
         draw_debug_overlay(ui, state, left_rect, right_rect);
@@ -274,8 +275,8 @@ struct RenderContext<'a> {
     sin_zw: f32,
     cos_zw: f32,
     inv_orientation: nalgebra::UnitQuaternion<f32>,
-    w_slice_center: f32,
     w_half: f32,
+    camera_4d_rotation_inverse: crate::rotation4d::Rotation4D,
 }
 
 fn prepare_render_context(state: &AppState) -> RenderContext<'_> {
@@ -289,8 +290,8 @@ fn prepare_render_context(state: &AppState) -> RenderContext<'_> {
     let (sin_zw, cos_zw) = state.rot_zw.sin_cos();
 
     let inv_orientation = state.camera.orientation.inverse();
-    let w_slice_center = state.camera.w;
     let w_half = state.w_thickness * 0.5;
+    let camera_4d_rotation_inverse = state.camera.rotation_4d.inverse();
 
     RenderContext {
         state,
@@ -309,8 +310,8 @@ fn prepare_render_context(state: &AppState) -> RenderContext<'_> {
         sin_zw,
         cos_zw,
         inv_orientation,
-        w_slice_center,
         w_half,
+        camera_4d_rotation_inverse,
     }
 }
 
@@ -406,6 +407,7 @@ fn render_eye_view(
     ctx: &RenderContext<'_>,
     view_rect: egui::Rect,
     eye_sign: f32,
+    is_left_view: bool,
 ) {
     let center = view_rect.center();
     let scale = view_rect.height().min(view_rect.width()) * 0.35;
@@ -414,8 +416,10 @@ fn render_eye_view(
     let painter = ui.painter().with_clip_rect(view_rect);
 
     render_tesseract_edges(&painter, ctx, center, scale, eye_offset);
-    render_axes_widget(&painter, ctx, view_rect);
-    render_position_label(&painter, ctx.state, view_rect);
+    if ctx.state.show_debug {
+        render_zone_labels(&painter, ctx, view_rect, is_left_view);
+    }
+    render_tetrahedron_gadget(&painter, ctx, view_rect, is_left_view);
 }
 
 fn render_tesseract_edges(
@@ -433,7 +437,7 @@ fn render_tesseract_edges(
         let v0 = &ctx.vertices[chunk[0] as usize];
         let v1 = &ctx.vertices[chunk[1] as usize];
 
-        let p0_4d = apply_so4_rotation(
+        let p0_object = apply_so4_rotation(
             v0.position,
             ctx.sin_xy,
             ctx.cos_xy,
@@ -448,7 +452,7 @@ fn render_tesseract_edges(
             ctx.sin_zw,
             ctx.cos_zw,
         );
-        let p1_4d = apply_so4_rotation(
+        let p1_object = apply_so4_rotation(
             v1.position,
             ctx.sin_xy,
             ctx.cos_xy,
@@ -464,10 +468,26 @@ fn render_tesseract_edges(
             ctx.cos_zw,
         );
 
-        let w0_in_slice = p0_4d.w >= ctx.w_slice_center - ctx.w_half
-            && p0_4d.w <= ctx.w_slice_center + ctx.w_half;
-        let w1_in_slice = p1_4d.w >= ctx.w_slice_center - ctx.w_half
-            && p1_4d.w <= ctx.w_slice_center + ctx.w_half;
+        let p0_world = p0_object
+            - nalgebra::Vector4::new(
+                ctx.state.camera.x,
+                ctx.state.camera.y,
+                ctx.state.camera.z,
+                ctx.state.camera.w,
+            );
+        let p1_world = p1_object
+            - nalgebra::Vector4::new(
+                ctx.state.camera.x,
+                ctx.state.camera.y,
+                ctx.state.camera.z,
+                ctx.state.camera.w,
+            );
+
+        let p0_4d = ctx.camera_4d_rotation_inverse.rotate_vector(p0_world);
+        let p1_4d = ctx.camera_4d_rotation_inverse.rotate_vector(p1_world);
+
+        let w0_in_slice = p0_4d.w >= -ctx.w_half && p0_4d.w <= ctx.w_half;
+        let w1_in_slice = p1_4d.w >= -ctx.w_half && p1_4d.w <= ctx.w_half;
 
         if !w0_in_slice && !w1_in_slice {
             continue;
@@ -500,16 +520,8 @@ fn project_edge_points(
     scale: f32,
     eye_offset: f32,
 ) -> (Option<egui::Pos2>, Option<egui::Pos2>) {
-    let p0_rel = Vector3::new(
-        p0_4d.x - ctx.state.camera.x,
-        p0_4d.y - ctx.state.camera.y,
-        p0_4d.z - ctx.state.camera.z,
-    );
-    let p1_rel = Vector3::new(
-        p1_4d.x - ctx.state.camera.x,
-        p1_4d.y - ctx.state.camera.y,
-        p1_4d.z - ctx.state.camera.z,
-    );
+    let p0_rel = Vector3::new(p0_4d.x, p0_4d.y, p0_4d.z);
+    let p1_rel = Vector3::new(p1_4d.x, p1_4d.y, p1_4d.z);
 
     let p0_cam = ctx.inv_orientation.transform_vector(&p0_rel);
     let p1_cam = ctx.inv_orientation.transform_vector(&p1_rel);
@@ -542,61 +554,361 @@ fn project_edge_points(
     (s0, s1)
 }
 
-fn render_axes_widget(painter: &egui::Painter, ctx: &RenderContext<'_>, view_rect: egui::Rect) {
-    let gadget_pos = egui::Pos2::new(view_rect.center().x, view_rect.max.y - 60.0);
-    let gadget_scale = 30.0;
+fn render_zone_labels(
+    painter: &egui::Painter,
+    ctx: &RenderContext<'_>,
+    view_rect: egui::Rect,
+    is_left_view: bool,
+) {
+    let basis = ctx.state.camera.rotation_4d.basis_vectors();
+    let layout = get_tetrahedron_layout(view_rect);
+    let offset = layout.edge_offset;
 
-    let axes = [
-        (
-            [1.0f32, 0.0, 0.0],
-            egui::Color32::from_rgb(255, 80, 80),
-            "X",
-        ),
-        (
-            [0.0f32, 1.0, 0.0],
-            egui::Color32::from_rgb(80, 255, 80),
-            "Y",
-        ),
-        (
-            [0.0f32, 0.0, 1.0],
-            egui::Color32::from_rgb(80, 150, 255),
-            "Z",
-        ),
-    ];
+    let labels = if is_left_view {
+        [
+            (
+                "↑",
+                format_4d_vector_compact(basis[1]),
+                "Up",
+                view_rect.center().x,
+                view_rect.min.y + offset * 0.5,
+            ),
+            (
+                "↓",
+                format_4d_vector_compact(neg_vec(basis[1])),
+                "Down",
+                view_rect.center().x,
+                view_rect.max.y - offset * 0.7,
+            ),
+            (
+                "←",
+                format_4d_vector_compact(neg_vec(basis[0])),
+                "Left",
+                view_rect.min.x + offset * 0.5,
+                view_rect.center().y,
+            ),
+            (
+                "→",
+                format_4d_vector_compact(basis[0]),
+                "Right",
+                view_rect.max.x - offset * 0.4,
+                view_rect.center().y,
+            ),
+        ]
+    } else {
+        [
+            (
+                "↑",
+                format_4d_vector_compact(basis[2]),
+                "Fwd",
+                view_rect.center().x,
+                view_rect.min.y + offset * 0.5,
+            ),
+            (
+                "↓",
+                format_4d_vector_compact(neg_vec(basis[2])),
+                "Back",
+                view_rect.center().x,
+                view_rect.max.y - offset * 0.7,
+            ),
+            (
+                "←",
+                format_4d_vector_compact(basis[3]),
+                "W+",
+                view_rect.min.x + offset * 0.5,
+                view_rect.center().y,
+            ),
+            (
+                "→",
+                format_4d_vector_compact(neg_vec(basis[3])),
+                "W-",
+                view_rect.max.x - offset * 0.4,
+                view_rect.center().y,
+            ),
+        ]
+    };
 
-    for (axis, color, label) in axes {
-        let world_axis = Vector3::new(axis[0], axis[1], axis[2]);
-        let rotated_axis = ctx.inv_orientation.transform_vector(&world_axis);
-
-        let p_end = egui::Pos2::new(
-            gadget_pos.x + rotated_axis.x * gadget_scale,
-            gadget_pos.y - rotated_axis.y * gadget_scale,
-        );
-
-        painter.line_segment([gadget_pos, p_end], egui::Stroke::new(4.0, color));
+    for (symbol, vector, action, x, y) in labels {
+        let pos = egui::Pos2::new(x, y);
+        let text = format!("{}\n{}\n{}", symbol, action, vector);
         painter.text(
-            p_end,
+            pos,
             egui::Align2::CENTER_CENTER,
-            label,
-            egui::FontId::proportional(14.0),
-            color,
+            text,
+            egui::FontId::proportional(10.0),
+            egui::Color32::from_rgba_unmultiplied(200, 200, 200, 150),
         );
     }
 }
 
-fn render_position_label(painter: &egui::Painter, state: &AppState, view_rect: egui::Rect) {
-    let pos_label_y = view_rect.max.y - 60.0 + 30.0 + 20.0;
-    let pos_label = egui::Pos2::new(view_rect.center().x, pos_label_y);
-    painter.text(
-        pos_label,
-        egui::Align2::CENTER_CENTER,
-        format!(
-            "X:{:.1} Y:{:.1} Z:{:.1} W:{:.1}",
-            state.camera.x, state.camera.y, state.camera.z, state.camera.w
-        ),
-        egui::FontId::proportional(12.0),
-        egui::Color32::from_rgb(255, 200, 100),
+fn render_single_tetrahedron(
+    painter: &egui::Painter,
+    vector_4d: nalgebra::Vector4<f32>,
+    zone_dir: ZoneDirection,
+    center_x: f32,
+    center_y: f32,
+    user_rotation: nalgebra::UnitQuaternion<f32>,
+    scale: f32,
+) {
+    let gadget = TetrahedronGadget::for_zone(vector_4d, zone_dir, user_rotation, scale);
+
+    for edge in &gadget.edges {
+        let v0_idx = edge.vertex_indices[0];
+        let v1_idx = edge.vertex_indices[1];
+
+        if let (Some(pos0), Some(pos1)) = (
+            gadget.get_vertex_screen_pos(v0_idx, center_x, center_y),
+            gadget.get_vertex_screen_pos(v1_idx, center_x, center_y),
+        ) {
+            let p0 = egui::Pos2::new(pos0.0, pos0.1);
+            let p1 = egui::Pos2::new(pos1.0, pos1.1);
+            painter.line_segment(
+                [p0, p1],
+                egui::Stroke::new(
+                    1.5,
+                    egui::Color32::from_rgba_unmultiplied(150, 220, 150, 180),
+                ),
+            );
+        }
+    }
+
+    let component_mags: [f32; 4] = gadget.component_values.map(|v| v.abs());
+    let max_mag = component_mags.iter().cloned().fold(0.0f32, f32::max);
+
+    for (i, vertex) in gadget.vertices.iter().enumerate() {
+        let component = gadget.component_values[i];
+        let color = crate::tetrahedron::compute_component_color(component, max_mag);
+        let egui_color = color.to_egui_color();
+
+        if let Some(pos) = gadget.get_vertex_screen_pos(i, center_x, center_y) {
+            let screen_pos = egui::Pos2::new(pos.0, pos.1);
+            let font_id = egui::FontId::proportional(14.0);
+            let outline_color = egui::Color32::from_rgba_unmultiplied(0, 0, 0, 180);
+
+            painter.text(
+                screen_pos + egui::Vec2::new(0.5, 0.5),
+                egui::Align2::CENTER_CENTER,
+                &vertex.label,
+                font_id.clone(),
+                outline_color,
+            );
+            painter.text(
+                screen_pos + egui::Vec2::new(-0.5, -0.5),
+                egui::Align2::CENTER_CENTER,
+                &vertex.label,
+                font_id.clone(),
+                outline_color,
+            );
+            painter.text(
+                screen_pos,
+                egui::Align2::CENTER_CENTER,
+                &vertex.label,
+                font_id,
+                egui_color,
+            );
+        }
+
+        if let Some(label_pos) = gadget.get_vertex_label_pos(i, center_x, center_y, 20.0) {
+            let value_text = crate::tetrahedron::format_component_value(component);
+            let value_pos = egui::Pos2::new(label_pos.0, label_pos.1);
+            let font_id = egui::FontId::monospace(10.0);
+            let outline_color = egui::Color32::from_rgba_unmultiplied(0, 0, 0, 160);
+            let text_color = egui::Color32::from_rgba_unmultiplied(230, 230, 230, 255);
+
+            painter.text(
+                value_pos + egui::Vec2::new(0.5, 0.5),
+                egui::Align2::CENTER_CENTER,
+                &value_text,
+                font_id.clone(),
+                outline_color,
+            );
+            painter.text(
+                value_pos + egui::Vec2::new(-0.5, -0.5),
+                egui::Align2::CENTER_CENTER,
+                &value_text,
+                font_id.clone(),
+                outline_color,
+            );
+            painter.text(
+                value_pos,
+                egui::Align2::CENTER_CENTER,
+                &value_text,
+                font_id,
+                text_color,
+            );
+        }
+    }
+
+    let arrow_start = egui::Pos2::new(center_x, center_y);
+    let arrow_end_pos = gadget.get_arrow_screen_pos(center_x, center_y);
+    let arrow_end = egui::Pos2::new(arrow_end_pos.0, arrow_end_pos.1);
+
+    let arrow_vec = arrow_end - arrow_start;
+    if arrow_vec.length() > 1e-3 {
+        painter.line_segment(
+            [arrow_start, arrow_end],
+            egui::Stroke::new(2.0, egui::Color32::from_rgb(255, 150, 50)),
+        );
+
+        let arrow_head_size = gadget.vector_arrow.arrow_head_size * 15.0;
+        if arrow_vec.length() > arrow_head_size {
+            let dir = arrow_vec.normalized();
+            let perp = egui::Vec2::new(-dir.y, dir.x);
+
+            let arrow_tip = arrow_end;
+            let arrow_base = arrow_end - dir * arrow_head_size;
+            let arrow_left = arrow_base + perp * (arrow_head_size * 0.5);
+            let arrow_right = arrow_base - perp * (arrow_head_size * 0.5);
+
+            painter.add(egui::Shape::convex_polygon(
+                vec![arrow_tip, arrow_left, arrow_right],
+                egui::Color32::from_rgb(255, 150, 50),
+                egui::Stroke::NONE,
+            ));
+        }
+    }
+
+    painter.circle_filled(
+        arrow_start,
+        2.0,
+        egui::Color32::from_rgba_unmultiplied(255, 150, 50, 180),
     );
+
+    if let Some(ref label) = gadget.tip_label {
+        let tip_offset = egui::Vec2::new(0.0, -12.0);
+        let label_pos = arrow_end + tip_offset;
+        painter.text(
+            label_pos,
+            egui::Align2::CENTER_BOTTOM,
+            label,
+            egui::FontId::proportional(10.0),
+            egui::Color32::from_rgb(255, 200, 100),
+        );
+    } else if arrow_vec.length() > 1e-3 {
+        painter.circle_filled(arrow_end, 3.0, egui::Color32::from_rgb(255, 150, 50));
+    }
+}
+
+fn zone_to_direction(zone: Zone) -> ZoneDirection {
+    match zone {
+        Zone::North => ZoneDirection::Up,
+        Zone::South => ZoneDirection::Down,
+        Zone::West => ZoneDirection::Left,
+        Zone::East => ZoneDirection::Right,
+    }
+}
+
+fn render_tetrahedron_gadget(
+    painter: &egui::Painter,
+    ctx: &RenderContext<'_>,
+    view_rect: egui::Rect,
+    is_left_view: bool,
+) {
+    let basis = ctx.state.camera.rotation_4d.basis_vectors();
+    let layout = get_tetrahedron_layout(view_rect);
+    let offset = layout.edge_offset;
+
+    let tetrahedra: Vec<(nalgebra::Vector4<f32>, Zone, f32, f32)> = if is_left_view {
+        vec![
+            (
+                nalgebra::Vector4::from(basis[1]),
+                Zone::North,
+                view_rect.center().x,
+                view_rect.min.y + offset,
+            ),
+            (
+                nalgebra::Vector4::from(neg_vec(basis[1])),
+                Zone::South,
+                view_rect.center().x,
+                view_rect.max.y - offset,
+            ),
+            (
+                nalgebra::Vector4::from(neg_vec(basis[0])),
+                Zone::West,
+                view_rect.min.x + offset,
+                view_rect.center().y,
+            ),
+            (
+                nalgebra::Vector4::from(basis[0]),
+                Zone::East,
+                view_rect.max.x - offset,
+                view_rect.center().y,
+            ),
+        ]
+    } else {
+        vec![
+            (
+                nalgebra::Vector4::from(basis[2]),
+                Zone::North,
+                view_rect.center().x,
+                view_rect.min.y + offset,
+            ),
+            (
+                nalgebra::Vector4::from(neg_vec(basis[2])),
+                Zone::South,
+                view_rect.center().x,
+                view_rect.max.y - offset,
+            ),
+            (
+                nalgebra::Vector4::from(neg_vec(basis[3])),
+                Zone::West,
+                view_rect.min.x + offset,
+                view_rect.center().y,
+            ),
+            (
+                nalgebra::Vector4::from(basis[3]),
+                Zone::East,
+                view_rect.max.x - offset,
+                view_rect.center().y,
+            ),
+        ]
+    };
+
+    for (vector_4d, zone, x, y) in tetrahedra {
+        let tetra_id = TetraId { is_left_view, zone };
+        let user_rotation = ctx.state.get_tetrahedron_rotation(tetra_id);
+        let zone_dir = zone_to_direction(zone);
+
+        render_single_tetrahedron(
+            painter,
+            vector_4d,
+            zone_dir,
+            x,
+            y,
+            user_rotation,
+            layout.scale,
+        );
+    }
+}
+
+fn neg_vec(v: [f32; 4]) -> [f32; 4] {
+    [-v[0], -v[1], -v[2], -v[3]]
+}
+
+fn format_4d_vector_compact(v: [f32; 4]) -> String {
+    let components: [(f32, &str); 4] = [(v[0], "X"), (v[1], "Y"), (v[2], "Z"), (v[3], "W")];
+
+    let parts: Vec<String> = components
+        .iter()
+        .filter(|(val, _)| val.abs() >= 0.05)
+        .map(|(val, axis)| {
+            if val.abs() < 0.05 {
+                String::new()
+            } else if (val - 1.0).abs() < 0.05 {
+                format!("+{}", axis)
+            } else if (val + 1.0).abs() < 0.05 {
+                format!("-{}", axis)
+            } else {
+                format!("{:+.1}{}", val, axis)
+            }
+        })
+        .collect();
+
+    if parts.is_empty() {
+        "0".to_string()
+    } else {
+        parts.join(" ")
+    }
 }
 
 fn draw_debug_overlay(

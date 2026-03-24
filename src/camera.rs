@@ -2,18 +2,19 @@
 
 use nalgebra::{UnitQuaternion, Vector3};
 
-/// First-person camera state
+use crate::rotation4d::{Rotation4D, RotationPlane};
+
+/// First-person camera state with 4D orientation
 pub struct Camera {
-    // Position in 3D space (4th dimension W is handled separately)
     pub x: f32,
     pub y: f32,
     pub z: f32,
 
-    // Orientation as quaternion
     pub orientation: UnitQuaternion<f32>,
 
-    // W-slice position (4th dimension)
     pub w: f32,
+
+    pub rotation_4d: Rotation4D,
 }
 
 impl Default for Camera {
@@ -24,6 +25,7 @@ impl Default for Camera {
             z: -5.0,
             orientation: UnitQuaternion::identity(),
             w: 0.0,
+            rotation_4d: Rotation4D::identity(),
         }
     }
 }
@@ -39,6 +41,7 @@ impl Camera {
         self.z = -5.0;
         self.orientation = UnitQuaternion::identity();
         self.w = 0.0;
+        self.rotation_4d = Rotation4D::identity();
     }
 
     /// Forward vector in world space (direction camera is looking)
@@ -109,6 +112,101 @@ impl Camera {
         let pitch_rot = UnitQuaternion::from_axis_angle(&Vector3::x_axis(), pitch);
         self.orientation = yaw_rot * pitch_rot;
     }
+
+    pub fn rotate_4d(&mut self, delta_x: f32, delta_y: f32) {
+        let tilt_zw = Rotation4D::from_plane_angle(RotationPlane::ZW, -delta_x * 0.005);
+        let tilt_yw = Rotation4D::from_plane_angle(RotationPlane::YW, delta_y * 0.005);
+        let delta_rot = tilt_zw.then(&tilt_yw);
+        self.rotation_4d = delta_rot.then(&self.rotation_4d);
+    }
+
+    pub fn tilt_slice_up(&mut self, amount: f32) {
+        let tilt = Rotation4D::from_plane_angle(RotationPlane::YW, amount * 0.02);
+        self.rotation_4d = tilt.then(&self.rotation_4d);
+    }
+
+    pub fn tilt_slice_down(&mut self, amount: f32) {
+        let tilt = Rotation4D::from_plane_angle(RotationPlane::YW, -amount * 0.02);
+        self.rotation_4d = tilt.then(&self.rotation_4d);
+    }
+
+    pub fn tilt_slice_left(&mut self, amount: f32) {
+        let tilt = Rotation4D::from_plane_angle(RotationPlane::ZW, amount * 0.02);
+        self.rotation_4d = tilt.then(&self.rotation_4d);
+    }
+
+    pub fn tilt_slice_right(&mut self, amount: f32) {
+        let tilt = Rotation4D::from_plane_angle(RotationPlane::ZW, -amount * 0.02);
+        self.rotation_4d = tilt.then(&self.rotation_4d);
+    }
+
+    pub fn get_4d_basis(&self) -> [[f32; 4]; 4] {
+        self.rotation_4d.basis_vectors()
+    }
+
+    pub fn get_slice_w_axis(&self) -> [f32; 4] {
+        self.rotation_4d.basis_w()
+    }
+
+    pub fn is_slice_tilted(&self) -> bool {
+        !self.rotation_4d.is_pure_3d()
+    }
+
+    pub fn get_4d_direction_label(&self, direction: SliceDirection) -> String {
+        let basis = self.rotation_4d.basis_vectors();
+        let v = match direction {
+            SliceDirection::Forward => basis[2],
+            SliceDirection::Backward => [-basis[2][0], -basis[2][1], -basis[2][2], -basis[2][3]],
+            SliceDirection::Left => [-basis[0][0], -basis[0][1], -basis[0][2], -basis[0][3]],
+            SliceDirection::Right => basis[0],
+            SliceDirection::Up => basis[1],
+            SliceDirection::Down => [-basis[1][0], -basis[1][1], -basis[1][2], -basis[1][3]],
+            SliceDirection::WPositive => basis[3],
+            SliceDirection::WNegative => [-basis[3][0], -basis[3][1], -basis[3][2], -basis[3][3]],
+        };
+        format_4d_vector(v)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SliceDirection {
+    Forward,
+    Backward,
+    Left,
+    Right,
+    Up,
+    Down,
+    WPositive,
+    WNegative,
+}
+
+fn format_4d_vector(v: [f32; 4]) -> String {
+    fn fmt_comp(val: f32) -> String {
+        if val.abs() < 0.01 {
+            String::new()
+        } else if (val - 1.0).abs() < 0.01 {
+            "+".to_string()
+        } else if (val + 1.0).abs() < 0.01 {
+            "-".to_string()
+        } else {
+            format!("{:+.2}", val)
+        }
+    }
+    let parts: Vec<String> = [
+        (fmt_comp(v[0]), "X"),
+        (fmt_comp(v[1]), "Y"),
+        (fmt_comp(v[2]), "Z"),
+        (fmt_comp(v[3]), "W"),
+    ]
+    .iter()
+    .filter(|(comp, _)| !comp.is_empty())
+    .map(|(comp, axis)| format!("{}{}", comp, axis))
+    .collect();
+    if parts.is_empty() {
+        "0".to_string()
+    } else {
+        parts.join(" ")
+    }
 }
 
 #[cfg(test)]
@@ -128,6 +226,7 @@ mod tests {
         assert_eq!(camera.z, -5.0);
         assert_eq!(camera.orientation, UnitQuaternion::identity());
         assert_eq!(camera.w, 0.0);
+        assert!(camera.rotation_4d.is_pure_3d());
     }
 
     #[test]
@@ -138,6 +237,7 @@ mod tests {
         camera.z = 30.0;
         camera.orientation = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), 1.0);
         camera.w = 3.0;
+        camera.rotation_4d = Rotation4D::from_plane_angle(RotationPlane::XW, 0.5);
 
         camera.reset();
 
@@ -146,6 +246,7 @@ mod tests {
         assert_eq!(camera.z, -5.0);
         assert_eq!(camera.orientation, UnitQuaternion::identity());
         assert_eq!(camera.w, 0.0);
+        assert!(camera.rotation_4d.is_pure_3d());
     }
 
     #[test]
@@ -156,6 +257,7 @@ mod tests {
             z: 0.0,
             orientation: UnitQuaternion::identity(),
             w: 0.0,
+            rotation_4d: Rotation4D::identity(),
         };
 
         let forward = camera.forward_vector();
@@ -172,6 +274,7 @@ mod tests {
             z: 0.0,
             orientation: UnitQuaternion::identity(),
             w: 0.0,
+            rotation_4d: Rotation4D::identity(),
         };
 
         let right = camera.right_vector();
@@ -188,6 +291,7 @@ mod tests {
             z: 0.0,
             orientation: UnitQuaternion::identity(),
             w: 0.0,
+            rotation_4d: Rotation4D::identity(),
         };
 
         let up = camera.up_vector();
@@ -205,6 +309,7 @@ mod tests {
             z: 0.0,
             orientation: UnitQuaternion::from_axis_angle(&Vector3::y_axis(), PI / 2.0),
             w: 0.0,
+            rotation_4d: Rotation4D::identity(),
         };
 
         let forward = camera.forward_vector();
@@ -222,6 +327,7 @@ mod tests {
             z: 0.0,
             orientation: UnitQuaternion::from_axis_angle(&Vector3::x_axis(), PI / 4.0),
             w: 0.0,
+            rotation_4d: Rotation4D::identity(),
         };
 
         let forward = camera.forward_vector();
@@ -240,6 +346,7 @@ mod tests {
             z: 0.0,
             orientation: UnitQuaternion::identity(),
             w: 0.0,
+            rotation_4d: Rotation4D::identity(),
         };
 
         camera.rotate(1.0, 0.0);
@@ -268,6 +375,7 @@ mod tests {
                 z: 0.0,
                 orientation,
                 w: 0.0,
+                rotation_4d: Rotation4D::identity(),
             };
 
             let forward = camera.forward_vector();
@@ -313,6 +421,7 @@ mod tests {
             z: 0.0,
             orientation: UnitQuaternion::identity(),
             w: 0.0,
+            rotation_4d: Rotation4D::identity(),
         };
 
         let initial_z = camera.z;
@@ -333,6 +442,7 @@ mod tests {
             z: 0.0,
             orientation: UnitQuaternion::identity(),
             w: 0.0,
+            rotation_4d: Rotation4D::identity(),
         };
 
         let initial_x = camera.x;
@@ -353,6 +463,7 @@ mod tests {
             z: 0.0,
             orientation: UnitQuaternion::identity(),
             w: 0.0,
+            rotation_4d: Rotation4D::identity(),
         };
 
         let initial_z = camera.z;
