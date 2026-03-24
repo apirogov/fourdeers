@@ -3,7 +3,8 @@
 use eframe::egui;
 
 use crate::input::{analyze_tap_in_stereo_view, zone_to_action, CameraAction};
-use crate::state::AppState;
+use crate::state::{AppState, DragView, TetraId};
+use crate::tetrahedron::get_tetrahedron_layout;
 use crate::ui::{draw_controls, render_visualization};
 
 pub struct FourDeersApp {
@@ -91,6 +92,14 @@ impl FourDeersApp {
 
                         if drag_distance > drag_threshold {
                             self.state.is_drag_mode = true;
+                            if let Some(vis_rect) = self.state.visualization_rect {
+                                let center_x = vis_rect.center().x;
+                                self.state.drag_view = if mouse_down_pos.x < center_x {
+                                    Some(DragView::Left)
+                                } else {
+                                    Some(DragView::Right)
+                                };
+                            }
                         }
                     }
 
@@ -109,10 +118,99 @@ impl FourDeersApp {
         }
     }
 
+    fn get_tetrahedron_center(view_rect: egui::Rect, zone: crate::input::Zone) -> (f32, f32) {
+        let layout = get_tetrahedron_layout(view_rect);
+        match zone {
+            crate::input::Zone::North => {
+                (view_rect.center().x, view_rect.min.y + layout.edge_offset)
+            }
+            crate::input::Zone::South => {
+                (view_rect.center().x, view_rect.max.y - layout.edge_offset)
+            }
+            crate::input::Zone::West => {
+                (view_rect.min.x + layout.edge_offset, view_rect.center().y)
+            }
+            crate::input::Zone::East => {
+                (view_rect.max.x - layout.edge_offset, view_rect.center().y)
+            }
+        }
+    }
+
+    fn is_mouse_over_tetrahedron(
+        pos: egui::Pos2,
+        view_rect: egui::Rect,
+        zone: crate::input::Zone,
+    ) -> bool {
+        let (center_x, center_y) = Self::get_tetrahedron_center(view_rect, zone);
+        let layout = get_tetrahedron_layout(view_rect);
+        let hit_radius = layout.scale * 1.5;
+        let dx = pos.x - center_x;
+        let dy = pos.y - center_y;
+        (dx * dx + dy * dy) <= hit_radius * hit_radius
+    }
+
     fn process_drag(&mut self, pos: egui::Pos2) {
+        use nalgebra::{UnitQuaternion, Vector3};
+
+        if let Some(tetra_id) = self.state.dragging_tetrahedron {
+            if let Some(last_pos) = self.state.last_tetra_drag_pos {
+                let delta = pos - last_pos;
+                let current_rot = self.state.get_tetrahedron_rotation(tetra_id);
+
+                let yaw_rot = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), -delta.x * 0.005);
+                let pitch_rot =
+                    UnitQuaternion::from_axis_angle(&Vector3::x_axis(), delta.y * 0.005);
+
+                let incremental = pitch_rot * yaw_rot;
+                let new_rot = incremental * current_rot;
+
+                self.state.set_tetrahedron_rotation(tetra_id, new_rot);
+            }
+            self.state.last_tetra_drag_pos = Some(pos);
+            self.state.held_action = None;
+            self.state.is_dragging = true;
+            return;
+        }
+
+        // Regular camera drag
         if let Some(last_pos) = self.state.last_mouse_pos {
             let delta = pos - last_pos;
-            self.state.camera.rotate(delta.x, delta.y);
+
+            // Check if we're near a tetrahedron zone and should rotate it instead
+            if let Some(visualization_rect) = self.state.visualization_rect {
+                if visualization_rect.contains(last_pos) {
+                    if let Some(analysis) = analyze_tap_in_stereo_view(visualization_rect, last_pos)
+                    {
+                        if Self::is_mouse_over_tetrahedron(
+                            last_pos,
+                            analysis.view_rect,
+                            analysis.zone,
+                        ) {
+                            let tetra_id = TetraId {
+                                is_left_view: analysis.is_left_view,
+                                zone: analysis.zone,
+                            };
+                            self.state.dragging_tetrahedron = Some(tetra_id);
+                            self.state.last_tetra_drag_pos = Some(pos);
+                            self.state.is_dragging = true;
+                            return;
+                        }
+                    }
+                }
+            }
+
+            // Camera rotation
+            match self.state.drag_view {
+                Some(DragView::Left) => {
+                    self.state.camera.rotate(delta.x, delta.y);
+                    self.state.reset_tetrahedron_rotations();
+                }
+                Some(DragView::Right) => {
+                    self.state.camera.rotate_4d(delta.x, delta.y);
+                    self.state.reset_tetrahedron_rotations();
+                }
+                None => {}
+            }
         }
         self.state.held_action = None;
         self.state.is_dragging = true;
@@ -138,9 +236,12 @@ impl FourDeersApp {
 
     fn clear_drag_state(&mut self) {
         self.state.is_dragging = false;
+        self.state.drag_view = None;
         self.state.last_mouse_pos = None;
         self.state.held_action = None;
         self.state.is_drag_mode = false;
+        self.state.dragging_tetrahedron = None;
+        self.state.last_tetra_drag_pos = None;
     }
 
     fn process_keyboard_input(&mut self, ctx: &egui::Context) {
@@ -166,10 +267,10 @@ impl FourDeersApp {
                 self.apply_camera_action(CameraAction::MoveDown, move_speed);
             }
             if i.key_down(egui::Key::Period) {
-                self.apply_camera_action(CameraAction::DecreaseW, move_speed);
+                self.apply_camera_action(CameraAction::MoveSliceOrthogonalPos, move_speed);
             }
             if i.key_down(egui::Key::Comma) {
-                self.apply_camera_action(CameraAction::IncreaseW, move_speed);
+                self.apply_camera_action(CameraAction::MoveSliceOrthogonalNeg, move_speed);
             }
         });
     }
@@ -180,12 +281,14 @@ impl FourDeersApp {
                 .default_width(280.0)
                 .resizable(true)
                 .show(ctx, |ui| {
-                    draw_controls(ui, &mut self.state, || self.sidebar_open = false);
+                    egui::ScrollArea::vertical().show(ui, |ui| {
+                        draw_controls(ui, &mut self.state, || self.sidebar_open = false);
+                    });
                 });
         }
 
         if !self.sidebar_open {
-            eframe::egui::Window::new("☰")
+            eframe::egui::Window::new("Menu")
                 .collapsible(false)
                 .resizable(false)
                 .title_bar(false)
@@ -300,25 +403,96 @@ impl FourDeersApp {
     }
 
     fn apply_camera_action(&mut self, action: CameraAction, speed: f32) {
+        // Reset tetrahedron rotations when camera moves
+        self.state.reset_tetrahedron_rotations();
+
         let forward = self.state.camera.forward_vector();
         let right = self.state.camera.right_vector();
         let up = self.state.camera.up_vector();
+        let basis_4d = self.state.camera.rotation_4d.basis_vectors();
+
+        let project_3d_to_4d = |v3: (f32, f32, f32)| -> [f32; 4] {
+            [
+                v3.0 * basis_4d[0][0] + v3.1 * basis_4d[1][0] + v3.2 * basis_4d[2][0],
+                v3.0 * basis_4d[0][1] + v3.1 * basis_4d[1][1] + v3.2 * basis_4d[2][1],
+                v3.0 * basis_4d[0][2] + v3.1 * basis_4d[1][2] + v3.2 * basis_4d[2][2],
+                v3.0 * basis_4d[0][3] + v3.1 * basis_4d[1][3] + v3.2 * basis_4d[2][3],
+            ]
+        };
 
         match action {
-            CameraAction::MoveForward => self.state.camera.move_along(forward, speed),
-            CameraAction::MoveBackward => self
-                .state
-                .camera
-                .move_along((-forward.0, -forward.1, -forward.2), speed),
-            CameraAction::StrafeLeft => self
-                .state
-                .camera
-                .move_along((-right.0, -right.1, -right.2), speed),
-            CameraAction::StrafeRight => self.state.camera.move_along(right, speed),
-            CameraAction::MoveUp => self.state.camera.move_along(up, speed),
-            CameraAction::MoveDown => self.state.camera.move_along((-up.0, -up.1, -up.2), speed),
+            CameraAction::MoveForward => {
+                let v4 = project_3d_to_4d(forward);
+                self.state.camera.x += v4[0] * speed;
+                self.state.camera.y += v4[1] * speed;
+                self.state.camera.z += v4[2] * speed;
+                self.state.camera.w += v4[3] * speed;
+            }
+            CameraAction::MoveBackward => {
+                let v4 = project_3d_to_4d(forward);
+                self.state.camera.x -= v4[0] * speed;
+                self.state.camera.y -= v4[1] * speed;
+                self.state.camera.z -= v4[2] * speed;
+                self.state.camera.w -= v4[3] * speed;
+            }
+            CameraAction::StrafeLeft => {
+                let v4 = project_3d_to_4d((-right.0, -right.1, -right.2));
+                self.state.camera.x += v4[0] * speed;
+                self.state.camera.y += v4[1] * speed;
+                self.state.camera.z += v4[2] * speed;
+                self.state.camera.w += v4[3] * speed;
+            }
+            CameraAction::StrafeRight => {
+                let v4 = project_3d_to_4d(right);
+                self.state.camera.x += v4[0] * speed;
+                self.state.camera.y += v4[1] * speed;
+                self.state.camera.z += v4[2] * speed;
+                self.state.camera.w += v4[3] * speed;
+            }
+            CameraAction::MoveUp => {
+                let v4 = project_3d_to_4d(up);
+                self.state.camera.x += v4[0] * speed;
+                self.state.camera.y += v4[1] * speed;
+                self.state.camera.z += v4[2] * speed;
+                self.state.camera.w += v4[3] * speed;
+            }
+            CameraAction::MoveDown => {
+                let v4 = project_3d_to_4d((-up.0, -up.1, -up.2));
+                self.state.camera.x += v4[0] * speed;
+                self.state.camera.y += v4[1] * speed;
+                self.state.camera.z += v4[2] * speed;
+                self.state.camera.w += v4[3] * speed;
+            }
             CameraAction::IncreaseW => self.state.camera.w += speed,
             CameraAction::DecreaseW => self.state.camera.w -= speed,
+            CameraAction::MoveSliceForward => {
+                let v4 = project_3d_to_4d(forward);
+                self.state.camera.x += v4[0] * speed;
+                self.state.camera.y += v4[1] * speed;
+                self.state.camera.z += v4[2] * speed;
+                self.state.camera.w += v4[3] * speed;
+            }
+            CameraAction::MoveSliceBackward => {
+                let v4 = project_3d_to_4d(forward);
+                self.state.camera.x -= v4[0] * speed;
+                self.state.camera.y -= v4[1] * speed;
+                self.state.camera.z -= v4[2] * speed;
+                self.state.camera.w -= v4[3] * speed;
+            }
+            CameraAction::MoveSliceOrthogonalPos => {
+                let w_dir = basis_4d[3];
+                self.state.camera.x += w_dir[0] * speed;
+                self.state.camera.y += w_dir[1] * speed;
+                self.state.camera.z += w_dir[2] * speed;
+                self.state.camera.w += w_dir[3] * speed;
+            }
+            CameraAction::MoveSliceOrthogonalNeg => {
+                let w_dir = basis_4d[3];
+                self.state.camera.x -= w_dir[0] * speed;
+                self.state.camera.y -= w_dir[1] * speed;
+                self.state.camera.z -= w_dir[2] * speed;
+                self.state.camera.w -= w_dir[3] * speed;
+            }
         }
     }
 }

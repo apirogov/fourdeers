@@ -1,9 +1,24 @@
 //! Application state
 
 use eframe::egui;
+use nalgebra::UnitQuaternion;
 
 use crate::camera::Camera;
 use crate::input::{CameraAction, Zone};
+
+/// Which view is being dragged
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DragView {
+    Left,
+    Right,
+}
+
+/// Identifier for each tetrahedron gadget (4 per view)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TetraId {
+    pub is_left_view: bool,
+    pub zone: Zone,
+}
 
 /// Application state for UI
 pub struct AppState {
@@ -17,6 +32,7 @@ pub struct AppState {
     pub rot_zw: f32,
 
     pub is_dragging: bool,
+    pub drag_view: Option<DragView>,
     pub last_mouse_pos: Option<egui::Pos2>,
 
     pub w_thickness: f32,
@@ -35,6 +51,13 @@ pub struct AppState {
 
     pub held_action: Option<CameraAction>,
     pub is_drag_mode: bool,
+
+    /// User-adjustable rotation quaternion for each tetrahedron
+    pub tetrahedron_rotations: std::collections::HashMap<TetraId, UnitQuaternion<f32>>,
+    /// Whether we're currently dragging a tetrahedron
+    pub dragging_tetrahedron: Option<TetraId>,
+    /// Last mouse position for tetrahedron dragging
+    pub last_tetra_drag_pos: Option<egui::Pos2>,
 }
 
 impl Default for AppState {
@@ -48,6 +71,7 @@ impl Default for AppState {
             rot_yw: 0.0,
             rot_zw: 0.0,
             is_dragging: false,
+            drag_view: None,
             last_mouse_pos: None,
             w_thickness: 2.5,
             eye_separation: 0.3,
@@ -61,6 +85,9 @@ impl Default for AppState {
             visualization_rect: None,
             held_action: None,
             is_drag_mode: false,
+            tetrahedron_rotations: std::collections::HashMap::new(),
+            dragging_tetrahedron: None,
+            last_tetra_drag_pos: None,
         }
     }
 }
@@ -78,5 +105,23 @@ impl AppState {
         self.rot_xw = 0.0;
         self.rot_yw = 0.0;
         self.rot_zw = 0.0;
+    }
+
+    /// Get tetrahedron rotation quaternion, defaulting to identity
+    pub fn get_tetrahedron_rotation(&self, id: TetraId) -> UnitQuaternion<f32> {
+        self.tetrahedron_rotations
+            .get(&id)
+            .copied()
+            .unwrap_or_else(UnitQuaternion::identity)
+    }
+
+    /// Set tetrahedron rotation quaternion
+    pub fn set_tetrahedron_rotation(&mut self, id: TetraId, rotation: UnitQuaternion<f32>) {
+        self.tetrahedron_rotations.insert(id, rotation);
+    }
+
+    /// Reset all tetrahedron rotations (called when camera moves)
+    pub fn reset_tetrahedron_rotations(&mut self) {
+        self.tetrahedron_rotations.clear();
     }
 }

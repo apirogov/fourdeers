@@ -1,7 +1,7 @@
 //! Input handling for stereoscopic view tap zones
 
 /// Directional zone enumeration
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Zone {
     North,
     East,
@@ -20,6 +20,10 @@ pub enum CameraAction {
     MoveDown,
     IncreaseW,
     DecreaseW,
+    MoveSliceForward,
+    MoveSliceBackward,
+    MoveSliceOrthogonalPos,
+    MoveSliceOrthogonalNeg,
 }
 
 /// Result of analyzing a tap within a stereoscopic view
@@ -43,10 +47,10 @@ pub fn zone_to_action(zone: Zone, is_left_view: bool) -> CameraAction {
         }
     } else {
         match zone {
-            Zone::North => CameraAction::MoveForward,
-            Zone::South => CameraAction::MoveBackward,
-            Zone::West => CameraAction::IncreaseW,
-            Zone::East => CameraAction::DecreaseW,
+            Zone::North => CameraAction::MoveSliceForward,
+            Zone::South => CameraAction::MoveSliceBackward,
+            Zone::West => CameraAction::MoveSliceOrthogonalNeg,
+            Zone::East => CameraAction::MoveSliceOrthogonalPos,
         }
     }
 }
@@ -531,13 +535,19 @@ mod tests {
     fn test_zone_to_action_right_view() {
         assert_eq!(
             zone_to_action(Zone::North, false),
-            CameraAction::MoveForward
+            CameraAction::MoveSliceForward
         );
         assert_eq!(
             zone_to_action(Zone::South, false),
-            CameraAction::MoveBackward
+            CameraAction::MoveSliceBackward
         );
-        assert_eq!(zone_to_action(Zone::West, false), CameraAction::IncreaseW);
-        assert_eq!(zone_to_action(Zone::East, false), CameraAction::DecreaseW);
+        assert_eq!(
+            zone_to_action(Zone::West, false),
+            CameraAction::MoveSliceOrthogonalNeg
+        );
+        assert_eq!(
+            zone_to_action(Zone::East, false),
+            CameraAction::MoveSliceOrthogonalPos
+        );
     }
 }
