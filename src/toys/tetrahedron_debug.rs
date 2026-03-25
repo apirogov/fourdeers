@@ -323,7 +323,7 @@ impl TetrahedronDebugToy {
                 let color = if w_avg >= 0.0 {
                     egui::Color32::from_rgba_unmultiplied(0, 255, 255, alpha)
                 } else {
-                    egui::Color32::from_rgba_unmultiplied(255, 255, 255, alpha)
+                    egui::Color32::from_rgba_unmultiplied(255, 165, 0, alpha)
                 };
 
                 painter.line_segment([s0, s1], egui::Stroke::new(2.5, color));
