@@ -5,7 +5,7 @@ use nalgebra::{UnitQuaternion, Vector3};
 
 use crate::camera::Camera;
 use crate::geometry::{apply_so4_rotation, Vertex4D};
-use crate::input::Zone;
+use crate::input::{TetraId, Zone};
 use crate::rotation4d::Rotation4D;
 use crate::tetrahedron::{get_tetrahedron_layout, TetrahedronGadget, ZoneDirection};
 
@@ -121,6 +121,7 @@ impl TesseractRenderContext {
         eye_sign: f32,
         is_left_view: bool,
         show_debug: bool,
+        tetrahedron_rotations: &std::collections::HashMap<TetraId, UnitQuaternion<f32>>,
     ) {
         let center = view_rect.center();
         let scale = view_rect.height().min(view_rect.width()) * 0.35;
@@ -132,7 +133,7 @@ impl TesseractRenderContext {
         if show_debug {
             self.render_zone_labels(&painter, view_rect, is_left_view);
         }
-        self.render_tetrahedron_gadget(&painter, view_rect, is_left_view);
+        self.render_tetrahedron_gadget(&painter, view_rect, is_left_view, tetrahedron_rotations);
     }
 
     fn render_tesseract_edges(
@@ -359,6 +360,7 @@ impl TesseractRenderContext {
         painter: &egui::Painter,
         view_rect: egui::Rect,
         is_left_view: bool,
+        tetrahedron_rotations: &std::collections::HashMap<TetraId, UnitQuaternion<f32>>,
     ) {
         let basis = self.camera.rotation_4d.basis_vectors();
         let layout = get_tetrahedron_layout(view_rect);
@@ -422,7 +424,11 @@ impl TesseractRenderContext {
 
         for (vector_4d, zone, x, y) in tetrahedra {
             let zone_dir = zone_to_direction(zone);
-            let user_rotation = UnitQuaternion::identity();
+            let tetra_id = TetraId { is_left_view, zone };
+            let user_rotation = tetrahedron_rotations
+                .get(&tetra_id)
+                .copied()
+                .unwrap_or_else(UnitQuaternion::identity);
 
             render_single_tetrahedron(
                 painter,

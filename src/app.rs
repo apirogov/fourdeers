@@ -102,13 +102,9 @@ impl FourDeersApp {
                                     DragView::Right
                                 };
                                 self.drag_view = Some(drag_view);
-                                let toy = self.toy_manager.active_toy_mut();
-                                toy.handle_drag_start(drag_view);
-                                if let Some(t) =
-                                    toy.as_any_mut().downcast_mut::<crate::toys::TesseractToy>()
-                                {
-                                    t.drag_state.last_mouse_pos = Some(mouse_down_pos);
-                                }
+                                self.toy_manager
+                                    .active_toy_mut()
+                                    .handle_drag_start(drag_view);
                             }
                         }
                     }
@@ -126,18 +122,16 @@ impl FourDeersApp {
     }
 
     fn process_drag(&mut self, pos: egui::Pos2) {
-        let last_pos = self
-            .toy_manager
-            .active_toy()
-            .as_any()
-            .downcast_ref::<crate::toys::TesseractToy>()
-            .and_then(|t| t.drag_state.last_mouse_pos);
+        let toy = self.toy_manager.active_toy_mut();
 
-        if let Some(last_pos) = last_pos {
+        if let Some(last_pos) = toy
+            .as_any_mut()
+            .downcast_mut::<crate::toys::TesseractToy>()
+            .map(|t| t.drag_state.last_mouse_pos)
+            .flatten()
+        {
             let is_left_view = matches!(self.drag_view, Some(DragView::Left));
-            self.toy_manager
-                .active_toy_mut()
-                .handle_drag(is_left_view, last_pos, pos);
+            toy.handle_drag(is_left_view, last_pos, pos);
         }
 
         if let Some(t) = self

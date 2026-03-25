@@ -455,8 +455,22 @@ impl Toy for TesseractToy {
             self.projection_distance,
         );
 
-        ctx.render_eye_view(ui, left_rect, -1.0, true, show_debug || self.show_debug);
-        ctx.render_eye_view(ui, right_rect, 1.0, false, show_debug || self.show_debug);
+        ctx.render_eye_view(
+            ui,
+            left_rect,
+            -1.0,
+            true,
+            show_debug || self.show_debug,
+            &self.tetrahedron_rotations,
+        );
+        ctx.render_eye_view(
+            ui,
+            right_rect,
+            1.0,
+            false,
+            show_debug || self.show_debug,
+            &self.tetrahedron_rotations,
+        );
     }
 
     fn render_overlay(
