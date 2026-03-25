@@ -3,7 +3,7 @@
 use eframe::egui;
 use std::any::Any;
 
-use crate::input::{TapAnalysis, TetraId, Zone};
+use crate::input::{DragView, TapAnalysis, TetraId, Zone};
 
 pub mod manager;
 pub mod registry;
@@ -23,6 +23,7 @@ pub trait Toy: Any {
     fn handle_tap(&mut self, analysis: &TapAnalysis);
     fn handle_drag(&mut self, is_left_view: bool, from: egui::Pos2, to: egui::Pos2);
     fn handle_hold(&mut self, analysis: &TapAnalysis);
+    fn handle_drag_start(&mut self, drag_view: DragView);
 
     fn handle_keyboard(&mut self, ctx: &egui::Context);
 

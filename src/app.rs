@@ -96,11 +96,15 @@ impl FourDeersApp {
                                 self.toy_manager.active_toy().get_visualization_rect()
                             {
                                 let center_x = vis_rect.center().x;
-                                self.drag_view = if mouse_down_pos.x < center_x {
-                                    Some(DragView::Left)
+                                let drag_view = if mouse_down_pos.x < center_x {
+                                    DragView::Left
                                 } else {
-                                    Some(DragView::Right)
+                                    DragView::Right
                                 };
+                                self.drag_view = Some(drag_view);
+                                self.toy_manager
+                                    .active_toy_mut()
+                                    .handle_drag_start(drag_view);
                             }
                         }
                     }

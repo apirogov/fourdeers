@@ -543,6 +543,10 @@ impl Toy for TesseractToy {
         self.apply_camera_action(action, 0.08);
     }
 
+    fn handle_drag_start(&mut self, drag_view: DragView) {
+        self.drag_state.drag_view = Some(drag_view);
+    }
+
     fn handle_keyboard(&mut self, ctx: &egui::Context) {
         let move_speed = 0.15;
 
