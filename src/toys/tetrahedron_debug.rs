@@ -25,7 +25,7 @@ pub struct TetrahedronDebugToy {
     view_mode: ViewMode,
     tetrahedron_rotation: UnitQuaternion<f32>,
     visualization_rect: Option<egui::Rect>,
-    drag_state: DragState,
+    pub drag_state: DragState,
     glome_rot_xy: f32,
     glome_rot_xz: f32,
     glome_rot_yz: f32,
@@ -634,15 +634,11 @@ impl Toy for TetrahedronDebugToy {
 
     fn handle_drag(&mut self, _is_left_view: bool, from: egui::Pos2, to: egui::Pos2) {
         if self.view_mode == ViewMode::StereoTetrahedron {
-            if let Some(last_pos) = self.drag_state.last_mouse_pos {
-                let delta = to - last_pos;
-                let yaw_rot = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), -delta.x * 0.005);
-                let pitch_rot =
-                    UnitQuaternion::from_axis_angle(&Vector3::x_axis(), delta.y * 0.005);
-                let incremental = pitch_rot * yaw_rot;
-                self.tetrahedron_rotation = incremental * self.tetrahedron_rotation;
-            }
-            self.drag_state.last_mouse_pos = Some(to);
+            let delta = to - from;
+            let yaw_rot = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), -delta.x * 0.005);
+            let pitch_rot = UnitQuaternion::from_axis_angle(&Vector3::x_axis(), delta.y * 0.005);
+            let incremental = pitch_rot * yaw_rot;
+            self.tetrahedron_rotation = incremental * self.tetrahedron_rotation;
             self.drag_state.is_dragging = true;
             return;
         }

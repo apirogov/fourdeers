@@ -13,6 +13,7 @@ pub struct FourDeersApp {
     mouse_down_time: Option<f64>,
     is_drag_mode: bool,
     drag_view: Option<DragView>,
+    last_drag_pos: Option<egui::Pos2>,
 }
 
 impl FourDeersApp {
@@ -25,6 +26,7 @@ impl FourDeersApp {
             mouse_down_time: None,
             is_drag_mode: false,
             drag_view: None,
+            last_drag_pos: None,
         }
     }
 }
@@ -122,27 +124,13 @@ impl FourDeersApp {
     }
 
     fn process_drag(&mut self, pos: egui::Pos2) {
-        let toy = self.toy_manager.active_toy_mut();
-
-        if let Some(last_pos) = toy
-            .as_any_mut()
-            .downcast_mut::<crate::toys::TesseractToy>()
-            .map(|t| t.drag_state.last_mouse_pos)
-            .flatten()
-        {
+        if let Some(last_pos) = self.last_drag_pos {
             let is_left_view = matches!(self.drag_view, Some(DragView::Left));
-            toy.handle_drag(is_left_view, last_pos, pos);
+            self.toy_manager
+                .active_toy_mut()
+                .handle_drag(is_left_view, last_pos, pos);
         }
-
-        if let Some(t) = self
-            .toy_manager
-            .active_toy_mut()
-            .as_any_mut()
-            .downcast_mut::<crate::toys::TesseractToy>()
-        {
-            t.drag_state.last_mouse_pos = Some(pos);
-            t.drag_state.is_dragging = true;
-        }
+        self.last_drag_pos = Some(pos);
     }
 
     fn process_hold(&mut self, pos: egui::Pos2) {
@@ -160,12 +148,22 @@ impl FourDeersApp {
     fn clear_drag_state(&mut self) {
         self.is_drag_mode = false;
         self.drag_view = None;
+        self.last_drag_pos = None;
 
         if let Some(t) = self
             .toy_manager
             .active_toy_mut()
             .as_any_mut()
             .downcast_mut::<crate::toys::TesseractToy>()
+        {
+            t.drag_state.clear();
+        }
+
+        if let Some(t) = self
+            .toy_manager
+            .active_toy_mut()
+            .as_any_mut()
+            .downcast_mut::<crate::toys::tetrahedron_debug::TetrahedronDebugToy>()
         {
             t.drag_state.clear();
         }
