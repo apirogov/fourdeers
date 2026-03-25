@@ -7,8 +7,42 @@
 use eframe::egui;
 use nalgebra::{UnitQuaternion, Vector3, Vector4};
 
+use crate::input::Zone;
+
 /// Square root of 3 - used to convert between scale and vertex coordinates
 const SQRT_3: f32 = 1.732_050_8;
+
+pub fn magnitude_4d(v: Vector4<f32>) -> f32 {
+    (v.x.powi(2) + v.y.powi(2) + v.z.powi(2) + v.w.powi(2)).sqrt()
+}
+
+const TETRAHEDRON_BASE_VERTICES: [Pos3D; 4] = [
+    Pos3D {
+        x: 1.0,
+        y: 1.0,
+        z: 1.0,
+    },
+    Pos3D {
+        x: -1.0,
+        y: -1.0,
+        z: 1.0,
+    },
+    Pos3D {
+        x: -1.0,
+        y: 1.0,
+        z: -1.0,
+    },
+    Pos3D {
+        x: 1.0,
+        y: -1.0,
+        z: -1.0,
+    },
+];
+
+fn get_tetrahedron_vertices(scale: f32) -> [Pos3D; 4] {
+    let s = scale / SQRT_3;
+    TETRAHEDRON_BASE_VERTICES.map(|v| Pos3D::new(v.x * s, v.y * s, v.z * s))
+}
 
 /// Layout parameters for tetrahedron rendering, proportional to view size
 #[derive(Debug, Clone, Copy)]
@@ -91,15 +125,6 @@ impl Pos3D {
     }
 }
 
-/// Which zone the tetrahedron represents
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ZoneDirection {
-    Up,
-    Down,
-    Left,
-    Right,
-}
-
 /// A vertex of the tetrahedron with label information
 #[derive(Debug, Clone)]
 pub struct TetrahedronVertex {
@@ -131,6 +156,7 @@ pub struct TetrahedronGadget {
     pub center: Pos3D,
     pub scale: f32,
     pub tip_label: Option<String>,
+    pub base_label: Option<String>,
     pub component_values: [f32; 4],
     pub vector_magnitude: f32,
 }
@@ -155,9 +181,7 @@ impl TetrahedronGadget {
         let vector_arrow = Self::compute_vector_arrow(vector_4d, scale, &rotation);
 
         let component_values = [vector_4d.x, vector_4d.y, vector_4d.z, vector_4d.w];
-        let vector_magnitude =
-            (vector_4d.x.powi(2) + vector_4d.y.powi(2) + vector_4d.z.powi(2) + vector_4d.w.powi(2))
-                .sqrt();
+        let vector_magnitude = magnitude_4d(vector_4d);
 
         Self {
             vertices,
@@ -166,6 +190,7 @@ impl TetrahedronGadget {
             center,
             scale,
             tip_label: None,
+            base_label: None,
             component_values,
             vector_magnitude,
         }
@@ -173,6 +198,11 @@ impl TetrahedronGadget {
 
     pub fn with_tip_label(mut self, label: impl Into<String>) -> Self {
         self.tip_label = Some(label.into());
+        self
+    }
+
+    pub fn with_base_label(mut self, label: impl Into<String>) -> Self {
+        self.base_label = Some(label.into());
         self
     }
 
@@ -185,25 +215,27 @@ impl TetrahedronGadget {
 
     pub fn for_zone(
         vector_4d: Vector4<f32>,
-        zone_dir: ZoneDirection,
+        zone: Zone,
         user_rotation: UnitQuaternion<f32>,
         scale: f32,
     ) -> Self {
-        let base_rotation = Self::compute_base_rotation_for_zone(&vector_4d, zone_dir);
+        let base_rotation = Self::compute_base_rotation_for_zone(&vector_4d, zone);
         let total_rotation = user_rotation * base_rotation;
         Self::from_4d_vector_with_quaternion(vector_4d, total_rotation, scale)
     }
 
-    fn compute_base_rotation_for_zone(
-        vector_4d: &Vector4<f32>,
-        zone_dir: ZoneDirection,
-    ) -> UnitQuaternion<f32> {
+    fn compute_base_rotation_for_zone(vector_4d: &Vector4<f32>, zone: Zone) -> UnitQuaternion<f32> {
         let arrow_dir = compute_weighted_direction_3d(*vector_4d);
-        let target = match zone_dir {
-            ZoneDirection::Up => Vector3::new(0.0, 1.0, 0.0),
-            ZoneDirection::Down => Vector3::new(0.0, -1.0, 0.0),
-            ZoneDirection::Left => Vector3::new(-1.0, 0.0, 0.0),
-            ZoneDirection::Right => Vector3::new(1.0, 0.0, 0.0),
+        let target = match zone {
+            Zone::North => Vector3::new(0.0, 1.0, 0.0),
+            Zone::South => Vector3::new(0.0, -1.0, 0.0),
+            Zone::East => Vector3::new(1.0, 0.0, 0.0),
+            Zone::West => Vector3::new(-1.0, 0.0, 0.0),
+            Zone::NorthEast => Vector3::new(1.0, 1.0, 0.0).normalize(),
+            Zone::NorthWest => Vector3::new(-1.0, 1.0, 0.0).normalize(),
+            Zone::SouthEast => Vector3::new(1.0, -1.0, 0.0).normalize(),
+            Zone::SouthWest => Vector3::new(-1.0, -1.0, 0.0).normalize(),
+            Zone::Center => Vector3::new(0.0, 1.0, 0.0),
         };
 
         let current = arrow_dir.to_vector3();
@@ -246,14 +278,7 @@ impl TetrahedronGadget {
         scale: f32,
         rotation: &UnitQuaternion<f32>,
     ) -> Vec<TetrahedronVertex> {
-        let s = scale / SQRT_3;
-
-        let base_positions = [
-            Pos3D::new(s, s, s),
-            Pos3D::new(-s, -s, s),
-            Pos3D::new(-s, s, -s),
-            Pos3D::new(s, -s, -s),
-        ];
+        let base_positions = get_tetrahedron_vertices(scale);
 
         let labels = ["X", "Y", "Z", "W"];
         let axes = ['X', 'Y', 'Z', 'W'];
@@ -304,11 +329,8 @@ impl TetrahedronGadget {
         rotation: &UnitQuaternion<f32>,
     ) -> VectorArrow {
         let arrow_head_size = scale * 0.15;
-        let s = scale / SQRT_3;
 
-        let norm =
-            (vector_4d.x.powi(2) + vector_4d.y.powi(2) + vector_4d.z.powi(2) + vector_4d.w.powi(2))
-                .sqrt();
+        let norm = magnitude_4d(vector_4d);
 
         if norm < 1e-6 {
             return VectorArrow {
@@ -333,12 +355,7 @@ impl TetrahedronGadget {
             };
         }
 
-        let base_vertices = [
-            Pos3D::new(s, s, s),
-            Pos3D::new(-s, -s, s),
-            Pos3D::new(-s, s, -s),
-            Pos3D::new(s, -s, -s),
-        ];
+        let base_vertices = get_tetrahedron_vertices(scale);
 
         let mut pos_x = 0.0f32;
         let mut pos_y = 0.0f32;
@@ -357,59 +374,38 @@ impl TetrahedronGadget {
         }
     }
 
-    pub fn get_vertex_screen_pos(
-        &self,
-        vertex_index: usize,
-        center_x: f32,
-        center_y: f32,
-    ) -> Option<(f32, f32)> {
-        if vertex_index >= self.vertices.len() {
-            return None;
-        }
-        let vertex = &self.vertices[vertex_index];
-        Some((center_x + vertex.position.x, center_y - vertex.position.y))
+    pub fn get_vertex_3d(&self, vertex_index: usize) -> Option<&Pos3D> {
+        self.vertices.get(vertex_index).map(|v| &v.position)
     }
 
-    pub fn get_vertex_label_pos(
-        &self,
-        vertex_index: usize,
-        center_x: f32,
-        center_y: f32,
-        offset: f32,
-    ) -> Option<(f32, f32)> {
-        if vertex_index >= self.vertices.len() {
-            return None;
-        }
-        let vertex = &self.vertices[vertex_index];
-        let label_x = center_x + vertex.position.x + vertex.normal.x * offset;
-        let label_y = center_y - vertex.position.y - vertex.normal.y * offset;
-        Some((label_x, label_y))
+    pub fn get_vertex_normal(&self, vertex_index: usize) -> Option<&Pos3D> {
+        self.vertices.get(vertex_index).map(|v| &v.normal)
     }
 
-    pub fn get_arrow_screen_pos(&self, center_x: f32, center_y: f32) -> (f32, f32) {
-        (
-            center_x + self.vector_arrow.end_position.x,
-            center_y - self.vector_arrow.end_position.y,
-        )
+    pub fn arrow_position(&self) -> &Pos3D {
+        &self.vector_arrow.end_position
+    }
+
+    pub fn arrow_head_size(&self) -> f32 {
+        self.vector_arrow.arrow_head_size
+    }
+
+    pub fn tip_label(&self) -> Option<&String> {
+        self.tip_label.as_ref()
+    }
+
+    pub fn base_label(&self) -> Option<&String> {
+        self.base_label.as_ref()
     }
 }
 
 fn compute_weighted_direction_3d(vector_4d: Vector4<f32>) -> Pos3D {
-    let norm =
-        (vector_4d.x.powi(2) + vector_4d.y.powi(2) + vector_4d.z.powi(2) + vector_4d.w.powi(2))
-            .sqrt();
+    let norm = magnitude_4d(vector_4d);
     if norm < 1e-6 {
         return Pos3D::new(0.0, 0.0, 0.0);
     }
 
     let normalized = vector_4d / norm;
-    let s = 1.0;
-    let base_vertices = [
-        Pos3D::new(s, s, s),
-        Pos3D::new(-s, -s, s),
-        Pos3D::new(-s, s, -s),
-        Pos3D::new(s, -s, -s),
-    ];
 
     let weights = [
         normalized.x.abs(),
@@ -422,16 +418,16 @@ fn compute_weighted_direction_3d(vector_4d: Vector4<f32>) -> Pos3D {
     let mut pos_z = 0.0f32;
 
     for (i, &weight) in weights.iter().enumerate() {
-        pos_x += base_vertices[i].x * weight;
-        pos_y += base_vertices[i].y * weight;
-        pos_z += base_vertices[i].z * weight;
+        pos_x += TETRAHEDRON_BASE_VERTICES[i].x * weight;
+        pos_y += TETRAHEDRON_BASE_VERTICES[i].y * weight;
+        pos_z += TETRAHEDRON_BASE_VERTICES[i].z * weight;
     }
 
     Pos3D::new(pos_x, pos_y, pos_z)
 }
 
 pub fn normalize_4d_vector(v: Vector4<f32>) -> Vector4<f32> {
-    let norm = (v.x.powi(2) + v.y.powi(2) + v.z.powi(2) + v.w.powi(2)).sqrt();
+    let norm = magnitude_4d(v);
     if norm < 1e-6 {
         Vector4::new(0.0, 0.0, 0.0, 0.0)
     } else {
@@ -736,45 +732,39 @@ mod tests {
     }
 
     #[test]
-    fn test_get_vertex_screen_pos() {
+    fn test_get_vertex_3d() {
         let vector = Vector4::new(1.0, 0.0, 0.0, 0.0);
         let gadget = TetrahedronGadget::from_4d_vector(vector);
 
-        let center_x = 100.0;
-        let center_y = 100.0;
-
-        let Some(pos) = gadget.get_vertex_screen_pos(0, center_x, center_y) else {
-            panic!("Failed to get vertex screen position");
+        let Some(pos) = gadget.get_vertex_3d(0) else {
+            panic!("Failed to get vertex 3d position");
         };
 
-        // Vertex 0 (+X) is at (s, s, s) where s = 1/sqrt(3)
         let s = 1.0 / SQRT_3;
-        assert_approx_eq(pos.0, center_x + s, 1e-5);
-        assert_approx_eq(pos.1, center_y - s, 1e-5);
+        assert_approx_eq(pos.x, s, 1e-5);
+        assert_approx_eq(pos.y, s, 1e-5);
+        assert_approx_eq(pos.z, s, 1e-5);
     }
 
     #[test]
-    fn test_get_vertex_screen_pos_invalid_index() {
+    fn test_get_vertex_3d_invalid_index() {
         let vector = Vector4::new(1.0, 0.0, 0.0, 0.0);
         let gadget = TetrahedronGadget::from_4d_vector(vector);
 
-        let pos = gadget.get_vertex_screen_pos(10, 100.0, 100.0);
+        let pos = gadget.get_vertex_3d(10);
         assert!(pos.is_none());
     }
 
     #[test]
-    fn test_get_arrow_screen_pos() {
+    fn test_arrow_position() {
         let vector = Vector4::new(1.0, 0.0, 0.0, 0.0);
         let gadget = TetrahedronGadget::from_4d_vector(vector);
 
-        let center_x = 100.0;
-        let center_y = 100.0;
-
-        let pos = gadget.get_arrow_screen_pos(center_x, center_y);
-
+        let arrow = gadget.arrow_position();
         let s = 1.0 / SQRT_3;
-        assert_approx_eq(pos.0, center_x + s, 1e-5);
-        assert_approx_eq(pos.1, center_y - s, 1e-5);
+        assert_approx_eq(arrow.x, s, 1e-3);
+        assert_approx_eq(arrow.y, s, 1e-3);
+        assert_approx_eq(arrow.z, s, 1e-3);
     }
 
     #[test]
@@ -864,7 +854,7 @@ mod tests {
     fn test_for_zone_up() {
         let vector = Vector4::new(0.0, 0.0, 1.0, 0.0);
         let gadget =
-            TetrahedronGadget::for_zone(vector, ZoneDirection::Up, UnitQuaternion::identity(), 1.0);
+            TetrahedronGadget::for_zone(vector, Zone::North, UnitQuaternion::identity(), 1.0);
 
         let arrow = gadget.vector_arrow.end_position;
         assert!(
@@ -877,12 +867,8 @@ mod tests {
     #[test]
     fn test_for_zone_right() {
         let vector = Vector4::new(0.0, 1.0, 0.0, 0.0);
-        let gadget = TetrahedronGadget::for_zone(
-            vector,
-            ZoneDirection::Right,
-            UnitQuaternion::identity(),
-            1.0,
-        );
+        let gadget =
+            TetrahedronGadget::for_zone(vector, Zone::East, UnitQuaternion::identity(), 1.0);
 
         let arrow = gadget.vector_arrow.end_position;
         assert!(

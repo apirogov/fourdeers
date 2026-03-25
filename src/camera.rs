@@ -4,17 +4,23 @@ use nalgebra::{UnitQuaternion, Vector3};
 
 use crate::rotation4d::{Rotation4D, RotationPlane};
 
+const ROTATION_SENSITIVITY: f32 = 0.005;
+
 /// First-person camera state with 4D orientation
+#[derive(Clone)]
 pub struct Camera {
     pub x: f32,
     pub y: f32,
     pub z: f32,
 
-    pub orientation: UnitQuaternion<f32>,
-
     pub w: f32,
 
     pub rotation_4d: Rotation4D,
+
+    yaw_l: f32,
+    pitch_l: f32,
+    yaw_r: f32,
+    pitch_r: f32,
 }
 
 impl Default for Camera {
@@ -23,9 +29,12 @@ impl Default for Camera {
             x: 0.0,
             y: 0.0,
             z: -5.0,
-            orientation: UnitQuaternion::identity(),
             w: 0.0,
             rotation_4d: Rotation4D::identity(),
+            yaw_l: 0.0,
+            pitch_l: 0.0,
+            yaw_r: 0.0,
+            pitch_r: 0.0,
         }
     }
 }
@@ -39,16 +48,20 @@ impl Camera {
         self.x = 0.0;
         self.y = 0.0;
         self.z = -5.0;
-        self.orientation = UnitQuaternion::identity();
         self.w = 0.0;
         self.rotation_4d = Rotation4D::identity();
+        self.yaw_l = 0.0;
+        self.pitch_l = 0.0;
+        self.yaw_r = 0.0;
+        self.pitch_r = 0.0;
     }
 
     /// Forward vector in world space (direction camera is looking)
     /// +Z is forward, +X is right, +Y is up
     pub fn forward_vector(&self) -> (f32, f32, f32) {
         let forward = self
-            .orientation
+            .rotation_4d
+            .q_left()
             .transform_vector(&Vector3::new(0.0, 0.0, 1.0));
         (forward.x, forward.y, forward.z)
     }
@@ -56,7 +69,8 @@ impl Camera {
     /// Right vector in world space
     pub fn right_vector(&self) -> (f32, f32, f32) {
         let right = self
-            .orientation
+            .rotation_4d
+            .q_left()
             .transform_vector(&Vector3::new(1.0, 0.0, 0.0));
         (right.x, right.y, right.z)
     }
@@ -64,7 +78,8 @@ impl Camera {
     /// Up vector in world space
     pub fn up_vector(&self) -> (f32, f32, f32) {
         let up = self
-            .orientation
+            .rotation_4d
+            .q_left()
             .transform_vector(&Vector3::new(0.0, 1.0, 0.0));
         (up.x, up.y, up.z)
     }
@@ -76,7 +91,7 @@ impl Camera {
         self.z += dir.2 * speed;
     }
 
-    /// Rotate camera by delta mouse movement
+    /// Rotate camera by delta mouse movement (3D mode - affects q_left)
     /// delta_x: horizontal movement (positive = drag right)
     /// delta_y: vertical movement (positive = drag down)
     ///
@@ -85,59 +100,99 @@ impl Camera {
     /// - Drag down -> look down (world appears to move up)
     pub fn rotate(&mut self, delta_x: f32, delta_y: f32) {
         // Negative yaw for drag right to look right
-        let yaw_rot = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), -delta_x * 0.005);
+        let yaw_rot =
+            UnitQuaternion::from_axis_angle(&Vector3::y_axis(), delta_x * ROTATION_SENSITIVITY);
         // Positive pitch for drag down to look down
-        let pitch_rot = UnitQuaternion::from_axis_angle(&Vector3::x_axis(), delta_y * 0.005);
+        let pitch_rot =
+            UnitQuaternion::from_axis_angle(&Vector3::x_axis(), delta_y * ROTATION_SENSITIVITY);
 
         // Apply rotations: yaw (around world Y) then pitch (around local X)
-        self.orientation = yaw_rot * self.orientation * pitch_rot;
+        // Modify q_left (the 3D-like rotation)
+        let new_q_left = yaw_rot * *self.rotation_4d.q_left() * pitch_rot;
+        self.rotation_4d = Rotation4D::new(new_q_left, *self.rotation_4d.q_right());
+
+        // Update cached values
+        self.yaw_l += delta_x * ROTATION_SENSITIVITY;
+        self.pitch_l += delta_y * ROTATION_SENSITIVITY;
     }
 
-    /// Get yaw angle (rotation around Y axis) in radians
-    pub fn yaw(&self) -> f32 {
-        let forward = self.forward_vector();
-        forward.0.atan2(forward.2)
+    /// Rotate 4D camera (4D mode - affects q_right)
+    pub fn rotate_4d(&mut self, delta_x: f32, delta_y: f32) {
+        // XW plane for horizontal (like XZ in 3D), YW plane for vertical (like YZ in 3D)
+        // Match 3D pattern: yaw * old * pitch
+        let tilt_xw =
+            Rotation4D::from_plane_angle(RotationPlane::XW, -delta_x * ROTATION_SENSITIVITY);
+        let tilt_yw =
+            Rotation4D::from_plane_angle(RotationPlane::YW, delta_y * ROTATION_SENSITIVITY);
+
+        // Apply in same order as 3D: new_xw * old * new_yw
+        let new_q_right = *tilt_xw.q_left() * *self.rotation_4d.q_right() * *tilt_yw.q_left();
+        self.rotation_4d = Rotation4D::new(*self.rotation_4d.q_left(), new_q_right);
+
+        // Update cached values
+        self.yaw_r += -delta_x * ROTATION_SENSITIVITY;
+        self.pitch_r += delta_y * ROTATION_SENSITIVITY;
     }
 
-    /// Get pitch angle (rotation around X axis) in radians
-    pub fn pitch(&self) -> f32 {
-        let forward = self.forward_vector();
-        let horizontal_len = (forward.0 * forward.0 + forward.2 * forward.2).sqrt();
-        forward.1.atan2(horizontal_len)
+    /// Get yaw angle (rotation around Y axis) in radians - for q_left
+    pub fn yaw_l(&self) -> f32 {
+        self.yaw_l
     }
 
-    /// Set orientation from yaw and pitch angles
-    pub fn set_yaw_pitch(&mut self, yaw: f32, pitch: f32) {
+    /// Get pitch angle (rotation around X axis) in radians - for q_left
+    pub fn pitch_l(&self) -> f32 {
+        self.pitch_l
+    }
+
+    /// Set q_left (3D orientation) from yaw and pitch angles
+    pub fn set_yaw_pitch_l(&mut self, yaw: f32, pitch: f32) {
         let yaw_rot = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), yaw);
         let pitch_rot = UnitQuaternion::from_axis_angle(&Vector3::x_axis(), pitch);
-        self.orientation = yaw_rot * pitch_rot;
+        self.rotation_4d = Rotation4D::new(yaw_rot * pitch_rot, *self.rotation_4d.q_right());
+        self.yaw_l = yaw;
+        self.pitch_l = pitch;
     }
 
-    pub fn rotate_4d(&mut self, delta_x: f32, delta_y: f32) {
-        let tilt_zw = Rotation4D::from_plane_angle(RotationPlane::ZW, -delta_x * 0.005);
-        let tilt_yw = Rotation4D::from_plane_angle(RotationPlane::YW, delta_y * 0.005);
-        let delta_rot = tilt_zw.then(&tilt_yw);
-        self.rotation_4d = delta_rot.then(&self.rotation_4d);
+    /// Set yaw only for q_left, preserving current pitch
+    pub fn set_yaw_l(&mut self, yaw: f32) {
+        let pitch = self.pitch_l;
+        let yaw_rot = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), yaw);
+        let pitch_rot = UnitQuaternion::from_axis_angle(&Vector3::x_axis(), pitch);
+        self.rotation_4d = Rotation4D::new(yaw_rot * pitch_rot, *self.rotation_4d.q_right());
+        self.yaw_l = yaw;
     }
 
-    pub fn tilt_slice_up(&mut self, amount: f32) {
-        let tilt = Rotation4D::from_plane_angle(RotationPlane::YW, amount * 0.02);
-        self.rotation_4d = tilt.then(&self.rotation_4d);
+    /// Set pitch only for q_left, preserving current yaw
+    pub fn set_pitch_l(&mut self, pitch: f32) {
+        let yaw = self.yaw_l;
+        let yaw_rot = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), yaw);
+        let pitch_rot = UnitQuaternion::from_axis_angle(&Vector3::x_axis(), pitch);
+        self.rotation_4d = Rotation4D::new(yaw_rot * pitch_rot, *self.rotation_4d.q_right());
+        self.pitch_l = pitch;
     }
 
-    pub fn tilt_slice_down(&mut self, amount: f32) {
-        let tilt = Rotation4D::from_plane_angle(RotationPlane::YW, -amount * 0.02);
-        self.rotation_4d = tilt.then(&self.rotation_4d);
+    /// Get yaw angle for q_right (4D rotation in XW plane)
+    pub fn yaw_r(&self) -> f32 {
+        self.yaw_r
     }
 
-    pub fn tilt_slice_left(&mut self, amount: f32) {
-        let tilt = Rotation4D::from_plane_angle(RotationPlane::ZW, amount * 0.02);
-        self.rotation_4d = tilt.then(&self.rotation_4d);
+    /// Get pitch angle for q_right (4D rotation in YW plane)
+    pub fn pitch_r(&self) -> f32 {
+        self.pitch_r
     }
 
-    pub fn tilt_slice_right(&mut self, amount: f32) {
-        let tilt = Rotation4D::from_plane_angle(RotationPlane::ZW, -amount * 0.02);
-        self.rotation_4d = tilt.then(&self.rotation_4d);
+    /// Set yaw only for q_right, preserving current pitch
+    pub fn set_yaw_r(&mut self, yaw: f32) {
+        let pitch = self.pitch_r;
+        self.rotation_4d.set_q_right_from_yaw_pitch(yaw, pitch);
+        self.yaw_r = yaw;
+    }
+
+    /// Set pitch only for q_right, preserving current yaw
+    pub fn set_pitch_r(&mut self, pitch: f32) {
+        let yaw = self.yaw_r;
+        self.rotation_4d.set_q_right_from_yaw_pitch(yaw, pitch);
+        self.pitch_r = pitch;
     }
 
     pub fn get_4d_basis(&self) -> [[f32; 4]; 4] {
@@ -178,6 +233,116 @@ pub enum SliceDirection {
     Down,
     WPositive,
     WNegative,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CameraAction {
+    MoveForward,
+    MoveBackward,
+    MoveLeft,
+    MoveRight,
+    MoveUp,
+    MoveDown,
+    IncreaseW,
+    DecreaseW,
+    MoveSliceForward,
+    MoveSliceBackward,
+    MoveKata,
+    MoveAna,
+}
+
+impl Camera {
+    pub fn project_3d_to_4d(&self, v3: (f32, f32, f32)) -> [f32; 4] {
+        let basis_4d = self.rotation_4d.basis_vectors();
+        [
+            v3.0 * basis_4d[0][0] + v3.1 * basis_4d[1][0] + v3.2 * basis_4d[2][0],
+            v3.0 * basis_4d[0][1] + v3.1 * basis_4d[1][1] + v3.2 * basis_4d[2][1],
+            v3.0 * basis_4d[0][2] + v3.1 * basis_4d[1][2] + v3.2 * basis_4d[2][2],
+            v3.0 * basis_4d[0][3] + v3.1 * basis_4d[1][3] + v3.2 * basis_4d[2][3],
+        ]
+    }
+
+    pub fn apply_action(&mut self, action: CameraAction, speed: f32) {
+        let forward = self.forward_vector();
+        let right = self.right_vector();
+        let up = self.up_vector();
+        let basis_4d = self.rotation_4d.basis_vectors();
+
+        match action {
+            CameraAction::MoveForward => {
+                let v4 = self.project_3d_to_4d(forward);
+                self.x += v4[0] * speed;
+                self.y += v4[1] * speed;
+                self.z += v4[2] * speed;
+                self.w += v4[3] * speed;
+            }
+            CameraAction::MoveBackward => {
+                let v4 = self.project_3d_to_4d(forward);
+                self.x -= v4[0] * speed;
+                self.y -= v4[1] * speed;
+                self.z -= v4[2] * speed;
+                self.w -= v4[3] * speed;
+            }
+            CameraAction::MoveLeft => {
+                let v4 = self.project_3d_to_4d((-right.0, -right.1, -right.2));
+                self.x += v4[0] * speed;
+                self.y += v4[1] * speed;
+                self.z += v4[2] * speed;
+                self.w += v4[3] * speed;
+            }
+            CameraAction::MoveRight => {
+                let v4 = self.project_3d_to_4d(right);
+                self.x += v4[0] * speed;
+                self.y += v4[1] * speed;
+                self.z += v4[2] * speed;
+                self.w += v4[3] * speed;
+            }
+            CameraAction::MoveUp => {
+                let v4 = self.project_3d_to_4d(up);
+                self.x += v4[0] * speed;
+                self.y += v4[1] * speed;
+                self.z += v4[2] * speed;
+                self.w += v4[3] * speed;
+            }
+            CameraAction::MoveDown => {
+                let v4 = self.project_3d_to_4d((-up.0, -up.1, -up.2));
+                self.x += v4[0] * speed;
+                self.y += v4[1] * speed;
+                self.z += v4[2] * speed;
+                self.w += v4[3] * speed;
+            }
+            CameraAction::IncreaseW => self.w += speed,
+            CameraAction::DecreaseW => self.w -= speed,
+            CameraAction::MoveSliceForward => {
+                let v4 = self.project_3d_to_4d(forward);
+                self.x += v4[0] * speed;
+                self.y += v4[1] * speed;
+                self.z += v4[2] * speed;
+                self.w += v4[3] * speed;
+            }
+            CameraAction::MoveSliceBackward => {
+                let v4 = self.project_3d_to_4d(forward);
+                self.x -= v4[0] * speed;
+                self.y -= v4[1] * speed;
+                self.z -= v4[2] * speed;
+                self.w -= v4[3] * speed;
+            }
+            CameraAction::MoveKata => {
+                let w_dir = basis_4d[3];
+                self.x += w_dir[0] * speed;
+                self.y += w_dir[1] * speed;
+                self.z += w_dir[2] * speed;
+                self.w += w_dir[3] * speed;
+            }
+            CameraAction::MoveAna => {
+                let w_dir = basis_4d[3];
+                self.x -= w_dir[0] * speed;
+                self.y -= w_dir[1] * speed;
+                self.z -= w_dir[2] * speed;
+                self.w -= w_dir[3] * speed;
+            }
+        }
+    }
 }
 
 fn format_4d_vector(v: [f32; 4]) -> String {
@@ -224,7 +389,6 @@ mod tests {
         assert_eq!(camera.x, 0.0);
         assert_eq!(camera.y, 0.0);
         assert_eq!(camera.z, -5.0);
-        assert_eq!(camera.orientation, UnitQuaternion::identity());
         assert_eq!(camera.w, 0.0);
         assert!(camera.rotation_4d.is_pure_3d());
     }
@@ -235,7 +399,6 @@ mod tests {
         camera.x = 10.0;
         camera.y = 20.0;
         camera.z = 30.0;
-        camera.orientation = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), 1.0);
         camera.w = 3.0;
         camera.rotation_4d = Rotation4D::from_plane_angle(RotationPlane::XW, 0.5);
 
@@ -244,7 +407,6 @@ mod tests {
         assert_eq!(camera.x, 0.0);
         assert_eq!(camera.y, 0.0);
         assert_eq!(camera.z, -5.0);
-        assert_eq!(camera.orientation, UnitQuaternion::identity());
         assert_eq!(camera.w, 0.0);
         assert!(camera.rotation_4d.is_pure_3d());
     }
@@ -255,9 +417,10 @@ mod tests {
             x: 0.0,
             y: 0.0,
             z: 0.0,
-            orientation: UnitQuaternion::identity(),
+
             w: 0.0,
             rotation_4d: Rotation4D::identity(),
+            ..Camera::new()
         };
 
         let forward = camera.forward_vector();
@@ -272,9 +435,10 @@ mod tests {
             x: 0.0,
             y: 0.0,
             z: 0.0,
-            orientation: UnitQuaternion::identity(),
+
             w: 0.0,
             rotation_4d: Rotation4D::identity(),
+            ..Camera::new()
         };
 
         let right = camera.right_vector();
@@ -289,9 +453,10 @@ mod tests {
             x: 0.0,
             y: 0.0,
             z: 0.0,
-            orientation: UnitQuaternion::identity(),
+
             w: 0.0,
             rotation_4d: Rotation4D::identity(),
+            ..Camera::new()
         };
 
         let up = camera.up_vector();
@@ -302,14 +467,14 @@ mod tests {
 
     #[test]
     fn test_forward_vector_yaw() {
-        // Rotate 90° around Y (yaw right)
+        // Rotate 90° around Y (yaw right) - use XZ plane
         let camera = Camera {
             x: 0.0,
             y: 0.0,
-            z: 0.0,
-            orientation: UnitQuaternion::from_axis_angle(&Vector3::y_axis(), PI / 2.0),
+            z: -5.0,
             w: 0.0,
-            rotation_4d: Rotation4D::identity(),
+            rotation_4d: Rotation4D::from_plane_angle(RotationPlane::XZ, PI / 2.0),
+            ..Camera::new()
         };
 
         let forward = camera.forward_vector();
@@ -320,14 +485,14 @@ mod tests {
 
     #[test]
     fn test_forward_vector_pitch() {
-        // Rotate 45° around X (pitch up)
+        // Rotate 45° around X (pitch up) - use YZ plane
         let camera = Camera {
             x: 0.0,
             y: 0.0,
             z: 0.0,
-            orientation: UnitQuaternion::from_axis_angle(&Vector3::x_axis(), PI / 4.0),
             w: 0.0,
-            rotation_4d: Rotation4D::identity(),
+            rotation_4d: Rotation4D::from_plane_angle(RotationPlane::YZ, PI / 4.0),
+            ..Camera::new()
         };
 
         let forward = camera.forward_vector();
@@ -344,9 +509,10 @@ mod tests {
             x: 0.0,
             y: 0.0,
             z: 0.0,
-            orientation: UnitQuaternion::identity(),
+
             w: 0.0,
             rotation_4d: Rotation4D::identity(),
+            ..Camera::new()
         };
 
         camera.rotate(1.0, 0.0);
@@ -359,23 +525,21 @@ mod tests {
     #[test]
     fn test_orthonormal_basis() {
         // Test that forward, right, up form an orthonormal basis
-        let orientations = vec![
-            UnitQuaternion::identity(),
-            UnitQuaternion::from_axis_angle(&Vector3::y_axis(), PI / 4.0),
-            UnitQuaternion::from_axis_angle(&Vector3::y_axis(), PI / 2.0),
-            UnitQuaternion::from_axis_angle(&Vector3::x_axis(), PI / 6.0),
-            UnitQuaternion::from_axis_angle(&Vector3::y_axis(), PI / 4.0)
-                * UnitQuaternion::from_axis_angle(&Vector3::x_axis(), PI / 6.0),
+        let rotations = vec![
+            Rotation4D::identity(),
+            Rotation4D::from_plane_angle(RotationPlane::XY, PI / 4.0),
+            Rotation4D::from_plane_angle(RotationPlane::XY, PI / 2.0),
+            Rotation4D::from_plane_angle(RotationPlane::XZ, PI / 6.0),
         ];
 
-        for orientation in orientations {
+        for rotation_4d in rotations {
             let camera = Camera {
                 x: 0.0,
                 y: 0.0,
                 z: 0.0,
-                orientation,
                 w: 0.0,
-                rotation_4d: Rotation4D::identity(),
+                rotation_4d,
+                ..Camera::new()
             };
 
             let forward = camera.forward_vector();
@@ -419,9 +583,10 @@ mod tests {
             x: 0.0,
             y: 0.0,
             z: 0.0,
-            orientation: UnitQuaternion::identity(),
+
             w: 0.0,
             rotation_4d: Rotation4D::identity(),
+            ..Camera::new()
         };
 
         let initial_z = camera.z;
@@ -440,9 +605,10 @@ mod tests {
             x: 0.0,
             y: 0.0,
             z: 0.0,
-            orientation: UnitQuaternion::identity(),
+
             w: 0.0,
             rotation_4d: Rotation4D::identity(),
+            ..Camera::new()
         };
 
         let initial_x = camera.x;
@@ -461,9 +627,10 @@ mod tests {
             x: 0.0,
             y: 0.0,
             z: 0.0,
-            orientation: UnitQuaternion::identity(),
+
             w: 0.0,
             rotation_4d: Rotation4D::identity(),
+            ..Camera::new()
         };
 
         let initial_z = camera.z;
@@ -488,5 +655,158 @@ mod tests {
         assert_approx_eq(camera.x, 0.5, 1e-6);
         assert_approx_eq(camera.y, 1.0, 1e-6);
         assert_approx_eq(camera.z, -5.0 + 1.5, 1e-6);
+    }
+
+    #[test]
+    fn test_rotate_affects_q_left_only() {
+        let mut camera = Camera::new();
+
+        let initial_q_right = *camera.rotation_4d.q_right();
+
+        camera.rotate(1.0, 0.5);
+
+        let new_q_right = *camera.rotation_4d.q_right();
+        assert_eq!(
+            initial_q_right, new_q_right,
+            "rotate() should not affect q_right"
+        );
+
+        let forward = camera.forward_vector();
+        assert!(
+            forward.0.abs() > 1e-6 || forward.2.abs() < 0.99,
+            "rotate() should change forward vector"
+        );
+    }
+
+    #[test]
+    fn test_rotate_4d_affects_q_right_only() {
+        let mut camera = Camera::new();
+
+        let initial_q_left = *camera.rotation_4d.q_left();
+
+        camera.rotate_4d(1.0, 0.5);
+
+        let new_q_left = *camera.rotation_4d.q_left();
+        assert_eq!(
+            initial_q_left, new_q_left,
+            "rotate_4d() should not affect q_left"
+        );
+
+        let basis_w = camera.rotation_4d.basis_w();
+        assert!(
+            basis_w[3] != 1.0 || basis_w[0].abs() > 1e-6,
+            "rotate_4d() should change W axis"
+        );
+    }
+
+    #[test]
+    fn test_rotate_4d_changes_basis_w() {
+        let mut camera = Camera::new();
+
+        let initial_basis_w = camera.rotation_4d.basis_w();
+        assert_approx_eq(initial_basis_w[3], 1.0, 1e-6);
+
+        camera.rotate_4d(1.0, 0.5);
+
+        let new_basis_w = camera.rotation_4d.basis_w();
+        assert!(
+            new_basis_w[3].abs() < 0.99 || new_basis_w[0].abs() > 1e-6,
+            "rotate_4d() should tilt W axis"
+        );
+    }
+
+    #[test]
+    fn test_rotate_and_rotate_4d_independent() {
+        let mut camera = Camera::new();
+
+        camera.rotate(1.0, 0.5);
+        let q_left_after_rotate = *camera.rotation_4d.q_left();
+        let q_right_after_rotate = *camera.rotation_4d.q_right();
+
+        camera.rotate_4d(0.5, 1.0);
+
+        let q_left_after_both = *camera.rotation_4d.q_left();
+        let q_right_after_both = *camera.rotation_4d.q_right();
+
+        assert_eq!(
+            q_left_after_rotate, q_left_after_both,
+            "rotate_4d() should not change q_left"
+        );
+        assert!(
+            q_right_after_both != q_right_after_rotate,
+            "rotate_4d() should change q_right"
+        );
+    }
+
+    #[test]
+    fn test_yaw_pitch_preservation() {
+        let mut camera = Camera::new();
+
+        camera.set_yaw_l(PI / 4.0);
+        let yaw1 = camera.yaw_l();
+
+        camera.set_pitch_l(PI / 6.0);
+        let yaw2 = camera.yaw_l();
+
+        assert_approx_eq(yaw1, yaw2, 1e-6);
+    }
+
+    #[test]
+    fn test_rotate_4d_circular_drag_returns_to_start() {
+        // Simulate circular drag with larger values (like actual mouse drag)
+        let mut camera = Camera::new();
+
+        // Right, Down, Left, Up - larger values like real drag
+        camera.rotate_4d(100.0, 0.0);
+        camera.rotate_4d(0.0, 100.0);
+        camera.rotate_4d(-100.0, 0.0);
+        camera.rotate_4d(0.0, -100.0);
+
+        let final_q_right = *camera.rotation_4d.q_right();
+
+        // Should be back to identity
+        let expected = UnitQuaternion::identity();
+        assert_approx_eq(final_q_right.w, expected.w, 1e-3);
+        assert_approx_eq(final_q_right.i, expected.i, 1e-3);
+        assert_approx_eq(final_q_right.j, expected.j, 1e-3);
+        assert_approx_eq(final_q_right.k, expected.k, 1e-3);
+    }
+
+    #[test]
+    fn test_rotate_4d_horizontal_then_back_returns_to_start() {
+        // Drag right then left by same amount should cancel out
+        let mut camera = Camera::new();
+
+        let initial_q_right = *camera.rotation_4d.q_right();
+
+        // Right then left - larger values
+        camera.rotate_4d(100.0, 0.0);
+        camera.rotate_4d(-100.0, 0.0);
+
+        let final_q_right = *camera.rotation_4d.q_right();
+
+        assert_approx_eq(final_q_right.w, initial_q_right.w, 1e-3);
+        assert_approx_eq(final_q_right.i, initial_q_right.i, 1e-3);
+        assert_approx_eq(final_q_right.j, initial_q_right.j, 1e-3);
+        assert_approx_eq(final_q_right.k, initial_q_right.k, 1e-3);
+    }
+
+    #[test]
+    fn test_rotate_4d_vertical_then_back_returns_to_start() {
+        // Drag down then up by same amount should cancel out
+        let mut camera = Camera::new();
+
+        let initial_q_right = *camera.rotation_4d.q_right();
+
+        // Down then up
+        camera.rotate_4d(0.0, 100.0);
+        camera.rotate_4d(0.0, -100.0);
+
+        let final_q_right = *camera.rotation_4d.q_right();
+
+        assert_approx_eq(final_q_right.w, initial_q_right.w, 1e-3);
+        assert_approx_eq(final_q_right.i, initial_q_right.i, 1e-3);
+        assert_approx_eq(final_q_right.j, initial_q_right.j, 1e-3);
+        assert_approx_eq(final_q_right.k, initial_q_right.k, 1e-3);
     }
 }

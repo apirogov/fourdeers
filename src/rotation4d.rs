@@ -44,9 +44,40 @@ impl Rotation4D {
         &self.q_right
     }
 
+    pub fn get_q_left_as_yaw_pitch(&self) -> (f32, f32) {
+        quaternion_to_yaw_pitch(self.q_left())
+    }
+
+    pub fn set_q_left_from_yaw_pitch(&mut self, yaw: f32, pitch: f32) {
+        self.q_left = quaternion_from_yaw_pitch(yaw, pitch);
+    }
+
+    pub fn get_q_right_as_yaw_pitch(&self) -> (f32, f32) {
+        quaternion_to_yaw_pitch_4d(self.q_right())
+    }
+
+    pub fn set_q_right_from_yaw_pitch(&mut self, yaw: f32, pitch: f32) {
+        self.q_right = quaternion_from_yaw_pitch_4d(yaw, pitch);
+    }
+
+    pub fn set_q_left_from_yaw_pitch_preserving_right(&mut self, yaw: f32, pitch: f32) {
+        self.q_left = quaternion_from_yaw_pitch(yaw, pitch);
+    }
+
+    pub fn set_q_right_from_yaw_pitch_preserving_left(&mut self, yaw: f32, pitch: f32) {
+        self.q_right = quaternion_from_yaw_pitch_4d(yaw, pitch);
+    }
+
     pub fn inverse(&self) -> Self {
         Self {
             q_left: self.q_left.inverse(),
+            q_right: self.q_right.inverse(),
+        }
+    }
+
+    pub fn inverse_q_right_only(&self) -> Self {
+        Self {
+            q_left: UnitQuaternion::identity(),
             q_right: self.q_right.inverse(),
         }
     }
@@ -444,5 +475,138 @@ mod tests {
                 assert_approx_eq(dot, 0.0, 1e-5);
             }
         }
+    }
+}
+
+pub fn quaternion_to_yaw_pitch(q: &UnitQuaternion<f32>) -> (f32, f32) {
+    let forward = q * Vector3::new(0.0, 0.0, 1.0);
+    let yaw = forward.x.atan2(forward.z);
+    let horizontal_len = (forward.x * forward.x + forward.z * forward.z).sqrt();
+    let pitch = forward.y.atan2(horizontal_len);
+    (yaw, pitch)
+}
+
+pub fn quaternion_from_yaw_pitch(yaw: f32, pitch: f32) -> UnitQuaternion<f32> {
+    let yaw_rot = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), yaw);
+    let pitch_rot = UnitQuaternion::from_axis_angle(&Vector3::x_axis(), pitch);
+    yaw_rot * pitch_rot
+}
+
+pub fn quaternion_to_yaw_pitch_4d(q: &UnitQuaternion<f32>) -> (f32, f32) {
+    // For XW plane rotation: how much has X rotated toward W?
+    // For YW plane rotation: how much has Y rotated toward W?
+    // Using the same pattern as q_left but adapted for 4D
+    let x_axis = q * Vector3::new(1.0, 0.0, 0.0);
+    let y_axis = q * Vector3::new(0.0, 1.0, 0.0);
+
+    // XW plane: X component indicates rotation toward W
+    let yaw = x_axis.z.atan2(x_axis.x);
+    // YW plane: Y component indicates rotation toward W
+    let pitch = y_axis.z.atan2(y_axis.y);
+
+    (yaw, pitch)
+}
+
+pub fn quaternion_from_yaw_pitch_4d(yaw: f32, pitch: f32) -> UnitQuaternion<f32> {
+    // XW plane for yaw (horizontal), YW plane for pitch (vertical)
+    let yaw_rot = Rotation4D::from_plane_angle(RotationPlane::XW, yaw);
+    let pitch_rot = Rotation4D::from_plane_angle(RotationPlane::YW, pitch);
+    // Combine in same order as rotate_4d: tilt_xw * tilt_yw (XW applied last)
+    *yaw_rot.q_left() * *pitch_rot.q_left()
+}
+
+#[cfg(test)]
+mod yaw_pitch_tests {
+    use super::*;
+    use std::f32::consts::PI;
+
+    fn assert_approx_eq(a: f32, b: f32, epsilon: f32) {
+        assert!((a - b).abs() < epsilon, "Expected {:.6}, got {:.6}", b, a);
+    }
+
+    #[test]
+    fn test_quaternion_from_yaw_pitch_identity() {
+        let q = quaternion_from_yaw_pitch(0.0, 0.0);
+        let forward = q * Vector3::new(0.0, 0.0, 1.0);
+        assert_approx_eq(forward.x, 0.0, 1e-6);
+        assert_approx_eq(forward.y, 0.0, 1e-6);
+        assert_approx_eq(forward.z, 1.0, 1e-6);
+    }
+
+    #[test]
+    fn test_quaternion_from_yaw_pitch_nonzero() {
+        let q = quaternion_from_yaw_pitch(PI / 4.0, PI / 6.0);
+        let forward = q * Vector3::new(0.0, 0.0, 1.0);
+        assert!(forward.x.abs() > 0.1, "yaw should rotate forward.x");
+        assert!(forward.y.abs() > 0.1, "pitch should rotate forward.y");
+    }
+
+    #[test]
+    fn test_quaternion_to_yaw_pitch_reasonable_range() {
+        let q = quaternion_from_yaw_pitch(PI / 4.0, PI / 6.0);
+        let (yaw, pitch) = quaternion_to_yaw_pitch(&q);
+        assert!(yaw.abs() < PI + 1.0, "yaw should be in reasonable range");
+        assert!(
+            pitch.abs() < PI / 2.0 + 0.1,
+            "pitch should be in reasonable range"
+        );
+    }
+
+    #[test]
+    fn test_quaternion_from_yaw_pitch_4d_identity() {
+        let q = quaternion_from_yaw_pitch_4d(0.0, 0.0);
+        let x_axis = q * Vector3::new(1.0, 0.0, 0.0);
+        assert_approx_eq(x_axis.x, 1.0, 1e-6);
+        assert_approx_eq(x_axis.y, 0.0, 1e-6);
+        assert_approx_eq(x_axis.z, 0.0, 1e-6);
+    }
+
+    #[test]
+    fn test_quaternion_to_yaw_pitch_4d_reasonable() {
+        let q = quaternion_from_yaw_pitch_4d(PI / 4.0, PI / 6.0);
+        let (yaw, pitch) = quaternion_to_yaw_pitch_4d(&q);
+        assert!(yaw.abs() < PI + 1.0, "yaw should be in reasonable range");
+        assert!(
+            pitch.abs() < PI / 2.0 + 0.1,
+            "pitch should be in reasonable range"
+        );
+    }
+
+    #[test]
+    fn test_rotation4d_q_left_set_get_consistent() {
+        let mut rot = Rotation4D::identity();
+
+        rot.set_q_left_from_yaw_pitch(PI / 4.0, PI / 6.0);
+
+        let forward = rot.q_left() * Vector3::new(0.0, 0.0, 1.0);
+        assert!(forward.x.abs() > 0.1, "yaw should rotate forward");
+        assert!(forward.y.abs() > 0.1, "pitch should rotate forward");
+    }
+
+    #[test]
+    fn test_rotation4d_q_right_set_get_consistent() {
+        let mut rot = Rotation4D::identity();
+
+        rot.set_q_right_from_yaw_pitch(PI / 4.0, PI / 6.0);
+
+        let q_right = rot.q_right();
+        let x_axis = q_right * Vector3::new(1.0, 0.0, 0.0);
+        assert!(x_axis.x.abs() < 0.99, "q_right should rotate x_axis");
+    }
+
+    #[test]
+    fn test_rotation4d_preserves_other_quaternion() {
+        let mut rot = Rotation4D::identity();
+
+        rot.set_q_left_from_yaw_pitch(PI / 4.0, PI / 6.0);
+        let q_right_before = *rot.q_right();
+
+        rot.set_q_right_from_yaw_pitch(PI / 3.0, PI / 8.0);
+
+        assert!(*rot.q_right() != q_right_before, "q_right should change");
+
+        let (yaw_l, pitch_l) = rot.get_q_left_as_yaw_pitch();
+        assert!(yaw_l.abs() > 0.1, "yaw_l should be nonzero");
+        assert!(pitch_l.abs() > 0.1, "pitch_l should be nonzero");
     }
 }
