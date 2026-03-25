@@ -5,6 +5,7 @@ use nalgebra::{UnitQuaternion, Vector3};
 use crate::rotation4d::{Rotation4D, RotationPlane};
 
 /// First-person camera state with 4D orientation
+#[derive(Clone)]
 pub struct Camera {
     pub x: f32,
     pub y: f32,
