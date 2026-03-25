@@ -216,10 +216,22 @@ impl TesseractRenderContext {
 
             let w_avg = (p0_4d.w + p1_4d.w) / 2.0;
             let alpha = if w0_in_slice && w1_in_slice { 255 } else { 100 };
-            let color = if w_avg >= 0.0 {
-                egui::Color32::from_rgba_unmultiplied(0, 255, 255, alpha)
+
+            let half_thickness = self.w_half;
+            let normalized_w = (w_avg / half_thickness).clamp(-1.0, 1.0);
+
+            let color = if normalized_w >= 0.0 {
+                let t = normalized_w;
+                let r = (255.0 * (1.0 - t)) as u8;
+                let g = (255.0 * (1.0 - t * 0.35)) as u8;
+                let b = (255.0 * (1.0 - t) + 255.0 * t) as u8;
+                egui::Color32::from_rgba_unmultiplied(r, g, b, alpha)
             } else {
-                egui::Color32::from_rgba_unmultiplied(255, 165, 0, alpha)
+                let t = -normalized_w;
+                let r = 255u8;
+                let g = (255.0 * (1.0 - t * 0.35)) as u8;
+                let b = (255.0 * (1.0 - t)) as u8;
+                egui::Color32::from_rgba_unmultiplied(r, g, b, alpha)
             };
 
             painter.line_segment([s0, s1], egui::Stroke::new(2.5, color));
