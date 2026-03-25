@@ -5,9 +5,7 @@ use nalgebra::{UnitQuaternion, Vector3};
 use std::collections::HashMap;
 
 use crate::camera::Camera;
-use crate::input::{
-    analyze_tap_in_stereo_view, ControlOverlay, DragView, TapAnalysis, TetraId, Zone,
-};
+use crate::input::{analyze_tap_in_stereo_view, DragView, TapAnalysis, TetraId, Zone};
 use crate::render::{
     draw_background, draw_center_divider, split_stereo_views, TesseractRenderContext,
 };
@@ -37,8 +35,6 @@ pub struct TesseractToy {
     pub drag_state: DragState,
 
     tetrahedron_rotations: HashMap<TetraId, UnitQuaternion<f32>>,
-
-    control_overlay: ControlOverlay,
 }
 
 impl Default for TesseractToy {
@@ -66,7 +62,6 @@ impl TesseractToy {
             visualization_rect: None,
             drag_state: DragState::new(),
             tetrahedron_rotations: HashMap::new(),
-            control_overlay: ControlOverlay::new(),
         }
     }
 
