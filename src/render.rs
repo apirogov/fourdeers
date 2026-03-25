@@ -215,12 +215,12 @@ impl TesseractRenderContext {
             };
 
             let w_avg = (p0_4d.w + p1_4d.w) / 2.0;
-            let t = ((w_avg - self.w_min) / (self.w_max - self.w_min)).clamp(0.0, 1.0);
             let alpha = if w0_in_slice && w1_in_slice { 255 } else { 100 };
-            let r = (255.0 * t) as u8;
-            let g = (200.0 * (1.0 - t.abs())) as u8;
-            let b = (150.0 + 105.0 * t) as u8;
-            let color = egui::Color32::from_rgba_unmultiplied(r, g, b, alpha);
+            let color = if w_avg >= 0.0 {
+                egui::Color32::from_rgba_unmultiplied(0, 255, 255, alpha)
+            } else {
+                egui::Color32::from_rgba_unmultiplied(255, 255, 255, alpha)
+            };
 
             painter.line_segment([s0, s1], egui::Stroke::new(2.5, color));
         }
@@ -628,5 +628,166 @@ fn format_4d_vector_compact(v: [f32; 4]) -> String {
         "0".to_string()
     } else {
         parts.join(" ")
+    }
+}
+
+/// Render a tetrahedron as a floating overlay (not in 3D scene) with stereo effect
+pub fn render_stereo_tetrahedron_overlay(
+    ui: &mut egui::Ui,
+    rect: egui::Rect,
+    vector_4d: nalgebra::Vector4<f32>,
+    rotation: &UnitQuaternion<f32>,
+    eye_separation: f32,
+) {
+    let (left_rect, right_rect) = split_stereo_views(rect);
+    let scale = rect.height().min(rect.width()) * 0.25;
+
+    let gadget = TetrahedronGadget::from_4d_vector_with_quaternion(vector_4d, *rotation, scale)
+        .with_auto_magnitude_label();
+
+    let left_painter = ui.painter().with_clip_rect(left_rect);
+    render_tetrahedron_flat(&left_painter, left_rect, &gadget, -eye_separation * 0.5);
+
+    let right_painter = ui.painter().with_clip_rect(right_rect);
+    render_tetrahedron_flat(&right_painter, right_rect, &gadget, eye_separation * 0.5);
+}
+
+/// Render a single tetrahedron in screen space with eye offset for stereo
+fn render_tetrahedron_flat(
+    painter: &egui::Painter,
+    view_rect: egui::Rect,
+    gadget: &TetrahedronGadget,
+    eye_offset_x: f32,
+) {
+    let center = view_rect.center();
+
+    for edge in &gadget.edges {
+        let v0_idx = edge.vertex_indices[0];
+        let v1_idx = edge.vertex_indices[1];
+        if let (Some(pos0), Some(pos1)) = (
+            gadget.get_vertex_screen_pos(v0_idx, center.x + eye_offset_x, center.y),
+            gadget.get_vertex_screen_pos(v1_idx, center.x + eye_offset_x, center.y),
+        ) {
+            let p0 = egui::Pos2::new(pos0.0, pos0.1);
+            let p1 = egui::Pos2::new(pos1.0, pos1.1);
+            painter.line_segment(
+                [p0, p1],
+                egui::Stroke::new(
+                    2.0,
+                    egui::Color32::from_rgba_unmultiplied(150, 220, 150, 200),
+                ),
+            );
+        }
+    }
+
+    let component_mags: [f32; 4] = gadget.component_values.map(|v| v.abs());
+    let max_mag = component_mags.iter().cloned().fold(0.0f32, f32::max);
+
+    for (i, vertex) in gadget.vertices.iter().enumerate() {
+        let component = gadget.component_values[i];
+        let color = crate::tetrahedron::compute_component_color(component, max_mag);
+        let egui_color = color.to_egui_color();
+
+        if let Some(pos) = gadget.get_vertex_screen_pos(i, center.x + eye_offset_x, center.y) {
+            let screen_pos = egui::Pos2::new(pos.0, pos.1);
+            let font_id = egui::FontId::proportional(16.0);
+            let outline_color = egui::Color32::from_rgba_unmultiplied(0, 0, 0, 180);
+
+            painter.text(
+                screen_pos + egui::Vec2::new(0.5, 0.5),
+                egui::Align2::CENTER_CENTER,
+                &vertex.label,
+                font_id.clone(),
+                outline_color,
+            );
+            painter.text(
+                screen_pos + egui::Vec2::new(-0.5, -0.5),
+                egui::Align2::CENTER_CENTER,
+                &vertex.label,
+                font_id.clone(),
+                outline_color,
+            );
+            painter.text(
+                screen_pos,
+                egui::Align2::CENTER_CENTER,
+                &vertex.label,
+                font_id,
+                egui_color,
+            );
+        }
+
+        if let Some(label_pos) =
+            gadget.get_vertex_label_pos(i, center.x + eye_offset_x, center.y, 25.0)
+        {
+            let value_text = crate::tetrahedron::format_component_value(component);
+            let value_pos = egui::Pos2::new(label_pos.0, label_pos.1);
+            let font_id = egui::FontId::monospace(11.0);
+            let outline_color = egui::Color32::from_rgba_unmultiplied(0, 0, 0, 160);
+            let text_color = egui::Color32::from_rgba_unmultiplied(230, 230, 230, 255);
+
+            painter.text(
+                value_pos + egui::Vec2::new(0.5, 0.5),
+                egui::Align2::CENTER_CENTER,
+                &value_text,
+                font_id.clone(),
+                outline_color,
+            );
+            painter.text(
+                value_pos,
+                egui::Align2::CENTER_CENTER,
+                &value_text,
+                font_id,
+                text_color,
+            );
+        }
+    }
+
+    let arrow_pos = gadget.get_arrow_screen_pos(center.x + eye_offset_x, center.y);
+    let arrow_start = center;
+    let arrow_end = egui::Pos2::new(arrow_pos.0, arrow_pos.1);
+    let arrow_vec = arrow_end - arrow_start;
+
+    if arrow_vec.length() > 1e-3 {
+        painter.line_segment(
+            [arrow_start, arrow_end],
+            egui::Stroke::new(3.0, egui::Color32::from_rgb(255, 150, 50)),
+        );
+
+        let arrow_head_size = gadget.vector_arrow.arrow_head_size * 20.0;
+        if arrow_vec.length() > arrow_head_size {
+            let dir = arrow_vec.normalized();
+            let perp = egui::Vec2::new(-dir.y, dir.x);
+
+            let arrow_tip = arrow_end;
+            let arrow_base = arrow_end - dir * arrow_head_size;
+            let arrow_left = arrow_base + perp * (arrow_head_size * 0.5);
+            let arrow_right = arrow_base - perp * (arrow_head_size * 0.5);
+
+            painter.add(egui::Shape::convex_polygon(
+                vec![arrow_tip, arrow_left, arrow_right],
+                egui::Color32::from_rgb(255, 150, 50),
+                egui::Stroke::NONE,
+            ));
+        }
+    }
+
+    painter.circle_filled(
+        center,
+        3.0,
+        egui::Color32::from_rgba_unmultiplied(255, 150, 50, 180),
+    );
+
+    if let Some(ref label) = gadget.tip_label {
+        let tip_offset = egui::Vec2::new(0.0, -15.0);
+        let label_pos = arrow_end + tip_offset;
+        painter.text(
+            label_pos,
+            egui::Align2::CENTER_BOTTOM,
+            label,
+            egui::FontId::proportional(12.0),
+            egui::Color32::from_rgb(255, 200, 100),
+        );
+    } else if arrow_vec.length() > 1e-3 {
+        painter.circle_filled(arrow_end, 4.0, egui::Color32::from_rgb(255, 150, 50));
     }
 }

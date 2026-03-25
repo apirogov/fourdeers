@@ -70,7 +70,6 @@ pub fn apply_so4_rotation(
 
 /// Creates 4D tesseract vertices and edge indices
 pub fn create_tesseract() -> (Vec<Vertex4D>, Vec<u16>) {
-    // Tesseract vertices: all combinations of (±1, ±1, ±1, ±1) in 4D
     let mut vertices = Vec::with_capacity(16);
     for i in 0..16 {
         let x = if (i & 1) != 0 { 1.0 } else { -1.0 };
@@ -82,7 +81,6 @@ pub fn create_tesseract() -> (Vec<Vertex4D>, Vec<u16>) {
         });
     }
 
-    // Tesseract edges: 32 edges connecting vertices that differ by exactly 1 bit
     let mut indices = Vec::new();
     for i in 0..16 {
         for bit in 0..4 {
@@ -90,6 +88,37 @@ pub fn create_tesseract() -> (Vec<Vertex4D>, Vec<u16>) {
             if i < j {
                 indices.push(i as u16);
                 indices.push(j as u16);
+            }
+        }
+    }
+
+    (vertices, indices)
+}
+
+/// Creates 4D glome (hypersphere) approximation using 16-cell geometry
+/// The 16-cell has 8 vertices at permutations of (±1, 0, 0, 0)
+/// Edges connect all non-opposite vertex pairs
+pub fn create_glome() -> (Vec<Vertex4D>, Vec<u16>) {
+    let mut vertices = Vec::with_capacity(8);
+
+    // 8 vertices: (±1, 0, 0, 0), (0, ±1, 0, 0), (0, 0, ±1, 0), (0, 0, 0, ±1)
+    for i in 0..8 {
+        let axis = i / 2;
+        let sign = if i % 2 == 0 { 1.0 } else { -1.0 };
+        let mut pos = [0.0f32; 4];
+        pos[axis] = sign;
+        vertices.push(Vertex4D { position: pos });
+    }
+
+    // Edges: connect each vertex to all non-opposite vertices
+    // Opposite vertices differ by index 1 (e.g., 0 and 1, 2 and 3, etc.)
+    let mut indices = Vec::new();
+    for i in 0..8u16 {
+        for j in (i + 1)..8u16 {
+            // Skip opposite pairs (0-1, 2-3, 4-5, 6-7)
+            if (i / 2) != (j / 2) {
+                indices.push(i);
+                indices.push(j);
             }
         }
     }
