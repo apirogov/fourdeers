@@ -677,8 +677,8 @@ fn render_tetrahedron_flat(
         let v0_idx = edge.vertex_indices[0];
         let v1_idx = edge.vertex_indices[1];
         if let (Some(pos0), Some(pos1)) = (
-            gadget.get_vertex_screen_pos(v0_idx, center.x + eye_offset_x, center.y),
-            gadget.get_vertex_screen_pos(v1_idx, center.x + eye_offset_x, center.y),
+            gadget.get_vertex_screen_pos_with_eye(v0_idx, center.x, center.y, eye_offset_x),
+            gadget.get_vertex_screen_pos_with_eye(v1_idx, center.x, center.y, eye_offset_x),
         ) {
             let p0 = egui::Pos2::new(pos0.0, pos0.1);
             let p1 = egui::Pos2::new(pos1.0, pos1.1);
@@ -700,7 +700,9 @@ fn render_tetrahedron_flat(
         let color = crate::tetrahedron::compute_component_color(component, max_mag);
         let egui_color = color.to_egui_color();
 
-        if let Some(pos) = gadget.get_vertex_screen_pos(i, center.x + eye_offset_x, center.y) {
+        if let Some(pos) =
+            gadget.get_vertex_screen_pos_with_eye(i, center.x, center.y, eye_offset_x)
+        {
             let screen_pos = egui::Pos2::new(pos.0, pos.1);
             let font_id = egui::FontId::proportional(16.0);
             let outline_color = egui::Color32::from_rgba_unmultiplied(0, 0, 0, 180);
@@ -729,7 +731,7 @@ fn render_tetrahedron_flat(
         }
 
         if let Some(label_pos) =
-            gadget.get_vertex_label_pos(i, center.x + eye_offset_x, center.y, 25.0)
+            gadget.get_vertex_label_pos_with_eye(i, center.x, center.y, 25.0, eye_offset_x)
         {
             let value_text = crate::tetrahedron::format_component_value(component);
             let value_pos = egui::Pos2::new(label_pos.0, label_pos.1);
@@ -754,14 +756,13 @@ fn render_tetrahedron_flat(
         }
     }
 
-    let arrow_pos = gadget.get_arrow_screen_pos(center.x + eye_offset_x, center.y);
-    let arrow_start = center;
+    let arrow_pos = gadget.get_arrow_screen_pos_with_eye(center.x, center.y, eye_offset_x);
     let arrow_end = egui::Pos2::new(arrow_pos.0, arrow_pos.1);
-    let arrow_vec = arrow_end - arrow_start;
+    let arrow_vec = arrow_end - center;
 
     if arrow_vec.length() > 1e-3 {
         painter.line_segment(
-            [arrow_start, arrow_end],
+            [center, arrow_end],
             egui::Stroke::new(3.0, egui::Color32::from_rgb(255, 150, 50)),
         );
 
