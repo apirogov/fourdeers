@@ -665,7 +665,7 @@ impl Toy for TetrahedronDebugToy {
     fn handle_drag(&mut self, _is_left_view: bool, from: egui::Pos2, to: egui::Pos2) {
         if self.view_mode == ViewMode::StereoTetrahedron {
             let delta = to - from;
-            let yaw_rot = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), -delta.x * 0.005);
+            let yaw_rot = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), delta.x * 0.005);
             let pitch_rot = UnitQuaternion::from_axis_angle(&Vector3::x_axis(), delta.y * 0.005);
             let incremental = pitch_rot * yaw_rot;
             self.tetrahedron_rotation = incremental * self.tetrahedron_rotation;

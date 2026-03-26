@@ -86,7 +86,7 @@ impl Camera {
     /// - Drag down -> look down (world appears to move up)
     pub fn rotate(&mut self, delta_x: f32, delta_y: f32) {
         // Negative yaw for drag right to look right
-        let yaw_rot = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), -delta_x * 0.005);
+        let yaw_rot = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), delta_x * 0.005);
         // Positive pitch for drag down to look down
         let pitch_rot = UnitQuaternion::from_axis_angle(&Vector3::x_axis(), delta_y * 0.005);
 
