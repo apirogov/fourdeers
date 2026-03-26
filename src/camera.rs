@@ -181,6 +181,116 @@ pub enum SliceDirection {
     WNegative,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CameraAction {
+    MoveForward,
+    MoveBackward,
+    StrafeLeft,
+    StrafeRight,
+    MoveUp,
+    MoveDown,
+    IncreaseW,
+    DecreaseW,
+    MoveSliceForward,
+    MoveSliceBackward,
+    MoveSliceOrthogonalPos,
+    MoveSliceOrthogonalNeg,
+}
+
+impl Camera {
+    pub fn project_3d_to_4d(&self, v3: (f32, f32, f32)) -> [f32; 4] {
+        let basis_4d = self.rotation_4d.basis_vectors();
+        [
+            v3.0 * basis_4d[0][0] + v3.1 * basis_4d[1][0] + v3.2 * basis_4d[2][0],
+            v3.0 * basis_4d[0][1] + v3.1 * basis_4d[1][1] + v3.2 * basis_4d[2][1],
+            v3.0 * basis_4d[0][2] + v3.1 * basis_4d[1][2] + v3.2 * basis_4d[2][2],
+            v3.0 * basis_4d[0][3] + v3.1 * basis_4d[1][3] + v3.2 * basis_4d[2][3],
+        ]
+    }
+
+    pub fn apply_action(&mut self, action: CameraAction, speed: f32) {
+        let forward = self.forward_vector();
+        let right = self.right_vector();
+        let up = self.up_vector();
+        let basis_4d = self.rotation_4d.basis_vectors();
+
+        match action {
+            CameraAction::MoveForward => {
+                let v4 = self.project_3d_to_4d(forward);
+                self.x += v4[0] * speed;
+                self.y += v4[1] * speed;
+                self.z += v4[2] * speed;
+                self.w += v4[3] * speed;
+            }
+            CameraAction::MoveBackward => {
+                let v4 = self.project_3d_to_4d(forward);
+                self.x -= v4[0] * speed;
+                self.y -= v4[1] * speed;
+                self.z -= v4[2] * speed;
+                self.w -= v4[3] * speed;
+            }
+            CameraAction::StrafeLeft => {
+                let v4 = self.project_3d_to_4d((-right.0, -right.1, -right.2));
+                self.x += v4[0] * speed;
+                self.y += v4[1] * speed;
+                self.z += v4[2] * speed;
+                self.w += v4[3] * speed;
+            }
+            CameraAction::StrafeRight => {
+                let v4 = self.project_3d_to_4d(right);
+                self.x += v4[0] * speed;
+                self.y += v4[1] * speed;
+                self.z += v4[2] * speed;
+                self.w += v4[3] * speed;
+            }
+            CameraAction::MoveUp => {
+                let v4 = self.project_3d_to_4d(up);
+                self.x += v4[0] * speed;
+                self.y += v4[1] * speed;
+                self.z += v4[2] * speed;
+                self.w += v4[3] * speed;
+            }
+            CameraAction::MoveDown => {
+                let v4 = self.project_3d_to_4d((-up.0, -up.1, -up.2));
+                self.x += v4[0] * speed;
+                self.y += v4[1] * speed;
+                self.z += v4[2] * speed;
+                self.w += v4[3] * speed;
+            }
+            CameraAction::IncreaseW => self.w += speed,
+            CameraAction::DecreaseW => self.w -= speed,
+            CameraAction::MoveSliceForward => {
+                let v4 = self.project_3d_to_4d(forward);
+                self.x += v4[0] * speed;
+                self.y += v4[1] * speed;
+                self.z += v4[2] * speed;
+                self.w += v4[3] * speed;
+            }
+            CameraAction::MoveSliceBackward => {
+                let v4 = self.project_3d_to_4d(forward);
+                self.x -= v4[0] * speed;
+                self.y -= v4[1] * speed;
+                self.z -= v4[2] * speed;
+                self.w -= v4[3] * speed;
+            }
+            CameraAction::MoveSliceOrthogonalPos => {
+                let w_dir = basis_4d[3];
+                self.x += w_dir[0] * speed;
+                self.y += w_dir[1] * speed;
+                self.z += w_dir[2] * speed;
+                self.w += w_dir[3] * speed;
+            }
+            CameraAction::MoveSliceOrthogonalNeg => {
+                let w_dir = basis_4d[3];
+                self.x -= w_dir[0] * speed;
+                self.y -= w_dir[1] * speed;
+                self.z -= w_dir[2] * speed;
+                self.w -= w_dir[3] * speed;
+            }
+        }
+    }
+}
+
 fn format_4d_vector(v: [f32; 4]) -> String {
     fn fmt_comp(val: f32) -> String {
         if val.abs() < 0.01 {

@@ -10,6 +10,38 @@ use nalgebra::{UnitQuaternion, Vector3, Vector4};
 /// Square root of 3 - used to convert between scale and vertex coordinates
 const SQRT_3: f32 = 1.732_050_8;
 
+pub fn magnitude_4d(v: Vector4<f32>) -> f32 {
+    (v.x.powi(2) + v.y.powi(2) + v.z.powi(2) + v.w.powi(2)).sqrt()
+}
+
+const TETRAHEDRON_BASE_VERTICES: [Pos3D; 4] = [
+    Pos3D {
+        x: 1.0,
+        y: 1.0,
+        z: 1.0,
+    },
+    Pos3D {
+        x: -1.0,
+        y: -1.0,
+        z: 1.0,
+    },
+    Pos3D {
+        x: -1.0,
+        y: 1.0,
+        z: -1.0,
+    },
+    Pos3D {
+        x: 1.0,
+        y: -1.0,
+        z: -1.0,
+    },
+];
+
+fn get_tetrahedron_vertices(scale: f32) -> [Pos3D; 4] {
+    let s = scale / SQRT_3;
+    TETRAHEDRON_BASE_VERTICES.map(|v| Pos3D::new(v.x * s, v.y * s, v.z * s))
+}
+
 /// Layout parameters for tetrahedron rendering, proportional to view size
 #[derive(Debug, Clone, Copy)]
 pub struct TetrahedronLayout {
@@ -155,9 +187,7 @@ impl TetrahedronGadget {
         let vector_arrow = Self::compute_vector_arrow(vector_4d, scale, &rotation);
 
         let component_values = [vector_4d.x, vector_4d.y, vector_4d.z, vector_4d.w];
-        let vector_magnitude =
-            (vector_4d.x.powi(2) + vector_4d.y.powi(2) + vector_4d.z.powi(2) + vector_4d.w.powi(2))
-                .sqrt();
+        let vector_magnitude = magnitude_4d(vector_4d);
 
         Self {
             vertices,
@@ -246,14 +276,7 @@ impl TetrahedronGadget {
         scale: f32,
         rotation: &UnitQuaternion<f32>,
     ) -> Vec<TetrahedronVertex> {
-        let s = scale / SQRT_3;
-
-        let base_positions = [
-            Pos3D::new(s, s, s),
-            Pos3D::new(-s, -s, s),
-            Pos3D::new(-s, s, -s),
-            Pos3D::new(s, -s, -s),
-        ];
+        let base_positions = get_tetrahedron_vertices(scale);
 
         let labels = ["X", "Y", "Z", "W"];
         let axes = ['X', 'Y', 'Z', 'W'];
@@ -304,11 +327,8 @@ impl TetrahedronGadget {
         rotation: &UnitQuaternion<f32>,
     ) -> VectorArrow {
         let arrow_head_size = scale * 0.15;
-        let s = scale / SQRT_3;
 
-        let norm =
-            (vector_4d.x.powi(2) + vector_4d.y.powi(2) + vector_4d.z.powi(2) + vector_4d.w.powi(2))
-                .sqrt();
+        let norm = magnitude_4d(vector_4d);
 
         if norm < 1e-6 {
             return VectorArrow {
@@ -333,12 +353,7 @@ impl TetrahedronGadget {
             };
         }
 
-        let base_vertices = [
-            Pos3D::new(s, s, s),
-            Pos3D::new(-s, -s, s),
-            Pos3D::new(-s, s, -s),
-            Pos3D::new(s, -s, -s),
-        ];
+        let base_vertices = get_tetrahedron_vertices(scale);
 
         let mut pos_x = 0.0f32;
         let mut pos_y = 0.0f32;
@@ -379,21 +394,12 @@ impl TetrahedronGadget {
 }
 
 fn compute_weighted_direction_3d(vector_4d: Vector4<f32>) -> Pos3D {
-    let norm =
-        (vector_4d.x.powi(2) + vector_4d.y.powi(2) + vector_4d.z.powi(2) + vector_4d.w.powi(2))
-            .sqrt();
+    let norm = magnitude_4d(vector_4d);
     if norm < 1e-6 {
         return Pos3D::new(0.0, 0.0, 0.0);
     }
 
     let normalized = vector_4d / norm;
-    let s = 1.0;
-    let base_vertices = [
-        Pos3D::new(s, s, s),
-        Pos3D::new(-s, -s, s),
-        Pos3D::new(-s, s, -s),
-        Pos3D::new(s, -s, -s),
-    ];
 
     let weights = [
         normalized.x.abs(),
@@ -406,16 +412,16 @@ fn compute_weighted_direction_3d(vector_4d: Vector4<f32>) -> Pos3D {
     let mut pos_z = 0.0f32;
 
     for (i, &weight) in weights.iter().enumerate() {
-        pos_x += base_vertices[i].x * weight;
-        pos_y += base_vertices[i].y * weight;
-        pos_z += base_vertices[i].z * weight;
+        pos_x += TETRAHEDRON_BASE_VERTICES[i].x * weight;
+        pos_y += TETRAHEDRON_BASE_VERTICES[i].y * weight;
+        pos_z += TETRAHEDRON_BASE_VERTICES[i].z * weight;
     }
 
     Pos3D::new(pos_x, pos_y, pos_z)
 }
 
 pub fn normalize_4d_vector(v: Vector4<f32>) -> Vector4<f32> {
-    let norm = (v.x.powi(2) + v.y.powi(2) + v.z.powi(2) + v.w.powi(2)).sqrt();
+    let norm = magnitude_4d(v);
     if norm < 1e-6 {
         Vector4::new(0.0, 0.0, 0.0, 0.0)
     } else {

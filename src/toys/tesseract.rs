@@ -4,7 +4,7 @@ use eframe::egui;
 use nalgebra::{UnitQuaternion, Vector3};
 use std::collections::HashMap;
 
-use crate::camera::Camera;
+use crate::camera::{Camera, CameraAction};
 use crate::input::{analyze_tap_in_stereo_view, DragView, TapAnalysis, TetraId, Zone};
 use crate::render::{
     draw_background, draw_center_divider, split_stereo_views, ProjectionMode,
@@ -98,95 +98,7 @@ impl TesseractToy {
 
     fn apply_camera_action(&mut self, action: CameraAction, speed: f32) {
         self.reset_tetrahedron_rotations();
-
-        let forward = self.camera.forward_vector();
-        let right = self.camera.right_vector();
-        let up = self.camera.up_vector();
-        let basis_4d = self.camera.rotation_4d.basis_vectors();
-
-        let project_3d_to_4d = |v3: (f32, f32, f32)| -> [f32; 4] {
-            [
-                v3.0 * basis_4d[0][0] + v3.1 * basis_4d[1][0] + v3.2 * basis_4d[2][0],
-                v3.0 * basis_4d[0][1] + v3.1 * basis_4d[1][1] + v3.2 * basis_4d[2][1],
-                v3.0 * basis_4d[0][2] + v3.1 * basis_4d[1][2] + v3.2 * basis_4d[2][2],
-                v3.0 * basis_4d[0][3] + v3.1 * basis_4d[1][3] + v3.2 * basis_4d[2][3],
-            ]
-        };
-
-        match action {
-            CameraAction::MoveForward => {
-                let v4 = project_3d_to_4d(forward);
-                self.camera.x += v4[0] * speed;
-                self.camera.y += v4[1] * speed;
-                self.camera.z += v4[2] * speed;
-                self.camera.w += v4[3] * speed;
-            }
-            CameraAction::MoveBackward => {
-                let v4 = project_3d_to_4d(forward);
-                self.camera.x -= v4[0] * speed;
-                self.camera.y -= v4[1] * speed;
-                self.camera.z -= v4[2] * speed;
-                self.camera.w -= v4[3] * speed;
-            }
-            CameraAction::StrafeLeft => {
-                let v4 = project_3d_to_4d((-right.0, -right.1, -right.2));
-                self.camera.x += v4[0] * speed;
-                self.camera.y += v4[1] * speed;
-                self.camera.z += v4[2] * speed;
-                self.camera.w += v4[3] * speed;
-            }
-            CameraAction::StrafeRight => {
-                let v4 = project_3d_to_4d(right);
-                self.camera.x += v4[0] * speed;
-                self.camera.y += v4[1] * speed;
-                self.camera.z += v4[2] * speed;
-                self.camera.w += v4[3] * speed;
-            }
-            CameraAction::MoveUp => {
-                let v4 = project_3d_to_4d(up);
-                self.camera.x += v4[0] * speed;
-                self.camera.y += v4[1] * speed;
-                self.camera.z += v4[2] * speed;
-                self.camera.w += v4[3] * speed;
-            }
-            CameraAction::MoveDown => {
-                let v4 = project_3d_to_4d((-up.0, -up.1, -up.2));
-                self.camera.x += v4[0] * speed;
-                self.camera.y += v4[1] * speed;
-                self.camera.z += v4[2] * speed;
-                self.camera.w += v4[3] * speed;
-            }
-            CameraAction::IncreaseW => self.camera.w += speed,
-            CameraAction::DecreaseW => self.camera.w -= speed,
-            CameraAction::MoveSliceForward => {
-                let v4 = project_3d_to_4d(forward);
-                self.camera.x += v4[0] * speed;
-                self.camera.y += v4[1] * speed;
-                self.camera.z += v4[2] * speed;
-                self.camera.w += v4[3] * speed;
-            }
-            CameraAction::MoveSliceBackward => {
-                let v4 = project_3d_to_4d(forward);
-                self.camera.x -= v4[0] * speed;
-                self.camera.y -= v4[1] * speed;
-                self.camera.z -= v4[2] * speed;
-                self.camera.w -= v4[3] * speed;
-            }
-            CameraAction::MoveSliceOrthogonalPos => {
-                let w_dir = basis_4d[3];
-                self.camera.x += w_dir[0] * speed;
-                self.camera.y += w_dir[1] * speed;
-                self.camera.z += w_dir[2] * speed;
-                self.camera.w += w_dir[3] * speed;
-            }
-            CameraAction::MoveSliceOrthogonalNeg => {
-                let w_dir = basis_4d[3];
-                self.camera.x -= w_dir[0] * speed;
-                self.camera.y -= w_dir[1] * speed;
-                self.camera.z -= w_dir[2] * speed;
-                self.camera.w -= w_dir[3] * speed;
-            }
-        }
+        self.camera.apply_action(action, speed);
     }
 
     fn zone_to_action(zone: Zone, is_left_view: bool) -> CameraAction {
@@ -206,22 +118,6 @@ impl TesseractToy {
             }
         }
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CameraAction {
-    MoveForward,
-    MoveBackward,
-    StrafeLeft,
-    StrafeRight,
-    MoveUp,
-    MoveDown,
-    IncreaseW,
-    DecreaseW,
-    MoveSliceForward,
-    MoveSliceBackward,
-    MoveSliceOrthogonalPos,
-    MoveSliceOrthogonalNeg,
 }
 
 impl Toy for TesseractToy {
