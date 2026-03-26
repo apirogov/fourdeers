@@ -7,30 +7,27 @@ use std::collections::HashMap;
 use crate::camera::{Camera, CameraAction};
 use crate::input::{analyze_tap_in_stereo_view, DragView, TapAnalysis, TetraId, Zone};
 use crate::render::{
-    draw_background, draw_center_divider, split_stereo_views, ProjectionMode,
+    draw_background, draw_center_divider, split_stereo_views, StereoSettings,
     TesseractRenderContext,
 };
 use crate::tetrahedron::get_tetrahedron_layout;
 use crate::toy::{DragState, Toy};
 
 pub struct TesseractToy {
-    camera: Camera,
+    pub camera: Camera,
     rot_xy: f32,
     rot_xz: f32,
     rot_yz: f32,
     rot_xw: f32,
     rot_yw: f32,
     rot_zw: f32,
-    w_thickness: f32,
-    eye_separation: f32,
-    projection_distance: f32,
-    projection_mode: ProjectionMode,
     w_min: f32,
     w_max: f32,
     show_debug: bool,
     visualization_rect: Option<egui::Rect>,
     pub drag_state: DragState,
     tetrahedron_rotations: HashMap<TetraId, UnitQuaternion<f32>>,
+    stereo: StereoSettings,
 }
 
 impl Default for TesseractToy {
@@ -49,16 +46,13 @@ impl TesseractToy {
             rot_xw: 0.0,
             rot_yw: 0.0,
             rot_zw: 0.0,
-            w_thickness: 2.5,
-            eye_separation: 0.12,
-            projection_distance: 3.0,
-            projection_mode: ProjectionMode::default(),
             w_min: -2.0,
             w_max: 2.0,
             show_debug: false,
             visualization_rect: None,
             drag_state: DragState::new(),
             tetrahedron_rotations: HashMap::new(),
+            stereo: StereoSettings::new(),
         }
     }
 
@@ -296,34 +290,39 @@ impl Toy for TesseractToy {
         ui.add_space(4.0);
 
         ui.collapsing("Slice Settings", |ui| {
-            ui.add(egui::Slider::new(&mut self.w_thickness, 0.1..=2.0).text("W Thickness"));
+            ui.add(egui::Slider::new(&mut self.stereo.w_thickness, 0.1..=2.0).text("W Thickness"));
         });
 
         ui.add_space(4.0);
 
         ui.collapsing("Stereoscopic", |ui| {
-            ui.add(egui::Slider::new(&mut self.eye_separation, 0.0..=1.0).text("Eye Separation"));
             ui.add(
-                egui::Slider::new(&mut self.projection_distance, 1.0..=10.0)
+                egui::Slider::new(&mut self.stereo.eye_separation, 0.0..=1.0)
+                    .text("Eye Separation"),
+            );
+            ui.add(
+                egui::Slider::new(&mut self.stereo.projection_distance, 1.0..=10.0)
                     .text("Projection Distance"),
             );
             ui.horizontal(|ui| {
                 ui.label("Projection:");
-                let persp_label = if self.projection_mode == ProjectionMode::Perspective {
-                    "● Perspective"
-                } else {
-                    "○ Perspective"
-                };
-                let ortho_label = if self.projection_mode == ProjectionMode::Orthographic {
-                    "● Orthographic"
-                } else {
-                    "○ Orthographic"
-                };
+                let persp_label =
+                    if self.stereo.projection_mode == crate::render::ProjectionMode::Perspective {
+                        "● Perspective"
+                    } else {
+                        "○ Perspective"
+                    };
+                let ortho_label =
+                    if self.stereo.projection_mode == crate::render::ProjectionMode::Orthographic {
+                        "● Orthographic"
+                    } else {
+                        "○ Orthographic"
+                    };
                 if ui.button(persp_label).clicked() {
-                    self.projection_mode = ProjectionMode::Perspective;
+                    self.stereo.projection_mode = crate::render::ProjectionMode::Perspective;
                 }
                 if ui.button(ortho_label).clicked() {
-                    self.projection_mode = ProjectionMode::Orthographic;
+                    self.stereo.projection_mode = crate::render::ProjectionMode::Orthographic;
                 }
             });
         });
@@ -352,7 +351,7 @@ impl Toy for TesseractToy {
 
         draw_center_divider(ui, rect);
 
-        let ctx = TesseractRenderContext::new(
+        let ctx = TesseractRenderContext::with_stereo_settings(
             &self.camera,
             self.rot_xy,
             self.rot_xz,
@@ -360,12 +359,9 @@ impl Toy for TesseractToy {
             self.rot_xw,
             self.rot_yw,
             self.rot_zw,
-            self.w_thickness,
             self.w_min,
             self.w_max,
-            self.eye_separation,
-            self.projection_distance,
-            self.projection_mode,
+            &self.stereo,
         );
 
         ctx.render_eye_view(

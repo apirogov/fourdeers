@@ -9,7 +9,7 @@ use crate::geometry::{apply_so4_rotation, create_glome};
 use crate::input::{analyze_tap_in_stereo_view, DragView, TapAnalysis, TetraId, Zone};
 use crate::render::{
     draw_background, draw_center_divider, render_stereo_tetrahedron_overlay, split_stereo_views,
-    ProjectionMode, StereoProjector, TesseractRenderContext,
+    w_to_color, StereoProjector, StereoSettings,
 };
 use crate::tetrahedron::{get_tetrahedron_layout, magnitude_4d};
 use crate::toy::{DragState, Toy};
@@ -21,7 +21,7 @@ pub enum ViewMode {
 }
 
 pub struct TetrahedronDebugToy {
-    camera: Camera,
+    pub camera: Camera,
     view_mode: ViewMode,
     tetrahedron_rotation: UnitQuaternion<f32>,
     visualization_rect: Option<egui::Rect>,
@@ -32,10 +32,7 @@ pub struct TetrahedronDebugToy {
     glome_rot_xw: f32,
     glome_rot_yw: f32,
     glome_rot_zw: f32,
-    w_thickness: f32,
-    eye_separation: f32,
-    projection_distance: f32,
-    projection_mode: ProjectionMode,
+    stereo: StereoSettings,
     tetrahedron_rotations: HashMap<TetraId, UnitQuaternion<f32>>,
 }
 
@@ -59,10 +56,7 @@ impl TetrahedronDebugToy {
             glome_rot_xw: 0.0,
             glome_rot_yw: 0.0,
             glome_rot_zw: 0.0,
-            w_thickness: 2.5,
-            eye_separation: 0.12,
-            projection_distance: 3.0,
-            projection_mode: ProjectionMode::default(),
+            stereo: StereoSettings::new(),
             tetrahedron_rotations: HashMap::new(),
         }
     }
@@ -149,7 +143,7 @@ impl TetrahedronDebugToy {
         let (vertices, indices) = create_glome();
         let inv_orientation = self.camera.orientation.inverse();
         let camera_4d_rotation_inverse = self.camera.rotation_4d.inverse();
-        let w_half = self.w_thickness * 0.5;
+        let w_half = self.stereo.w_thickness * 0.5;
 
         for (eye_idx, (view_rect, eye_sign)) in [(left_rect, -1.0f32), (right_rect, 1.0f32)]
             .iter()
@@ -158,7 +152,7 @@ impl TetrahedronDebugToy {
             let _is_left_view = eye_idx == 0;
             let center = view_rect.center();
             let scale = view_rect.height().min(view_rect.width()) * 0.35;
-            let eye_offset = *eye_sign * self.eye_separation * 0.5;
+            let eye_offset = *eye_sign * self.stereo.eye_separation * 0.5;
 
             let painter = ui.painter().with_clip_rect(*view_rect);
 
@@ -222,7 +216,7 @@ impl TetrahedronDebugToy {
                 let p0_cam = inv_orientation.transform_vector(&p0_rel);
                 let p1_cam = inv_orientation.transform_vector(&p1_rel);
 
-                let dist = self.projection_distance;
+                let dist = self.stereo.projection_distance;
 
                 let s0 = if p0_cam.z > -dist + 0.1 {
                     let scale0 = scale / (p0_cam.z + dist);
@@ -251,62 +245,12 @@ impl TetrahedronDebugToy {
                 let w_avg = (p0_4d.w + p1_4d.w) / 2.0;
                 let alpha = if w0_in_slice && w1_in_slice { 255 } else { 100 };
 
-                let half_thickness = w_half;
-                let normalized_w = (w_avg / half_thickness).clamp(-1.0, 1.0);
-
-                let color = if normalized_w >= 0.0 {
-                    let t = normalized_w;
-                    let r = (255.0 * (1.0 - t)) as u8;
-                    let g = (255.0 * (1.0 - t * 0.35)) as u8;
-                    let b = (255.0 * (1.0 - t) + 255.0 * t) as u8;
-                    egui::Color32::from_rgba_unmultiplied(r, g, b, alpha)
-                } else {
-                    let t = -normalized_w;
-                    let r = 255u8;
-                    let g = (255.0 * (1.0 - t * 0.35)) as u8;
-                    let b = (255.0 * (1.0 - t)) as u8;
-                    egui::Color32::from_rgba_unmultiplied(r, g, b, alpha)
-                };
+                let normalized_w = (w_avg / w_half).clamp(-1.0, 1.0);
+                let color = w_to_color(normalized_w, alpha);
 
                 painter.line_segment([s0, s1], egui::Stroke::new(2.5, color));
             }
         }
-    }
-
-    fn render_zone_tetrahedra(&self, ui: &mut egui::Ui, rect: egui::Rect) {
-        let ctx = TesseractRenderContext::new(
-            &self.camera,
-            self.glome_rot_xy,
-            self.glome_rot_xz,
-            self.glome_rot_yz,
-            self.glome_rot_xw,
-            self.glome_rot_yw,
-            self.glome_rot_zw,
-            self.w_thickness,
-            -2.0,
-            2.0,
-            self.eye_separation,
-            self.projection_distance,
-            self.projection_mode,
-        );
-
-        let (left_rect, right_rect) = split_stereo_views(rect);
-        ctx.render_eye_view(
-            ui,
-            left_rect,
-            -1.0,
-            true,
-            false,
-            &self.tetrahedron_rotations,
-        );
-        ctx.render_eye_view(
-            ui,
-            right_rect,
-            1.0,
-            false,
-            false,
-            &self.tetrahedron_rotations,
-        );
     }
 }
 
@@ -459,7 +403,9 @@ impl Toy for TetrahedronDebugToy {
             });
 
             ui.collapsing("Slice Settings", |ui| {
-                ui.add(egui::Slider::new(&mut self.w_thickness, 0.1..=5.0).text("W Thickness"));
+                ui.add(
+                    egui::Slider::new(&mut self.stereo.w_thickness, 0.1..=5.0).text("W Thickness"),
+                );
             });
         } else {
             ui.label("Stereo Tetrahedron Mode");
@@ -480,33 +426,41 @@ impl Toy for TetrahedronDebugToy {
             ));
 
             ui.separator();
-            ui.add(egui::Slider::new(&mut self.eye_separation, 0.0..=1.0).text("Eye Separation"));
+            ui.add(
+                egui::Slider::new(&mut self.stereo.eye_separation, 0.0..=1.0)
+                    .text("Eye Separation"),
+            );
         }
 
         ui.separator();
         ui.collapsing("Stereoscopic", |ui| {
-            ui.add(egui::Slider::new(&mut self.eye_separation, 0.0..=1.0).text("Eye Separation"));
             ui.add(
-                egui::Slider::new(&mut self.projection_distance, 1.0..=10.0)
+                egui::Slider::new(&mut self.stereo.eye_separation, 0.0..=1.0)
+                    .text("Eye Separation"),
+            );
+            ui.add(
+                egui::Slider::new(&mut self.stereo.projection_distance, 1.0..=10.0)
                     .text("Projection Distance"),
             );
             ui.horizontal(|ui| {
                 ui.label("Projection:");
-                let persp_label = if self.projection_mode == ProjectionMode::Perspective {
-                    "● Perspective"
-                } else {
-                    "○ Perspective"
-                };
-                let ortho_label = if self.projection_mode == ProjectionMode::Orthographic {
-                    "● Orthographic"
-                } else {
-                    "○ Orthographic"
-                };
+                let persp_label =
+                    if self.stereo.projection_mode == crate::render::ProjectionMode::Perspective {
+                        "● Perspective"
+                    } else {
+                        "○ Perspective"
+                    };
+                let ortho_label =
+                    if self.stereo.projection_mode == crate::render::ProjectionMode::Orthographic {
+                        "● Orthographic"
+                    } else {
+                        "○ Orthographic"
+                    };
                 if ui.button(persp_label).clicked() {
-                    self.projection_mode = ProjectionMode::Perspective;
+                    self.stereo.projection_mode = crate::render::ProjectionMode::Perspective;
                 }
                 if ui.button(ortho_label).clicked() {
-                    self.projection_mode = ProjectionMode::Orthographic;
+                    self.stereo.projection_mode = crate::render::ProjectionMode::Orthographic;
                 }
             });
         });
@@ -519,7 +473,6 @@ impl Toy for TetrahedronDebugToy {
         match self.view_mode {
             ViewMode::Camera => {
                 self.render_glome(ui, rect);
-                self.render_zone_tetrahedra(ui, rect);
             }
             ViewMode::StereoTetrahedron => {
                 draw_center_divider(ui, rect);
@@ -528,8 +481,8 @@ impl Toy for TetrahedronDebugToy {
                 let projector = StereoProjector::new(
                     rect.center(),
                     scale,
-                    self.eye_separation,
-                    self.projection_mode,
+                    self.stereo.eye_separation,
+                    self.stereo.projection_mode,
                 );
                 render_stereo_tetrahedron_overlay(
                     ui,

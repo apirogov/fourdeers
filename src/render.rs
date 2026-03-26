@@ -41,6 +41,67 @@ pub enum ProjectionMode {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub struct StereoSettings {
+    pub eye_separation: f32,
+    pub projection_distance: f32,
+    pub projection_mode: ProjectionMode,
+    pub w_thickness: f32,
+}
+
+impl Default for StereoSettings {
+    fn default() -> Self {
+        Self {
+            eye_separation: 0.12,
+            projection_distance: 3.0,
+            projection_mode: ProjectionMode::default(),
+            w_thickness: 2.5,
+        }
+    }
+}
+
+impl StereoSettings {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn with_eye_separation(mut self, separation: f32) -> Self {
+        self.eye_separation = separation;
+        self
+    }
+
+    pub fn with_projection_distance(mut self, distance: f32) -> Self {
+        self.projection_distance = distance;
+        self
+    }
+
+    pub fn with_projection_mode(mut self, mode: ProjectionMode) -> Self {
+        self.projection_mode = mode;
+        self
+    }
+
+    pub fn with_w_thickness(mut self, thickness: f32) -> Self {
+        self.w_thickness = thickness;
+        self
+    }
+}
+
+pub fn w_to_color(normalized_w: f32, alpha: u8) -> egui::Color32 {
+    if normalized_w >= 0.0 {
+        let t = normalized_w;
+        let r = (255.0 * (1.0 - t)) as u8;
+        let g = (255.0 * (1.0 - t * 0.35)) as u8;
+        let b = (255.0 * (1.0 - t) + 255.0 * t) as u8;
+        egui::Color32::from_rgba_unmultiplied(r, g, b, alpha)
+    } else {
+        let t = -normalized_w;
+        let r = 255u8;
+        let g = (255.0 * (1.0 - t * 0.35)) as u8;
+        let b = (255.0 * (1.0 - t)) as u8;
+        egui::Color32::from_rgba_unmultiplied(r, g, b, alpha)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct StereoProjector {
     center: egui::Pos2,
     scale: f32,
@@ -234,6 +295,35 @@ impl TesseractRenderContext {
         }
     }
 
+    pub fn with_stereo_settings(
+        camera: &Camera,
+        rot_xy: f32,
+        rot_xz: f32,
+        rot_yz: f32,
+        rot_xw: f32,
+        rot_yw: f32,
+        rot_zw: f32,
+        w_min: f32,
+        w_max: f32,
+        stereo: &StereoSettings,
+    ) -> Self {
+        Self::new(
+            camera,
+            rot_xy,
+            rot_xz,
+            rot_yz,
+            rot_xw,
+            rot_yw,
+            rot_zw,
+            stereo.w_thickness,
+            w_min,
+            w_max,
+            stereo.eye_separation,
+            stereo.projection_distance,
+            stereo.projection_mode,
+        )
+    }
+
     pub fn render_eye_view(
         &self,
         ui: &mut egui::Ui,
@@ -339,20 +429,7 @@ impl TesseractRenderContext {
             let alpha = if w0_in_slice && w1_in_slice { 255 } else { 100 };
 
             let normalized_w = (w_avg / self.w_half).clamp(-1.0, 1.0);
-
-            let color = if normalized_w >= 0.0 {
-                let t = normalized_w;
-                let r = (255.0 * (1.0 - t)) as u8;
-                let g = (255.0 * (1.0 - t * 0.35)) as u8;
-                let b = (255.0 * (1.0 - t) + 255.0 * t) as u8;
-                egui::Color32::from_rgba_unmultiplied(r, g, b, alpha)
-            } else {
-                let t = -normalized_w;
-                let r = 255u8;
-                let g = (255.0 * (1.0 - t * 0.35)) as u8;
-                let b = (255.0 * (1.0 - t)) as u8;
-                egui::Color32::from_rgba_unmultiplied(r, g, b, alpha)
-            };
+            let color = w_to_color(normalized_w, alpha);
 
             painter.line_segment([s0, s1], egui::Stroke::new(2.5, color));
         }
