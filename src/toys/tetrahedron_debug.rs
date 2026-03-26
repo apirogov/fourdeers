@@ -9,7 +9,7 @@ use crate::geometry::{apply_so4_rotation, create_glome};
 use crate::input::{analyze_tap_in_stereo_view, DragView, TapAnalysis, TetraId, Zone};
 use crate::render::{
     draw_background, draw_center_divider, render_stereo_tetrahedron_overlay, split_stereo_views,
-    TesseractRenderContext,
+    ProjectionMode, StereoProjector, TesseractRenderContext,
 };
 use crate::tetrahedron::get_tetrahedron_layout;
 use crate::toy::{DragState, Toy};
@@ -35,6 +35,7 @@ pub struct TetrahedronDebugToy {
     w_thickness: f32,
     eye_separation: f32,
     projection_distance: f32,
+    projection_mode: ProjectionMode,
     tetrahedron_rotations: HashMap<TetraId, UnitQuaternion<f32>>,
 }
 
@@ -59,8 +60,9 @@ impl TetrahedronDebugToy {
             glome_rot_yw: 0.0,
             glome_rot_zw: 0.0,
             w_thickness: 2.5,
-            eye_separation: 0.3,
+            eye_separation: 0.12,
             projection_distance: 3.0,
+            projection_mode: ProjectionMode::default(),
             tetrahedron_rotations: HashMap::new(),
         }
     }
@@ -225,7 +227,7 @@ impl TetrahedronDebugToy {
             .iter()
             .enumerate()
         {
-            let is_left_view = eye_idx == 0;
+            let _is_left_view = eye_idx == 0;
             let center = view_rect.center();
             let scale = view_rect.height().min(view_rect.width()) * 0.35;
             let eye_offset = *eye_sign * self.eye_separation * 0.5;
@@ -357,6 +359,7 @@ impl TetrahedronDebugToy {
             2.0,
             self.eye_separation,
             self.projection_distance,
+            self.projection_mode,
         );
 
         let (left_rect, right_rect) = split_stereo_views(rect);
@@ -570,10 +573,30 @@ impl Toy for TetrahedronDebugToy {
 
         ui.separator();
         ui.collapsing("Stereoscopic", |ui| {
+            ui.add(egui::Slider::new(&mut self.eye_separation, 0.0..=1.0).text("Eye Separation"));
             ui.add(
                 egui::Slider::new(&mut self.projection_distance, 1.0..=10.0)
                     .text("Projection Distance"),
             );
+            ui.horizontal(|ui| {
+                ui.label("Projection:");
+                let persp_label = if self.projection_mode == ProjectionMode::Perspective {
+                    "● Perspective"
+                } else {
+                    "○ Perspective"
+                };
+                let ortho_label = if self.projection_mode == ProjectionMode::Orthographic {
+                    "● Orthographic"
+                } else {
+                    "○ Orthographic"
+                };
+                if ui.button(persp_label).clicked() {
+                    self.projection_mode = ProjectionMode::Perspective;
+                }
+                if ui.button(ortho_label).clicked() {
+                    self.projection_mode = ProjectionMode::Orthographic;
+                }
+            });
         });
     }
 
@@ -589,12 +612,19 @@ impl Toy for TetrahedronDebugToy {
             ViewMode::StereoTetrahedron => {
                 draw_center_divider(ui, rect);
                 let to_origin = self.get_to_origin_vector();
+                let scale = rect.height().min(rect.width()) * 0.25;
+                let projector = StereoProjector::new(
+                    rect.center(),
+                    scale,
+                    self.eye_separation,
+                    self.projection_mode,
+                );
                 render_stereo_tetrahedron_overlay(
                     ui,
                     rect,
                     to_origin,
                     &self.tetrahedron_rotation,
-                    self.eye_separation,
+                    &projector,
                 );
             }
         }

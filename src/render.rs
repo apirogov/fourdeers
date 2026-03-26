@@ -33,6 +33,123 @@ pub fn draw_center_divider(ui: &mut egui::Ui, rect: egui::Rect) {
     );
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ProjectionMode {
+    #[default]
+    Perspective,
+    Orthographic,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct StereoProjector {
+    center: egui::Pos2,
+    scale: f32,
+    eye_separation: f32,
+    focal_length: f32,
+    mode: ProjectionMode,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ProjectedPoint {
+    pub screen_pos: egui::Pos2,
+    pub depth: f32,
+}
+
+impl StereoProjector {
+    pub fn new(center: egui::Pos2, scale: f32, eye_separation: f32, mode: ProjectionMode) -> Self {
+        Self {
+            center,
+            scale,
+            eye_separation,
+            focal_length: scale * 3.0,
+            mode,
+        }
+    }
+
+    pub fn from_rect(rect: egui::Rect, eye_separation: f32, mode: ProjectionMode) -> Self {
+        let scale = rect.height().min(rect.width()) * 0.35;
+        Self::new(rect.center(), scale, eye_separation, mode)
+    }
+
+    pub fn center(&self) -> egui::Pos2 {
+        self.center
+    }
+
+    pub fn scale(&self) -> f32 {
+        self.scale
+    }
+
+    pub fn with_center(&self, center: egui::Pos2) -> Self {
+        Self {
+            center,
+            scale: self.scale,
+            eye_separation: self.eye_separation,
+            focal_length: self.focal_length,
+            mode: self.mode,
+        }
+    }
+
+    pub fn with_scale(&self, scale: f32) -> Self {
+        Self {
+            center: self.center,
+            scale,
+            eye_separation: self.eye_separation,
+            focal_length: scale * 3.0,
+            mode: self.mode,
+        }
+    }
+
+    pub fn project_3d(&self, x: f32, y: f32, z: f32, eye_sign: f32) -> Option<ProjectedPoint> {
+        let (scale_factor, parallax) = match self.mode {
+            ProjectionMode::Perspective => {
+                let z_offset = self.focal_length + z;
+                if z_offset <= 0.1 {
+                    return None;
+                }
+                let sf = self.focal_length / z_offset;
+                let eye_offset = eye_sign * self.eye_separation * 0.5;
+                (sf, eye_offset * sf)
+            }
+            ProjectionMode::Orthographic => {
+                let eye_offset = eye_sign * self.eye_separation * 0.5;
+                let parallax = eye_offset * (self.scale / self.focal_length);
+                (1.0, parallax)
+            }
+        };
+
+        let final_scale = self.scale * scale_factor;
+        Some(ProjectedPoint {
+            screen_pos: egui::Pos2::new(
+                self.center.x + x * final_scale + parallax,
+                self.center.y - y * final_scale,
+            ),
+            depth: z,
+        })
+    }
+
+    pub fn project_3d_no_eye(&self, x: f32, y: f32, z: f32) -> Option<ProjectedPoint> {
+        let scale_factor = match self.mode {
+            ProjectionMode::Perspective => {
+                let z_offset = self.focal_length + z;
+                if z_offset <= 0.1 {
+                    return None;
+                }
+                self.focal_length / z_offset
+            }
+            ProjectionMode::Orthographic => 1.0,
+        };
+
+        let final_scale = self.scale * scale_factor;
+        Some(ProjectedPoint {
+            screen_pos: egui::Pos2::new(
+                self.center.x + x * final_scale,
+                self.center.y - y * final_scale,
+            ),
+            depth: z,
+        })
+    }
+}
+
 pub struct TesseractRenderContext {
     pub vertices: Vec<Vertex4D>,
     pub indices: Vec<u16>,
@@ -56,6 +173,7 @@ pub struct TesseractRenderContext {
     pub w_max: f32,
     pub eye_separation: f32,
     pub projection_distance: f32,
+    pub projection_mode: ProjectionMode,
 }
 
 impl TesseractRenderContext {
@@ -72,6 +190,7 @@ impl TesseractRenderContext {
         w_max: f32,
         eye_separation: f32,
         projection_distance: f32,
+        projection_mode: ProjectionMode,
     ) -> Self {
         use crate::geometry::create_tesseract;
 
@@ -111,6 +230,7 @@ impl TesseractRenderContext {
             w_max,
             eye_separation,
             projection_distance,
+            projection_mode,
         }
     }
 
@@ -125,23 +245,30 @@ impl TesseractRenderContext {
     ) {
         let center = view_rect.center();
         let scale = view_rect.height().min(view_rect.width()) * 0.35;
-        let eye_offset = eye_sign * self.eye_separation * 0.5;
+
+        let projector =
+            StereoProjector::new(center, scale, self.eye_separation, self.projection_mode);
 
         let painter = ui.painter().with_clip_rect(view_rect);
 
-        self.render_tesseract_edges(&painter, center, scale, eye_offset);
+        self.render_tesseract_edges(&painter, &projector, eye_sign);
         if show_debug {
             self.render_zone_labels(&painter, view_rect, is_left_view);
         }
-        self.render_tetrahedron_gadget(&painter, view_rect, is_left_view, tetrahedron_rotations);
+        self.render_tetrahedron_gadget(
+            &painter,
+            view_rect,
+            is_left_view,
+            tetrahedron_rotations,
+            &projector,
+        );
     }
 
     fn render_tesseract_edges(
         &self,
         painter: &egui::Painter,
-        center: egui::Pos2,
-        scale: f32,
-        eye_offset: f32,
+        projector: &StereoProjector,
+        eye_sign: f32,
     ) {
         for chunk in self.indices.chunks(2) {
             if chunk.len() != 2 {
@@ -208,7 +335,7 @@ impl TesseractRenderContext {
             }
 
             let (screen_p0, screen_p1) =
-                self.project_edge_points(p0_4d, p1_4d, center, scale, eye_offset);
+                self.project_edge_points(p0_4d, p1_4d, projector, eye_sign);
 
             let Some((s0, s1)) = screen_p0.zip(screen_p1) else {
                 continue;
@@ -217,8 +344,7 @@ impl TesseractRenderContext {
             let w_avg = (p0_4d.w + p1_4d.w) / 2.0;
             let alpha = if w0_in_slice && w1_in_slice { 255 } else { 100 };
 
-            let half_thickness = self.w_half;
-            let normalized_w = (w_avg / half_thickness).clamp(-1.0, 1.0);
+            let normalized_w = (w_avg / self.w_half).clamp(-1.0, 1.0);
 
             let color = if normalized_w >= 0.0 {
                 let t = normalized_w;
@@ -242,9 +368,8 @@ impl TesseractRenderContext {
         &self,
         p0_4d: nalgebra::Vector4<f32>,
         p1_4d: nalgebra::Vector4<f32>,
-        center: egui::Pos2,
-        scale: f32,
-        eye_offset: f32,
+        projector: &StereoProjector,
+        eye_sign: f32,
     ) -> (Option<egui::Pos2>, Option<egui::Pos2>) {
         let p0_rel = Vector3::new(p0_4d.x, p0_4d.y, p0_4d.z);
         let p1_rel = Vector3::new(p1_4d.x, p1_4d.y, p1_4d.z);
@@ -252,30 +377,12 @@ impl TesseractRenderContext {
         let p0_cam = self.inv_orientation.transform_vector(&p0_rel);
         let p1_cam = self.inv_orientation.transform_vector(&p1_rel);
 
-        let x0_final = p0_cam.x + eye_offset;
-        let x1_final = p1_cam.x + eye_offset;
-
-        let dist = self.projection_distance;
-
-        let s0 = if p0_cam.z > -dist + 0.1 {
-            let scale0 = scale / (p0_cam.z + dist);
-            Some(egui::Pos2::new(
-                center.x + x0_final * scale0,
-                center.y - p0_cam.y * scale0,
-            ))
-        } else {
-            None
-        };
-
-        let s1 = if p1_cam.z > -dist + 0.1 {
-            let scale1 = scale / (p1_cam.z + dist);
-            Some(egui::Pos2::new(
-                center.x + x1_final * scale1,
-                center.y - p1_cam.y * scale1,
-            ))
-        } else {
-            None
-        };
+        let s0 = projector
+            .project_3d(p0_cam.x, p0_cam.y, p0_cam.z, eye_sign)
+            .map(|p| p.screen_pos);
+        let s1 = projector
+            .project_3d(p1_cam.x, p1_cam.y, p1_cam.z, eye_sign)
+            .map(|p| p.screen_pos);
 
         (s0, s1)
     }
@@ -373,6 +480,7 @@ impl TesseractRenderContext {
         view_rect: egui::Rect,
         is_left_view: bool,
         tetrahedron_rotations: &std::collections::HashMap<TetraId, UnitQuaternion<f32>>,
+        projector: &StereoProjector,
     ) {
         let basis = self.camera.rotation_4d.basis_vectors();
         let layout = get_tetrahedron_layout(view_rect);
@@ -450,6 +558,7 @@ impl TesseractRenderContext {
                 y,
                 user_rotation,
                 layout.scale,
+                projector,
             );
         }
     }
@@ -464,7 +573,6 @@ fn zone_to_direction(zone: Zone) -> ZoneDirection {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 fn render_single_tetrahedron(
     painter: &egui::Painter,
     vector_4d: nalgebra::Vector4<f32>,
@@ -473,21 +581,27 @@ fn render_single_tetrahedron(
     center_y: f32,
     user_rotation: UnitQuaternion<f32>,
     scale: f32,
+    projector: &StereoProjector,
 ) {
+    let projector = projector
+        .with_center(egui::Pos2::new(center_x, center_y))
+        .with_scale(scale);
     let gadget = TetrahedronGadget::for_zone(vector_4d, zone_dir, user_rotation, scale);
 
     for edge in &gadget.edges {
         let v0_idx = edge.vertex_indices[0];
         let v1_idx = edge.vertex_indices[1];
 
-        if let (Some(pos0), Some(pos1)) = (
-            gadget.get_vertex_screen_pos(v0_idx, center_x, center_y),
-            gadget.get_vertex_screen_pos(v1_idx, center_x, center_y),
-        ) {
-            let p0 = egui::Pos2::new(pos0.0, pos0.1);
-            let p1 = egui::Pos2::new(pos1.0, pos1.1);
+        let p0 = gadget
+            .get_vertex_3d(v0_idx)
+            .and_then(|pos| projector.project_3d_no_eye(pos.x, pos.y, pos.z));
+        let p1 = gadget
+            .get_vertex_3d(v1_idx)
+            .and_then(|pos| projector.project_3d_no_eye(pos.x, pos.y, pos.z));
+
+        if let (Some(p0), Some(p1)) = (p0, p1) {
             painter.line_segment(
-                [p0, p1],
+                [p0.screen_pos, p1.screen_pos],
                 egui::Stroke::new(
                     1.5,
                     egui::Color32::from_rgba_unmultiplied(150, 220, 150, 180),
@@ -504,27 +618,29 @@ fn render_single_tetrahedron(
         let color = crate::tetrahedron::compute_component_color(component, max_mag);
         let egui_color = color.to_egui_color();
 
-        if let Some(pos) = gadget.get_vertex_screen_pos(i, center_x, center_y) {
-            let screen_pos = egui::Pos2::new(pos.0, pos.1);
+        if let Some(p) = gadget
+            .get_vertex_3d(i)
+            .and_then(|pos| projector.project_3d_no_eye(pos.x, pos.y, pos.z))
+        {
             let font_id = egui::FontId::proportional(14.0);
             let outline_color = egui::Color32::from_rgba_unmultiplied(0, 0, 0, 180);
 
             painter.text(
-                screen_pos + egui::Vec2::new(0.5, 0.5),
+                p.screen_pos + egui::Vec2::new(0.5, 0.5),
                 egui::Align2::CENTER_CENTER,
                 &vertex.label,
                 font_id.clone(),
                 outline_color,
             );
             painter.text(
-                screen_pos + egui::Vec2::new(-0.5, -0.5),
+                p.screen_pos + egui::Vec2::new(-0.5, -0.5),
                 egui::Align2::CENTER_CENTER,
                 &vertex.label,
                 font_id.clone(),
                 outline_color,
             );
             painter.text(
-                screen_pos,
+                p.screen_pos,
                 egui::Align2::CENTER_CENTER,
                 &vertex.label,
                 font_id,
@@ -532,84 +648,89 @@ fn render_single_tetrahedron(
             );
         }
 
-        if let Some(label_pos) = gadget.get_vertex_label_pos(i, center_x, center_y, 20.0) {
-            let value_text = crate::tetrahedron::format_component_value(component);
-            let value_pos = egui::Pos2::new(label_pos.0, label_pos.1);
-            let font_id = egui::FontId::monospace(10.0);
-            let outline_color = egui::Color32::from_rgba_unmultiplied(0, 0, 0, 160);
-            let text_color = egui::Color32::from_rgba_unmultiplied(230, 230, 230, 255);
+        if let (Some(pos), Some(normal)) = (gadget.get_vertex_3d(i), gadget.get_vertex_normal(i)) {
+            let label_x = pos.x + normal.x * 20.0;
+            let label_y = pos.y + normal.y * 20.0;
+            if let Some(label_p) = projector.project_3d_no_eye(label_x, label_y, pos.z) {
+                let value_text = crate::tetrahedron::format_component_value(component);
+                let font_id = egui::FontId::monospace(10.0);
+                let outline_color = egui::Color32::from_rgba_unmultiplied(0, 0, 0, 160);
+                let text_color = egui::Color32::from_rgba_unmultiplied(230, 230, 230, 255);
 
-            painter.text(
-                value_pos + egui::Vec2::new(0.5, 0.5),
-                egui::Align2::CENTER_CENTER,
-                &value_text,
-                font_id.clone(),
-                outline_color,
-            );
-            painter.text(
-                value_pos + egui::Vec2::new(-0.5, -0.5),
-                egui::Align2::CENTER_CENTER,
-                &value_text,
-                font_id.clone(),
-                outline_color,
-            );
-            painter.text(
-                value_pos,
-                egui::Align2::CENTER_CENTER,
-                &value_text,
-                font_id,
-                text_color,
-            );
+                painter.text(
+                    label_p.screen_pos + egui::Vec2::new(0.5, 0.5),
+                    egui::Align2::CENTER_CENTER,
+                    &value_text,
+                    font_id.clone(),
+                    outline_color,
+                );
+                painter.text(
+                    label_p.screen_pos + egui::Vec2::new(-0.5, -0.5),
+                    egui::Align2::CENTER_CENTER,
+                    &value_text,
+                    font_id.clone(),
+                    outline_color,
+                );
+                painter.text(
+                    label_p.screen_pos,
+                    egui::Align2::CENTER_CENTER,
+                    &value_text,
+                    font_id,
+                    text_color,
+                );
+            }
         }
     }
 
-    let arrow_start = egui::Pos2::new(center_x, center_y);
-    let arrow_end_pos = gadget.get_arrow_screen_pos(center_x, center_y);
-    let arrow_end = egui::Pos2::new(arrow_end_pos.0, arrow_end_pos.1);
+    let center = egui::Pos2::new(center_x, center_y);
+    let arrow = gadget.arrow_position();
+    if let Some(arrow_p) = projector.project_3d_no_eye(arrow.x, arrow.y, arrow.z) {
+        let arrow_end = arrow_p.screen_pos;
+        let arrow_vec = arrow_end - center;
 
-    let arrow_vec = arrow_end - arrow_start;
-    if arrow_vec.length() > 1e-3 {
-        painter.line_segment(
-            [arrow_start, arrow_end],
-            egui::Stroke::new(2.0, egui::Color32::from_rgb(255, 150, 50)),
-        );
+        if arrow_vec.length() > 1e-3 {
+            painter.line_segment(
+                [center, arrow_end],
+                egui::Stroke::new(2.0, egui::Color32::from_rgb(255, 150, 50)),
+            );
 
-        let arrow_head_size = gadget.vector_arrow.arrow_head_size * 15.0;
-        if arrow_vec.length() > arrow_head_size {
-            let dir = arrow_vec.normalized();
-            let perp = egui::Vec2::new(-dir.y, dir.x);
+            let arrow_head_size = gadget.arrow_head_size() * 15.0;
+            if arrow_vec.length() > arrow_head_size {
+                let dir = arrow_vec.normalized();
+                let perp = egui::Vec2::new(-dir.y, dir.x);
 
-            let arrow_tip = arrow_end;
-            let arrow_base = arrow_end - dir * arrow_head_size;
-            let arrow_left = arrow_base + perp * (arrow_head_size * 0.5);
-            let arrow_right = arrow_base - perp * (arrow_head_size * 0.5);
+                let arrow_tip = arrow_end;
+                let arrow_base = arrow_end - dir * arrow_head_size;
+                let arrow_left = arrow_base + perp * (arrow_head_size * 0.5);
+                let arrow_right = arrow_base - perp * (arrow_head_size * 0.5);
 
-            painter.add(egui::Shape::convex_polygon(
-                vec![arrow_tip, arrow_left, arrow_right],
-                egui::Color32::from_rgb(255, 150, 50),
-                egui::Stroke::NONE,
-            ));
+                painter.add(egui::Shape::convex_polygon(
+                    vec![arrow_tip, arrow_left, arrow_right],
+                    egui::Color32::from_rgb(255, 150, 50),
+                    egui::Stroke::NONE,
+                ));
+            }
         }
-    }
 
-    painter.circle_filled(
-        arrow_start,
-        2.0,
-        egui::Color32::from_rgba_unmultiplied(255, 150, 50, 180),
-    );
-
-    if let Some(ref label) = gadget.tip_label {
-        let tip_offset = egui::Vec2::new(0.0, -12.0);
-        let label_pos = arrow_end + tip_offset;
-        painter.text(
-            label_pos,
-            egui::Align2::CENTER_BOTTOM,
-            label,
-            egui::FontId::proportional(10.0),
-            egui::Color32::from_rgb(255, 200, 100),
+        painter.circle_filled(
+            center,
+            2.0,
+            egui::Color32::from_rgba_unmultiplied(255, 150, 50, 180),
         );
-    } else if arrow_vec.length() > 1e-3 {
-        painter.circle_filled(arrow_end, 3.0, egui::Color32::from_rgb(255, 150, 50));
+
+        if let Some(ref label) = gadget.tip_label {
+            let tip_offset = egui::Vec2::new(0.0, -12.0);
+            let label_pos = arrow_end + tip_offset;
+            painter.text(
+                label_pos,
+                egui::Align2::CENTER_BOTTOM,
+                label,
+                egui::FontId::proportional(10.0),
+                egui::Color32::from_rgb(255, 200, 100),
+            );
+        } else if arrow_vec.length() > 1e-3 {
+            painter.circle_filled(arrow_end, 3.0, egui::Color32::from_rgb(255, 150, 50));
+        }
     }
 }
 
@@ -649,41 +770,42 @@ pub fn render_stereo_tetrahedron_overlay(
     rect: egui::Rect,
     vector_4d: nalgebra::Vector4<f32>,
     rotation: &UnitQuaternion<f32>,
-    eye_separation: f32,
+    projector: &StereoProjector,
 ) {
     let (left_rect, right_rect) = split_stereo_views(rect);
-    let scale = rect.height().min(rect.width()) * 0.25;
-
-    let gadget = TetrahedronGadget::from_4d_vector_with_quaternion(vector_4d, *rotation, scale)
-        .with_auto_magnitude_label();
+    let gadget =
+        TetrahedronGadget::from_4d_vector_with_quaternion(vector_4d, *rotation, projector.scale())
+            .with_auto_magnitude_label();
 
     let left_painter = ui.painter().with_clip_rect(left_rect);
-    render_tetrahedron_flat(&left_painter, left_rect, &gadget, -eye_separation * 0.5);
+    render_tetrahedron_with_projector(&left_painter, &gadget, projector, -1.0);
 
     let right_painter = ui.painter().with_clip_rect(right_rect);
-    render_tetrahedron_flat(&right_painter, right_rect, &gadget, eye_separation * 0.5);
+    render_tetrahedron_with_projector(&right_painter, &gadget, projector, 1.0);
 }
 
-/// Render a single tetrahedron in screen space with eye offset for stereo
-fn render_tetrahedron_flat(
+fn render_tetrahedron_with_projector(
     painter: &egui::Painter,
-    view_rect: egui::Rect,
     gadget: &TetrahedronGadget,
-    eye_offset_x: f32,
+    projector: &StereoProjector,
+    eye_sign: f32,
 ) {
-    let center = view_rect.center();
+    let center = projector.center();
 
     for edge in &gadget.edges {
         let v0_idx = edge.vertex_indices[0];
         let v1_idx = edge.vertex_indices[1];
-        if let (Some(pos0), Some(pos1)) = (
-            gadget.get_vertex_screen_pos_with_eye(v0_idx, center.x, center.y, eye_offset_x),
-            gadget.get_vertex_screen_pos_with_eye(v1_idx, center.x, center.y, eye_offset_x),
-        ) {
-            let p0 = egui::Pos2::new(pos0.0, pos0.1);
-            let p1 = egui::Pos2::new(pos1.0, pos1.1);
+
+        let p0 = gadget
+            .get_vertex_3d(v0_idx)
+            .and_then(|pos| projector.project_3d(pos.x, pos.y, pos.z, eye_sign));
+        let p1 = gadget
+            .get_vertex_3d(v1_idx)
+            .and_then(|pos| projector.project_3d(pos.x, pos.y, pos.z, eye_sign));
+
+        if let (Some(p0), Some(p1)) = (p0, p1) {
             painter.line_segment(
-                [p0, p1],
+                [p0.screen_pos, p1.screen_pos],
                 egui::Stroke::new(
                     2.0,
                     egui::Color32::from_rgba_unmultiplied(150, 220, 150, 200),
@@ -700,29 +822,29 @@ fn render_tetrahedron_flat(
         let color = crate::tetrahedron::compute_component_color(component, max_mag);
         let egui_color = color.to_egui_color();
 
-        if let Some(pos) =
-            gadget.get_vertex_screen_pos_with_eye(i, center.x, center.y, eye_offset_x)
+        if let Some(p) = gadget
+            .get_vertex_3d(i)
+            .and_then(|pos| projector.project_3d(pos.x, pos.y, pos.z, eye_sign))
         {
-            let screen_pos = egui::Pos2::new(pos.0, pos.1);
             let font_id = egui::FontId::proportional(16.0);
             let outline_color = egui::Color32::from_rgba_unmultiplied(0, 0, 0, 180);
 
             painter.text(
-                screen_pos + egui::Vec2::new(0.5, 0.5),
+                p.screen_pos + egui::Vec2::new(0.5, 0.5),
                 egui::Align2::CENTER_CENTER,
                 &vertex.label,
                 font_id.clone(),
                 outline_color,
             );
             painter.text(
-                screen_pos + egui::Vec2::new(-0.5, -0.5),
+                p.screen_pos + egui::Vec2::new(-0.5, -0.5),
                 egui::Align2::CENTER_CENTER,
                 &vertex.label,
                 font_id.clone(),
                 outline_color,
             );
             painter.text(
-                screen_pos,
+                p.screen_pos,
                 egui::Align2::CENTER_CENTER,
                 &vertex.label,
                 font_id,
@@ -730,77 +852,80 @@ fn render_tetrahedron_flat(
             );
         }
 
-        if let Some(label_pos) =
-            gadget.get_vertex_label_pos_with_eye(i, center.x, center.y, 25.0, eye_offset_x)
-        {
-            let value_text = crate::tetrahedron::format_component_value(component);
-            let value_pos = egui::Pos2::new(label_pos.0, label_pos.1);
-            let font_id = egui::FontId::monospace(11.0);
-            let outline_color = egui::Color32::from_rgba_unmultiplied(0, 0, 0, 160);
-            let text_color = egui::Color32::from_rgba_unmultiplied(230, 230, 230, 255);
+        if let (Some(pos), Some(normal)) = (gadget.get_vertex_3d(i), gadget.get_vertex_normal(i)) {
+            let label_x = pos.x + normal.x * 25.0;
+            let label_y = pos.y + normal.y * 25.0;
+            if let Some(label_p) = projector.project_3d(label_x, label_y, pos.z, eye_sign) {
+                let value_text = crate::tetrahedron::format_component_value(component);
+                let font_id = egui::FontId::monospace(11.0);
+                let outline_color = egui::Color32::from_rgba_unmultiplied(0, 0, 0, 160);
+                let text_color = egui::Color32::from_rgba_unmultiplied(230, 230, 230, 255);
 
-            painter.text(
-                value_pos + egui::Vec2::new(0.5, 0.5),
-                egui::Align2::CENTER_CENTER,
-                &value_text,
-                font_id.clone(),
-                outline_color,
-            );
-            painter.text(
-                value_pos,
-                egui::Align2::CENTER_CENTER,
-                &value_text,
-                font_id,
-                text_color,
-            );
+                painter.text(
+                    label_p.screen_pos + egui::Vec2::new(0.5, 0.5),
+                    egui::Align2::CENTER_CENTER,
+                    &value_text,
+                    font_id.clone(),
+                    outline_color,
+                );
+                painter.text(
+                    label_p.screen_pos,
+                    egui::Align2::CENTER_CENTER,
+                    &value_text,
+                    font_id,
+                    text_color,
+                );
+            }
         }
     }
 
-    let arrow_pos = gadget.get_arrow_screen_pos_with_eye(center.x, center.y, eye_offset_x);
-    let arrow_end = egui::Pos2::new(arrow_pos.0, arrow_pos.1);
-    let arrow_vec = arrow_end - center;
+    let arrow = gadget.arrow_position();
+    if let Some(arrow_p) = projector.project_3d(arrow.x, arrow.y, arrow.z, eye_sign) {
+        let arrow_end = arrow_p.screen_pos;
+        let arrow_vec = arrow_end - center;
 
-    if arrow_vec.length() > 1e-3 {
-        painter.line_segment(
-            [center, arrow_end],
-            egui::Stroke::new(3.0, egui::Color32::from_rgb(255, 150, 50)),
-        );
+        if arrow_vec.length() > 1e-3 {
+            painter.line_segment(
+                [center, arrow_end],
+                egui::Stroke::new(3.0, egui::Color32::from_rgb(255, 150, 50)),
+            );
 
-        let arrow_head_size = gadget.vector_arrow.arrow_head_size * 20.0;
-        if arrow_vec.length() > arrow_head_size {
-            let dir = arrow_vec.normalized();
-            let perp = egui::Vec2::new(-dir.y, dir.x);
+            let arrow_head_size = gadget.arrow_head_size() * 20.0;
+            if arrow_vec.length() > arrow_head_size {
+                let dir = arrow_vec.normalized();
+                let perp = egui::Vec2::new(-dir.y, dir.x);
 
-            let arrow_tip = arrow_end;
-            let arrow_base = arrow_end - dir * arrow_head_size;
-            let arrow_left = arrow_base + perp * (arrow_head_size * 0.5);
-            let arrow_right = arrow_base - perp * (arrow_head_size * 0.5);
+                let arrow_tip = arrow_end;
+                let arrow_base = arrow_end - dir * arrow_head_size;
+                let arrow_left = arrow_base + perp * (arrow_head_size * 0.5);
+                let arrow_right = arrow_base - perp * (arrow_head_size * 0.5);
 
-            painter.add(egui::Shape::convex_polygon(
-                vec![arrow_tip, arrow_left, arrow_right],
-                egui::Color32::from_rgb(255, 150, 50),
-                egui::Stroke::NONE,
-            ));
+                painter.add(egui::Shape::convex_polygon(
+                    vec![arrow_tip, arrow_left, arrow_right],
+                    egui::Color32::from_rgb(255, 150, 50),
+                    egui::Stroke::NONE,
+                ));
+            }
         }
-    }
 
-    painter.circle_filled(
-        center,
-        3.0,
-        egui::Color32::from_rgba_unmultiplied(255, 150, 50, 180),
-    );
-
-    if let Some(ref label) = gadget.tip_label {
-        let tip_offset = egui::Vec2::new(0.0, -15.0);
-        let label_pos = arrow_end + tip_offset;
-        painter.text(
-            label_pos,
-            egui::Align2::CENTER_BOTTOM,
-            label,
-            egui::FontId::proportional(12.0),
-            egui::Color32::from_rgb(255, 200, 100),
+        painter.circle_filled(
+            center,
+            3.0,
+            egui::Color32::from_rgba_unmultiplied(255, 150, 50, 180),
         );
-    } else if arrow_vec.length() > 1e-3 {
-        painter.circle_filled(arrow_end, 4.0, egui::Color32::from_rgb(255, 150, 50));
+
+        if let Some(ref label) = gadget.tip_label {
+            let tip_offset = egui::Vec2::new(0.0, -15.0);
+            let label_pos = arrow_end + tip_offset;
+            painter.text(
+                label_pos,
+                egui::Align2::CENTER_BOTTOM,
+                label,
+                egui::FontId::proportional(12.0),
+                egui::Color32::from_rgb(255, 200, 100),
+            );
+        } else if arrow_vec.length() > 1e-3 {
+            painter.circle_filled(arrow_end, 4.0, egui::Color32::from_rgb(255, 150, 50));
+        }
     }
 }

@@ -7,33 +7,29 @@ use std::collections::HashMap;
 use crate::camera::Camera;
 use crate::input::{analyze_tap_in_stereo_view, DragView, TapAnalysis, TetraId, Zone};
 use crate::render::{
-    draw_background, draw_center_divider, split_stereo_views, TesseractRenderContext,
+    draw_background, draw_center_divider, split_stereo_views, ProjectionMode,
+    TesseractRenderContext,
 };
 use crate::tetrahedron::get_tetrahedron_layout;
 use crate::toy::{DragState, Toy};
 
 pub struct TesseractToy {
-    pub camera: Camera,
-
+    camera: Camera,
     rot_xy: f32,
     rot_xz: f32,
     rot_yz: f32,
     rot_xw: f32,
     rot_yw: f32,
     rot_zw: f32,
-
     w_thickness: f32,
     eye_separation: f32,
     projection_distance: f32,
+    projection_mode: ProjectionMode,
     w_min: f32,
     w_max: f32,
-
-    pub show_debug: bool,
-
+    show_debug: bool,
     visualization_rect: Option<egui::Rect>,
-
     pub drag_state: DragState,
-
     tetrahedron_rotations: HashMap<TetraId, UnitQuaternion<f32>>,
 }
 
@@ -54,8 +50,9 @@ impl TesseractToy {
             rot_yw: 0.0,
             rot_zw: 0.0,
             w_thickness: 2.5,
-            eye_separation: 0.3,
+            eye_separation: 0.12,
             projection_distance: 3.0,
+            projection_mode: ProjectionMode::default(),
             w_min: -2.0,
             w_max: 2.0,
             show_debug: false,
@@ -414,6 +411,25 @@ impl Toy for TesseractToy {
                 egui::Slider::new(&mut self.projection_distance, 1.0..=10.0)
                     .text("Projection Distance"),
             );
+            ui.horizontal(|ui| {
+                ui.label("Projection:");
+                let persp_label = if self.projection_mode == ProjectionMode::Perspective {
+                    "● Perspective"
+                } else {
+                    "○ Perspective"
+                };
+                let ortho_label = if self.projection_mode == ProjectionMode::Orthographic {
+                    "● Orthographic"
+                } else {
+                    "○ Orthographic"
+                };
+                if ui.button(persp_label).clicked() {
+                    self.projection_mode = ProjectionMode::Perspective;
+                }
+                if ui.button(ortho_label).clicked() {
+                    self.projection_mode = ProjectionMode::Orthographic;
+                }
+            });
         });
 
         ui.add_space(4.0);
@@ -453,6 +469,7 @@ impl Toy for TesseractToy {
             self.w_max,
             self.eye_separation,
             self.projection_distance,
+            self.projection_mode,
         );
 
         ctx.render_eye_view(

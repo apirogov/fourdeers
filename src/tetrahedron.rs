@@ -357,134 +357,24 @@ impl TetrahedronGadget {
         }
     }
 
-    pub fn get_vertex_screen_pos(
-        &self,
-        vertex_index: usize,
-        center_x: f32,
-        center_y: f32,
-    ) -> Option<(f32, f32)> {
-        if vertex_index >= self.vertices.len() {
-            return None;
-        }
-        let vertex = &self.vertices[vertex_index];
-        let focal_length = self.scale * 3.0;
-        let z_offset = focal_length + vertex.position.z;
-        let scale = if z_offset > 0.1 {
-            focal_length / z_offset
-        } else {
-            0.0
-        };
-        Some((
-            center_x + vertex.position.x * scale,
-            center_y - vertex.position.y * scale,
-        ))
+    pub fn get_vertex_3d(&self, vertex_index: usize) -> Option<&Pos3D> {
+        self.vertices.get(vertex_index).map(|v| &v.position)
     }
 
-    pub fn get_vertex_screen_pos_with_eye(
-        &self,
-        vertex_index: usize,
-        center_x: f32,
-        center_y: f32,
-        eye_offset_x: f32,
-    ) -> Option<(f32, f32)> {
-        if vertex_index >= self.vertices.len() {
-            return None;
-        }
-        let vertex = &self.vertices[vertex_index];
-        let focal_length = self.scale * 3.0;
-        let z_offset = focal_length + vertex.position.z;
-        let scale = if z_offset > 0.1 {
-            focal_length / z_offset
-        } else {
-            0.0
-        };
-        let parallax = eye_offset_x * scale;
-        Some((
-            center_x + vertex.position.x * scale + parallax,
-            center_y - vertex.position.y * scale,
-        ))
+    pub fn get_vertex_normal(&self, vertex_index: usize) -> Option<&Pos3D> {
+        self.vertices.get(vertex_index).map(|v| &v.normal)
     }
 
-    pub fn get_vertex_label_pos(
-        &self,
-        vertex_index: usize,
-        center_x: f32,
-        center_y: f32,
-        offset: f32,
-    ) -> Option<(f32, f32)> {
-        if vertex_index >= self.vertices.len() {
-            return None;
-        }
-        let vertex = &self.vertices[vertex_index];
-        let focal_length = self.scale * 3.0;
-        let z_offset = focal_length + vertex.position.z;
-        let scale = if z_offset > 0.1 {
-            focal_length / z_offset
-        } else {
-            0.0
-        };
-        let label_x = center_x + (vertex.position.x + vertex.normal.x * offset) * scale;
-        let label_y = center_y - (vertex.position.y + vertex.normal.y * offset) * scale;
-        Some((label_x, label_y))
+    pub fn arrow_position(&self) -> &Pos3D {
+        &self.vector_arrow.end_position
     }
 
-    pub fn get_vertex_label_pos_with_eye(
-        &self,
-        vertex_index: usize,
-        center_x: f32,
-        center_y: f32,
-        offset: f32,
-        eye_offset_x: f32,
-    ) -> Option<(f32, f32)> {
-        if vertex_index >= self.vertices.len() {
-            return None;
-        }
-        let vertex = &self.vertices[vertex_index];
-        let focal_length = self.scale * 3.0;
-        let z_offset = focal_length + vertex.position.z;
-        let scale = if z_offset > 0.1 {
-            focal_length / z_offset
-        } else {
-            0.0
-        };
-        let parallax = eye_offset_x * scale;
-        let label_x = center_x + (vertex.position.x + vertex.normal.x * offset) * scale + parallax;
-        let label_y = center_y - (vertex.position.y + vertex.normal.y * offset) * scale;
-        Some((label_x, label_y))
+    pub fn arrow_head_size(&self) -> f32 {
+        self.vector_arrow.arrow_head_size
     }
 
-    pub fn get_arrow_screen_pos(&self, center_x: f32, center_y: f32) -> (f32, f32) {
-        let focal_length = self.scale * 3.0;
-        let z_offset = focal_length + self.vector_arrow.end_position.z;
-        let scale = if z_offset > 0.1 {
-            focal_length / z_offset
-        } else {
-            0.0
-        };
-        (
-            center_x + self.vector_arrow.end_position.x * scale,
-            center_y - self.vector_arrow.end_position.y * scale,
-        )
-    }
-
-    pub fn get_arrow_screen_pos_with_eye(
-        &self,
-        center_x: f32,
-        center_y: f32,
-        eye_offset_x: f32,
-    ) -> (f32, f32) {
-        let focal_length = self.scale * 3.0;
-        let z_offset = focal_length + self.vector_arrow.end_position.z;
-        let scale = if z_offset > 0.1 {
-            focal_length / z_offset
-        } else {
-            0.0
-        };
-        let parallax = eye_offset_x * scale;
-        (
-            center_x + self.vector_arrow.end_position.x * scale + parallax,
-            center_y - self.vector_arrow.end_position.y * scale,
-        )
+    pub fn tip_label(&self) -> Option<&String> {
+        self.tip_label.as_ref()
     }
 }
 
@@ -830,55 +720,39 @@ mod tests {
     }
 
     #[test]
-    fn test_get_vertex_screen_pos() {
+    fn test_get_vertex_3d() {
         let vector = Vector4::new(1.0, 0.0, 0.0, 0.0);
         let gadget = TetrahedronGadget::from_4d_vector(vector);
 
-        let center_x = 100.0;
-        let center_y = 100.0;
-
-        let Some(pos) = gadget.get_vertex_screen_pos(0, center_x, center_y) else {
-            panic!("Failed to get vertex screen position");
+        let Some(pos) = gadget.get_vertex_3d(0) else {
+            panic!("Failed to get vertex 3d position");
         };
 
-        // Vertex 0 (+X) is at (s, s, s) where s = 1/sqrt(3)
-        // With perspective: focal_length = scale * 3 = 3
-        // z_offset = focal_length + z = 3 + s
-        // scale_factor = focal_length / z_offset
         let s = 1.0 / SQRT_3;
-        let focal_length = 3.0;
-        let z_offset = focal_length + s;
-        let scale_factor = focal_length / z_offset;
-        assert_approx_eq(pos.0, center_x + s * scale_factor, 1e-3);
-        assert_approx_eq(pos.1, center_y - s * scale_factor, 1e-3);
+        assert_approx_eq(pos.x, s, 1e-5);
+        assert_approx_eq(pos.y, s, 1e-5);
+        assert_approx_eq(pos.z, s, 1e-5);
     }
 
     #[test]
-    fn test_get_vertex_screen_pos_invalid_index() {
+    fn test_get_vertex_3d_invalid_index() {
         let vector = Vector4::new(1.0, 0.0, 0.0, 0.0);
         let gadget = TetrahedronGadget::from_4d_vector(vector);
 
-        let pos = gadget.get_vertex_screen_pos(10, 100.0, 100.0);
+        let pos = gadget.get_vertex_3d(10);
         assert!(pos.is_none());
     }
 
     #[test]
-    fn test_get_arrow_screen_pos() {
+    fn test_arrow_position() {
         let vector = Vector4::new(1.0, 0.0, 0.0, 0.0);
         let gadget = TetrahedronGadget::from_4d_vector(vector);
 
-        let center_x = 100.0;
-        let center_y = 100.0;
-
-        let pos = gadget.get_arrow_screen_pos(center_x, center_y);
-
-        // Arrow ends at vertex 0 position (s, s, s) where s = 1/sqrt(3)
+        let arrow = gadget.arrow_position();
         let s = 1.0 / SQRT_3;
-        let focal_length = 3.0;
-        let z_offset = focal_length + s;
-        let scale_factor = focal_length / z_offset;
-        assert_approx_eq(pos.0, center_x + s * scale_factor, 1e-3);
-        assert_approx_eq(pos.1, center_y - s * scale_factor, 1e-3);
+        assert_approx_eq(arrow.x, s, 1e-3);
+        assert_approx_eq(arrow.y, s, 1e-3);
+        assert_approx_eq(arrow.z, s, 1e-3);
     }
 
     #[test]
