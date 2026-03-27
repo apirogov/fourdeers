@@ -239,6 +239,8 @@ pub struct TesseractRenderContext {
 
 impl TesseractRenderContext {
     pub fn new(
+        vertices: Vec<Vertex4D>,
+        indices: Vec<u16>,
         camera: &Camera,
         rot_xy: f32,
         rot_xz: f32,
@@ -253,10 +255,6 @@ impl TesseractRenderContext {
         projection_distance: f32,
         projection_mode: ProjectionMode,
     ) -> Self {
-        use crate::geometry::create_tesseract;
-
-        let (vertices, indices) = create_tesseract();
-
         let (sin_xy, cos_xy) = rot_xy.sin_cos();
         let (sin_xz, cos_xz) = rot_xz.sin_cos();
         let (sin_yz, cos_yz) = rot_yz.sin_cos();
@@ -296,6 +294,8 @@ impl TesseractRenderContext {
     }
 
     pub fn with_stereo_settings(
+        vertices: Vec<Vertex4D>,
+        indices: Vec<u16>,
         camera: &Camera,
         rot_xy: f32,
         rot_xz: f32,
@@ -308,6 +308,8 @@ impl TesseractRenderContext {
         stereo: &StereoSettings,
     ) -> Self {
         Self::new(
+            vertices,
+            indices,
             camera,
             rot_xy,
             rot_xz,

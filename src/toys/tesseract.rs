@@ -6,6 +6,7 @@ use std::collections::HashMap;
 
 use crate::camera::{Camera, CameraAction};
 use crate::input::{analyze_tap_in_stereo_view, DragView, TapAnalysis, TetraId, Zone, ZoneMode};
+use crate::polytopes::{create_polytope, PolytopeType};
 use crate::render::{
     draw_background, draw_center_divider, split_stereo_views, StereoSettings,
     TesseractRenderContext,
@@ -15,6 +16,7 @@ use crate::toy::{DragState, Toy};
 
 pub struct TesseractToy {
     pub camera: Camera,
+    polytope_type: PolytopeType,
     rot_xy: f32,
     rot_xz: f32,
     rot_yz: f32,
@@ -41,6 +43,7 @@ impl TesseractToy {
     pub fn new() -> Self {
         Self {
             camera: Camera::new(),
+            polytope_type: PolytopeType::EightCell,
             rot_xy: 0.0,
             rot_xz: 0.0,
             rot_yz: 0.0,
@@ -125,7 +128,7 @@ impl TesseractToy {
 
 impl Toy for TesseractToy {
     fn name(&self) -> &str {
-        "4D Tesseract"
+        self.polytope_type.name()
     }
 
     fn id(&self) -> &str {
@@ -144,7 +147,24 @@ impl Toy for TesseractToy {
     }
 
     fn render_sidebar(&mut self, ui: &mut egui::Ui) {
-        ui.label("3D Slice through 4D Tesseract");
+        ui.label("4D Polytope Visualization");
+
+        egui::ComboBox::from_label("Polytope")
+            .selected_text(self.polytope_type.name())
+            .show_ui(ui, |ui| {
+                for poly_type in PolytopeType::all() {
+                    ui.selectable_value(&mut self.polytope_type, poly_type, poly_type.name());
+                }
+            });
+
+        ui.label(format!(
+            "{} vertices, {} edges",
+            self.polytope_type.vertex_count(),
+            self.polytope_type.edge_count()
+        ));
+
+        ui.separator();
+
         ui.label("Arrows: Move | PgUp/Dn: Up/Down | ,/. : W-slice");
         ui.label("Mouse: Look");
         ui.separator();
@@ -348,8 +368,12 @@ impl Toy for TesseractToy {
         });
 
         ui.separator();
-        ui.label("Geometry: 4D Tesseract");
-        ui.label("16 vertices, 32 edges");
+        ui.label(format!("Geometry: {}", self.polytope_type.name()));
+        ui.label(format!(
+            "{} vertices, {} edges",
+            self.polytope_type.vertex_count(),
+            self.polytope_type.edge_count()
+        ));
     }
 
     fn render_scene(&mut self, ui: &mut egui::Ui, rect: egui::Rect, show_debug: bool) {
@@ -360,7 +384,11 @@ impl Toy for TesseractToy {
 
         draw_center_divider(ui, rect);
 
+        let (vertices, indices) = create_polytope(self.polytope_type);
+
         let ctx = TesseractRenderContext::with_stereo_settings(
+            vertices,
+            indices,
             &self.camera,
             self.rot_xy,
             self.rot_xz,

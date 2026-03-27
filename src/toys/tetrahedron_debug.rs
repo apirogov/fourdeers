@@ -5,8 +5,9 @@ use nalgebra::{UnitQuaternion, Vector3, Vector4};
 use std::collections::HashMap;
 
 use crate::camera::{Camera, CameraAction};
-use crate::geometry::{apply_so4_rotation, create_glome};
+use crate::geometry::apply_so4_rotation;
 use crate::input::{analyze_tap_in_stereo_view, DragView, TapAnalysis, TetraId, Zone, ZoneMode};
+use crate::polytopes::create_polytope;
 use crate::render::{
     draw_background, draw_center_divider, render_stereo_tetrahedron_overlay, split_stereo_views,
     w_to_color, StereoProjector, StereoSettings,
@@ -148,7 +149,7 @@ impl TetrahedronDebugToy {
         let (sin_yw, cos_yw) = self.glome_rot_yw.sin_cos();
         let (sin_zw, cos_zw) = self.glome_rot_zw.sin_cos();
 
-        let (vertices, indices) = create_glome();
+        let (vertices, indices) = create_polytope(crate::polytopes::PolytopeType::SixteenCell);
         let inv_orientation = self.camera.orientation.inverse();
         let camera_4d_rotation_inverse = self.camera.rotation_4d.inverse();
         let w_half = self.stereo.w_thickness * 0.5;

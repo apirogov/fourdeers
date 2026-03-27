@@ -1,13 +1,8 @@
 //! 4D Geometry and mathematical operations
 
-use bytemuck::{Pod, Zeroable};
 use nalgebra::Vector4;
 
-#[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
-pub struct Vertex4D {
-    pub position: [f32; 4], // x, y, z, w
-}
+pub use crate::polytopes::Vertex4D;
 
 /// Applies SO(4) rotations to a 4D point
 #[allow(clippy::too_many_arguments)]
@@ -66,64 +61,6 @@ pub fn apply_so4_rotation(
     p.w = z * sin_zw + w * cos_zw;
 
     p
-}
-
-/// Creates 4D tesseract vertices and edge indices
-pub fn create_tesseract() -> (Vec<Vertex4D>, Vec<u16>) {
-    let mut vertices = Vec::with_capacity(16);
-    for i in 0..16 {
-        let x = if (i & 1) != 0 { 1.0 } else { -1.0 };
-        let y = if (i & 2) != 0 { 1.0 } else { -1.0 };
-        let z = if (i & 4) != 0 { 1.0 } else { -1.0 };
-        let w = if (i & 8) != 0 { 1.0 } else { -1.0 };
-        vertices.push(Vertex4D {
-            position: [x, y, z, w],
-        });
-    }
-
-    let mut indices = Vec::new();
-    for i in 0..16 {
-        for bit in 0..4 {
-            let j = i ^ (1 << bit);
-            if i < j {
-                indices.push(i as u16);
-                indices.push(j as u16);
-            }
-        }
-    }
-
-    (vertices, indices)
-}
-
-/// Creates 4D glome (hypersphere) approximation using 16-cell geometry
-/// The 16-cell has 8 vertices at permutations of (±1, 0, 0, 0)
-/// Edges connect all non-opposite vertex pairs
-pub fn create_glome() -> (Vec<Vertex4D>, Vec<u16>) {
-    let mut vertices = Vec::with_capacity(8);
-
-    // 8 vertices: (±1, 0, 0, 0), (0, ±1, 0, 0), (0, 0, ±1, 0), (0, 0, 0, ±1)
-    for i in 0..8 {
-        let axis = i / 2;
-        let sign = if i % 2 == 0 { 1.0 } else { -1.0 };
-        let mut pos = [0.0f32; 4];
-        pos[axis] = sign;
-        vertices.push(Vertex4D { position: pos });
-    }
-
-    // Edges: connect each vertex to all non-opposite vertices
-    // Opposite vertices differ by index 1 (e.g., 0 and 1, 2 and 3, etc.)
-    let mut indices = Vec::new();
-    for i in 0..8u16 {
-        for j in (i + 1)..8u16 {
-            // Skip opposite pairs (0-1, 2-3, 4-5, 6-7)
-            if (i / 2) != (j / 2) {
-                indices.push(i);
-                indices.push(j);
-            }
-        }
-    }
-
-    (vertices, indices)
 }
 
 #[cfg(test)]
@@ -313,147 +250,6 @@ mod tests {
         assert!((result.y - pos[1]).abs() < 1e-6);
         assert!((result.z - pos[2]).abs() < 1e-6);
         assert!((result.w - pos[3]).abs() < 1e-6);
-    }
-
-    #[test]
-    fn test_tesseract_vertex_count() {
-        let (vertices, _) = create_tesseract();
-        assert_eq!(vertices.len(), 16, "Tesseract should have 16 vertices");
-    }
-
-    #[test]
-    fn test_tesseract_edge_count() {
-        let (_, indices) = create_tesseract();
-        assert_eq!(
-            indices.len(),
-            64,
-            "Tesseract should have 32 edge indices (64 values)"
-        );
-    }
-
-    #[test]
-    fn test_tesseract_vertex_positions() {
-        let (vertices, _) = create_tesseract();
-
-        for (i, vertex) in vertices.iter().enumerate() {
-            let x = vertex.position[0];
-            let y = vertex.position[1];
-            let z = vertex.position[2];
-            let w = vertex.position[3];
-
-            assert!(
-                (x.abs() - 1.0).abs() < 1e-6,
-                "Vertex {}: X should be ±1.0",
-                i
-            );
-            assert!(
-                (y.abs() - 1.0).abs() < 1e-6,
-                "Vertex {}: Y should be ±1.0",
-                i
-            );
-            assert!(
-                (z.abs() - 1.0).abs() < 1e-6,
-                "Vertex {}: Z should be ±1.0",
-                i
-            );
-            assert!(
-                (w.abs() - 1.0).abs() < 1e-6,
-                "Vertex {}: W should be ±1.0",
-                i
-            );
-        }
-    }
-
-    #[test]
-    fn test_tesseract_unique_vertices() {
-        let (vertices, _) = create_tesseract();
-
-        for i in 0..vertices.len() {
-            for j in (i + 1)..vertices.len() {
-                assert_ne!(
-                    vertices[i].position, vertices[j].position,
-                    "Vertices {} and {} should be different",
-                    i, j
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn test_tesseract_edge_connectivity() {
-        let (vertices, indices) = create_tesseract();
-
-        for chunk in indices.chunks(2) {
-            let v1_idx = chunk[0] as usize;
-            let v2_idx = chunk[1] as usize;
-
-            assert!(v1_idx < 16, "Edge vertex index {} out of range", v1_idx);
-            assert!(v2_idx < 16, "Edge vertex index {} out of range", v2_idx);
-
-            let v1 = vertices[v1_idx];
-            let v2 = vertices[v2_idx];
-
-            let diff_count = (0..4)
-                .filter(|&k| (v1.position[k] - v2.position[k]).abs() > 1e-6)
-                .count();
-
-            assert_eq!(
-                diff_count, 1,
-                "Edge should connect vertices differing in exactly 1 coordinate"
-            );
-        }
-    }
-
-    #[test]
-    fn test_tesseract_vertex_degree() {
-        let (_vertices, indices) = create_tesseract();
-
-        let mut adjacency = [0u8; 16];
-        for chunk in indices.chunks(2) {
-            let v1_idx = chunk[0] as usize;
-            let v2_idx = chunk[1] as usize;
-            adjacency[v1_idx] += 1;
-            adjacency[v2_idx] += 1;
-        }
-
-        for (i, &deg) in adjacency.iter().enumerate() {
-            assert_eq!(
-                deg, 4,
-                "Vertex {} should have degree 4 (connected to 4 edges)",
-                i
-            );
-        }
-    }
-
-    #[test]
-    fn test_tesseract_no_duplicate_edges() {
-        let (_vertices, indices) = create_tesseract();
-
-        let mut edges = Vec::new();
-        for chunk in indices.chunks(2) {
-            let edge = (chunk[0], chunk[1]);
-            edges.push(edge);
-        }
-
-        for i in 0..edges.len() {
-            for j in (i + 1)..edges.len() {
-                let edge1 = edges[i];
-                let edge2 = edges[j];
-
-                let exchange = (edge2.1, edge2.0);
-                assert_ne!(edge1, edge2, "Duplicate edge found");
-                assert_ne!(edge1, exchange, "Duplicate edge found (reversed)");
-            }
-        }
-    }
-
-    #[test]
-    fn test_vertex4d_pod_zeroable() {
-        let v = Vertex4D {
-            position: [0.0f32; 4],
-        };
-        let v_copy = v;
-        assert_eq!(v.position, v_copy.position);
     }
 
     #[test]
