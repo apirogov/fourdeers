@@ -185,16 +185,16 @@ pub enum SliceDirection {
 pub enum CameraAction {
     MoveForward,
     MoveBackward,
-    StrafeLeft,
-    StrafeRight,
+    MoveLeft,
+    MoveRight,
     MoveUp,
     MoveDown,
     IncreaseW,
     DecreaseW,
     MoveSliceForward,
     MoveSliceBackward,
-    MoveSliceOrthogonalPos,
-    MoveSliceOrthogonalNeg,
+    MoveKata,
+    MoveAna,
 }
 
 impl Camera {
@@ -229,14 +229,14 @@ impl Camera {
                 self.z -= v4[2] * speed;
                 self.w -= v4[3] * speed;
             }
-            CameraAction::StrafeLeft => {
+            CameraAction::MoveLeft => {
                 let v4 = self.project_3d_to_4d((-right.0, -right.1, -right.2));
                 self.x += v4[0] * speed;
                 self.y += v4[1] * speed;
                 self.z += v4[2] * speed;
                 self.w += v4[3] * speed;
             }
-            CameraAction::StrafeRight => {
+            CameraAction::MoveRight => {
                 let v4 = self.project_3d_to_4d(right);
                 self.x += v4[0] * speed;
                 self.y += v4[1] * speed;
@@ -273,14 +273,14 @@ impl Camera {
                 self.z -= v4[2] * speed;
                 self.w -= v4[3] * speed;
             }
-            CameraAction::MoveSliceOrthogonalPos => {
+            CameraAction::MoveKata => {
                 let w_dir = basis_4d[3];
                 self.x += w_dir[0] * speed;
                 self.y += w_dir[1] * speed;
                 self.z += w_dir[2] * speed;
                 self.w += w_dir[3] * speed;
             }
-            CameraAction::MoveSliceOrthogonalNeg => {
+            CameraAction::MoveAna => {
                 let w_dir = basis_4d[3];
                 self.x -= w_dir[0] * speed;
                 self.y -= w_dir[1] * speed;

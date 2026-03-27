@@ -24,6 +24,7 @@ pub struct TesseractToy {
     w_min: f32,
     w_max: f32,
     show_debug: bool,
+    zone_mode: ZoneMode,
     visualization_rect: Option<egui::Rect>,
     pub drag_state: DragState,
     tetrahedron_rotations: HashMap<TetraId, UnitQuaternion<f32>>,
@@ -49,6 +50,7 @@ impl TesseractToy {
             w_min: -2.0,
             w_max: 2.0,
             show_debug: false,
+            zone_mode: ZoneMode::NineZones,
             visualization_rect: None,
             drag_state: DragState::new(),
             tetrahedron_rotations: HashMap::new(),
@@ -97,28 +99,27 @@ impl TesseractToy {
     }
 
     fn zone_to_action(zone: Zone, is_left_view: bool) -> Option<CameraAction> {
-        if !zone.is_cardinal() {
-            return None;
-        }
-
-        let action = if is_left_view {
+        if is_left_view {
             match zone {
-                Zone::North => CameraAction::MoveUp,
-                Zone::South => CameraAction::MoveDown,
-                Zone::West => CameraAction::StrafeLeft,
-                Zone::East => CameraAction::StrafeRight,
-                _ => unreachable!(),
+                Zone::North => Some(CameraAction::MoveUp),
+                Zone::South => Some(CameraAction::MoveDown),
+                Zone::West => Some(CameraAction::MoveLeft),
+                Zone::East => Some(CameraAction::MoveRight),
+                _ => None,
             }
         } else {
             match zone {
-                Zone::North => CameraAction::MoveSliceForward,
-                Zone::South => CameraAction::MoveSliceBackward,
-                Zone::West => CameraAction::MoveSliceOrthogonalNeg,
-                Zone::East => CameraAction::MoveSliceOrthogonalPos,
-                _ => unreachable!(),
+                Zone::North => Some(CameraAction::MoveUp),
+                Zone::South => Some(CameraAction::MoveDown),
+                Zone::West => Some(CameraAction::MoveLeft),
+                Zone::East => Some(CameraAction::MoveRight),
+                Zone::NorthEast => Some(CameraAction::MoveSliceForward),
+                Zone::SouthWest => Some(CameraAction::MoveSliceBackward),
+                Zone::NorthWest => Some(CameraAction::MoveAna),
+                Zone::SouthEast => Some(CameraAction::MoveKata),
+                _ => None,
             }
-        };
-        Some(action)
+        }
     }
 }
 
@@ -490,10 +491,10 @@ impl Toy for TesseractToy {
                 self.apply_camera_action(CameraAction::MoveBackward, move_speed);
             }
             if i.key_down(egui::Key::ArrowLeft) {
-                self.apply_camera_action(CameraAction::StrafeLeft, move_speed);
+                self.apply_camera_action(CameraAction::MoveLeft, move_speed);
             }
             if i.key_down(egui::Key::ArrowRight) {
-                self.apply_camera_action(CameraAction::StrafeRight, move_speed);
+                self.apply_camera_action(CameraAction::MoveRight, move_speed);
             }
             if i.key_down(egui::Key::PageUp) {
                 self.apply_camera_action(CameraAction::MoveUp, move_speed);
@@ -502,10 +503,10 @@ impl Toy for TesseractToy {
                 self.apply_camera_action(CameraAction::MoveDown, move_speed);
             }
             if i.key_down(egui::Key::Period) {
-                self.apply_camera_action(CameraAction::MoveSliceOrthogonalPos, move_speed);
+                self.apply_camera_action(CameraAction::MoveKata, move_speed);
             }
             if i.key_down(egui::Key::Comma) {
-                self.apply_camera_action(CameraAction::MoveSliceOrthogonalNeg, move_speed);
+                self.apply_camera_action(CameraAction::MoveAna, move_speed);
             }
         });
     }
@@ -516,6 +517,10 @@ impl Toy for TesseractToy {
 
     fn set_visualization_rect(&mut self, rect: egui::Rect) {
         self.visualization_rect = Some(rect);
+    }
+
+    fn get_zone_mode(&self) -> ZoneMode {
+        self.zone_mode
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

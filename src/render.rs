@@ -467,6 +467,7 @@ impl TesseractRenderContext {
         let basis = self.camera.rotation_4d.basis_vectors();
         let layout = get_tetrahedron_layout(view_rect);
         let offset = layout.edge_offset;
+        let third_w = view_rect.width() / 3.0;
 
         let labels = if is_left_view {
             [
@@ -502,32 +503,32 @@ impl TesseractRenderContext {
         } else {
             [
                 (
-                    "↑",
+                    "↗",
                     format_4d_vector_compact(basis[2]),
                     "Fwd",
-                    view_rect.center().x,
+                    view_rect.min.x + third_w * 2.0,
                     view_rect.min.y + offset * 0.5,
                 ),
                 (
-                    "↓",
+                    "↙",
                     format_4d_vector_compact(neg_vec(basis[2])),
                     "Back",
-                    view_rect.center().x,
+                    view_rect.min.x + third_w,
                     view_rect.max.y - offset * 0.7,
                 ),
                 (
-                    "←",
-                    format_4d_vector_compact(basis[3]),
-                    "W+",
+                    "↖",
+                    format_4d_vector_compact(neg_vec(basis[3])),
+                    "Ana",
                     view_rect.min.x + offset * 0.5,
-                    view_rect.center().y,
+                    view_rect.min.y + offset * 0.5,
                 ),
                 (
-                    "→",
-                    format_4d_vector_compact(neg_vec(basis[3])),
-                    "W-",
+                    "↘",
+                    format_4d_vector_compact(basis[3]),
+                    "Kata",
                     view_rect.max.x - offset * 0.4,
-                    view_rect.center().y,
+                    view_rect.max.y - offset * 0.7,
                 ),
             ]
         };
@@ -555,6 +556,7 @@ impl TesseractRenderContext {
         let basis = self.camera.rotation_4d.basis_vectors();
         let layout = get_tetrahedron_layout(view_rect);
         let offset = layout.edge_offset;
+        let third_w = view_rect.width() / 3.0;
 
         let tetrahedra: Vec<(nalgebra::Vector4<f32>, Zone, f32, f32)> = if is_left_view {
             vec![
@@ -587,27 +589,27 @@ impl TesseractRenderContext {
             vec![
                 (
                     nalgebra::Vector4::from(basis[2]),
-                    Zone::North,
-                    view_rect.center().x,
+                    Zone::NorthEast,
+                    view_rect.min.x + third_w * 2.0,
                     view_rect.min.y + offset,
                 ),
                 (
                     nalgebra::Vector4::from(neg_vec(basis[2])),
-                    Zone::South,
-                    view_rect.center().x,
+                    Zone::SouthWest,
+                    view_rect.min.x + third_w,
                     view_rect.max.y - offset,
                 ),
                 (
                     nalgebra::Vector4::from(neg_vec(basis[3])),
-                    Zone::West,
+                    Zone::NorthWest,
                     view_rect.min.x + offset,
-                    view_rect.center().y,
+                    view_rect.min.y + offset,
                 ),
                 (
                     nalgebra::Vector4::from(basis[3]),
-                    Zone::East,
+                    Zone::SouthEast,
                     view_rect.max.x - offset,
-                    view_rect.center().y,
+                    view_rect.max.y - offset,
                 ),
             ]
         };
@@ -635,11 +637,11 @@ impl TesseractRenderContext {
 
 fn zone_to_direction(zone: Zone) -> ZoneDirection {
     match zone {
-        Zone::North => ZoneDirection::Up,
-        Zone::South => ZoneDirection::Down,
+        Zone::North | Zone::NorthEast | Zone::NorthWest => ZoneDirection::Up,
+        Zone::South | Zone::SouthWest | Zone::SouthEast => ZoneDirection::Down,
         Zone::West => ZoneDirection::Left,
         Zone::East => ZoneDirection::Right,
-        _ => ZoneDirection::Up,
+        Zone::Center => ZoneDirection::Up,
     }
 }
 

@@ -119,16 +119,16 @@ impl TetrahedronDebugToy {
             match zone {
                 Zone::North => CameraAction::MoveUp,
                 Zone::South => CameraAction::MoveDown,
-                Zone::West => CameraAction::StrafeLeft,
-                Zone::East => CameraAction::StrafeRight,
+                Zone::West => CameraAction::MoveLeft,
+                Zone::East => CameraAction::MoveRight,
                 _ => unreachable!(),
             }
         } else {
             match zone {
                 Zone::North => CameraAction::MoveForward,
                 Zone::South => CameraAction::MoveBackward,
-                Zone::West => CameraAction::MoveSliceOrthogonalNeg,
-                Zone::East => CameraAction::MoveSliceOrthogonalPos,
+                Zone::West => CameraAction::MoveAna,
+                Zone::East => CameraAction::MoveKata,
                 _ => unreachable!(),
             }
         };
@@ -632,10 +632,10 @@ impl Toy for TetrahedronDebugToy {
                 self.apply_camera_action(CameraAction::MoveBackward, move_speed);
             }
             if i.key_down(egui::Key::ArrowLeft) {
-                self.apply_camera_action(CameraAction::StrafeLeft, move_speed);
+                self.apply_camera_action(CameraAction::MoveLeft, move_speed);
             }
             if i.key_down(egui::Key::ArrowRight) {
-                self.apply_camera_action(CameraAction::StrafeRight, move_speed);
+                self.apply_camera_action(CameraAction::MoveRight, move_speed);
             }
             if i.key_down(egui::Key::PageUp) {
                 self.apply_camera_action(CameraAction::MoveUp, move_speed);
@@ -644,10 +644,10 @@ impl Toy for TetrahedronDebugToy {
                 self.apply_camera_action(CameraAction::MoveDown, move_speed);
             }
             if i.key_down(egui::Key::Period) {
-                self.apply_camera_action(CameraAction::MoveSliceOrthogonalPos, move_speed);
+                self.apply_camera_action(CameraAction::MoveKata, move_speed);
             }
             if i.key_down(egui::Key::Comma) {
-                self.apply_camera_action(CameraAction::MoveSliceOrthogonalNeg, move_speed);
+                self.apply_camera_action(CameraAction::MoveAna, move_speed);
             }
         });
     }
