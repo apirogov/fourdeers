@@ -128,7 +128,7 @@ impl TesseractToy {
 
 impl Toy for TesseractToy {
     fn name(&self) -> &str {
-        self.polytope_type.name()
+        "Polytopes"
     }
 
     fn id(&self) -> &str {
