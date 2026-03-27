@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use crate::camera::{Camera, CameraAction};
 use crate::geometry::apply_so4_rotation;
-use crate::input::{DragView, TapAnalysis, TetraId, Zone};
+use crate::input::{DragView, TapAnalysis, TetraId, Zone, ZoneMode};
 use crate::polytopes::create_polytope;
 use crate::render::{
     draw_background, draw_center_divider, render_menu_label, render_stereo_tetrahedron_overlay,
@@ -637,6 +637,10 @@ impl Toy for TetrahedronDebugToy {
 
     fn set_visualization_rect(&mut self, rect: egui::Rect) {
         self.visualization_rect = Some(rect);
+    }
+
+    fn get_zone_mode(&self) -> ZoneMode {
+        ZoneMode::NineZones
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

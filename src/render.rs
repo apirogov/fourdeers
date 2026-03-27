@@ -1010,7 +1010,8 @@ pub fn render_stereo_tetrahedron_overlay(
 ) {
     let (left_rect, right_rect) = split_stereo_views(rect);
     let gadget = TetrahedronGadget::from_4d_vector_with_quaternion(vector_4d, *rotation, 1.0)
-        .with_auto_magnitude_label();
+        .with_auto_magnitude_label()
+        .with_base_label("Compass");
 
     let left_projector = projector.with_center(left_rect.center());
     let left_painter = ui.painter().with_clip_rect(left_rect);
@@ -1151,6 +1152,28 @@ fn render_tetrahedron_with_projector(
             3.0,
             egui::Color32::from_rgba_unmultiplied(255, 150, 50, 180),
         );
+
+        if let Some(ref label) = gadget.base_label {
+            let base_pos = center + egui::Vec2::new(0.0, 18.0);
+            let font_id = egui::FontId::proportional(11.0);
+            let outline_color = egui::Color32::from_rgba_unmultiplied(0, 0, 0, 180);
+            let text_color = egui::Color32::from_rgb(255, 180, 80);
+
+            painter.text(
+                base_pos + egui::Vec2::new(0.5, 0.5),
+                egui::Align2::CENTER_CENTER,
+                label,
+                font_id.clone(),
+                outline_color,
+            );
+            painter.text(
+                base_pos,
+                egui::Align2::CENTER_CENTER,
+                label,
+                font_id,
+                text_color,
+            );
+        }
 
         if let Some(ref label) = gadget.tip_label {
             let tip_offset = egui::Vec2::new(0.0, -15.0);
