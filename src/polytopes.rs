@@ -1,6 +1,7 @@
 //! Regular convex 4-polytopes
 //!
-//! All 6 regular convex 4-polytopes, centered at the origin.
+//! 4 of the 6 regular convex 4-polytopes, centered at the origin.
+//! The 120-cell and 600-cell are omitted due to complexity.
 //!
 //! | Name | Vertices | Edges | Cells |
 //! |------|----------|-------|-------|
@@ -8,8 +9,6 @@
 //! | 8-cell (tesseract) | 16 | 32 | 8 |
 //! | 16-cell | 8 | 24 | 16 |
 //! | 24-cell | 24 | 96 | 24 |
-//! | 120-cell | 600 | 1200 | 120 |
-//! | 600-cell | 120 | 720 | 600 |
 
 use bytemuck::{Pod, Zeroable};
 
@@ -34,8 +33,6 @@ pub enum PolytopeType {
     EightCell,
     SixteenCell,
     TwentyFourCell,
-    OneHundredTwentyCell,
-    SixHundredCell,
 }
 
 impl PolytopeType {
@@ -45,8 +42,6 @@ impl PolytopeType {
             PolytopeType::EightCell => "8-cell (Tesseract)",
             PolytopeType::SixteenCell => "16-cell",
             PolytopeType::TwentyFourCell => "24-cell",
-            PolytopeType::OneHundredTwentyCell => "120-cell",
-            PolytopeType::SixHundredCell => "600-cell",
         }
     }
 
@@ -56,8 +51,6 @@ impl PolytopeType {
             PolytopeType::EightCell => "tesseract",
             PolytopeType::SixteenCell => "16-cell",
             PolytopeType::TwentyFourCell => "24-cell",
-            PolytopeType::OneHundredTwentyCell => "120-cell",
-            PolytopeType::SixHundredCell => "600-cell",
         }
     }
 
@@ -67,8 +60,6 @@ impl PolytopeType {
             PolytopeType::EightCell => 16,
             PolytopeType::SixteenCell => 8,
             PolytopeType::TwentyFourCell => 24,
-            PolytopeType::OneHundredTwentyCell => 600,
-            PolytopeType::SixHundredCell => 120,
         }
     }
 
@@ -78,19 +69,15 @@ impl PolytopeType {
             PolytopeType::EightCell => 32,
             PolytopeType::SixteenCell => 24,
             PolytopeType::TwentyFourCell => 96,
-            PolytopeType::OneHundredTwentyCell => 1200,
-            PolytopeType::SixHundredCell => 720,
         }
     }
 
-    pub fn all() -> [PolytopeType; 6] {
+    pub fn all() -> [PolytopeType; 4] {
         [
             PolytopeType::FiveCell,
             PolytopeType::EightCell,
             PolytopeType::SixteenCell,
             PolytopeType::TwentyFourCell,
-            PolytopeType::OneHundredTwentyCell,
-            PolytopeType::SixHundredCell,
         ]
     }
 }
@@ -101,8 +88,6 @@ pub fn create_polytope(kind: PolytopeType) -> (Vec<Vertex4D>, Vec<u16>) {
         PolytopeType::EightCell => create_8_cell(),
         PolytopeType::SixteenCell => create_16_cell(),
         PolytopeType::TwentyFourCell => create_24_cell(),
-        PolytopeType::OneHundredTwentyCell => create_120_cell_stub(),
-        PolytopeType::SixHundredCell => create_600_cell_stub(),
     }
 }
 
@@ -207,14 +192,6 @@ fn create_24_cell() -> (Vec<Vertex4D>, Vec<u16>) {
     }
 
     (vertices, indices)
-}
-
-fn create_120_cell_stub() -> (Vec<Vertex4D>, Vec<u16>) {
-    create_8_cell()
-}
-
-fn create_600_cell_stub() -> (Vec<Vertex4D>, Vec<u16>) {
-    create_16_cell()
 }
 
 #[cfg(test)]
