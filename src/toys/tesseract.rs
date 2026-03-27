@@ -419,7 +419,7 @@ impl Toy for TesseractToy {
             false,
             show_debug || self.show_debug,
             &self.tetrahedron_rotations,
-            None,
+            Some(self.right_view_4d_rotation),
         );
     }
 
@@ -434,6 +434,11 @@ impl Toy for TesseractToy {
 
     fn handle_tap(&mut self, analysis: &TapAnalysis) {
         if analysis.is_left_view && analysis.zone == Zone::SouthWest {
+            self.right_view_4d_rotation = !self.right_view_4d_rotation;
+            return;
+        }
+
+        if !analysis.is_left_view && analysis.zone == Zone::Center {
             self.right_view_4d_rotation = !self.right_view_4d_rotation;
             return;
         }

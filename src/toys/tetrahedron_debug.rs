@@ -271,6 +271,9 @@ impl TetrahedronDebugToy {
             "Rot:3D"
         };
         render_tap_zone_label(&left_painter, left_rect, Zone::SouthWest, rot_label);
+
+        let right_painter = ui.painter().with_clip_rect(right_rect);
+        render_tap_zone_label(&right_painter, right_rect, Zone::Center, rot_label);
     }
 }
 
@@ -512,7 +515,7 @@ impl Toy for TetrahedronDebugToy {
                     &projector,
                 );
 
-                let (left_rect, _) = split_stereo_views(rect);
+                let (left_rect, right_rect) = split_stereo_views(rect);
                 let left_painter = ui.painter().with_clip_rect(left_rect);
                 render_menu_label(&left_painter, left_rect);
                 let rot_label = if self.right_view_4d_rotation {
@@ -521,6 +524,9 @@ impl Toy for TetrahedronDebugToy {
                     "Rot:3D"
                 };
                 render_tap_zone_label(&left_painter, left_rect, Zone::SouthWest, rot_label);
+
+                let right_painter = ui.painter().with_clip_rect(right_rect);
+                render_tap_zone_label(&right_painter, right_rect, Zone::Center, rot_label);
             }
         }
     }
@@ -547,6 +553,11 @@ impl Toy for TetrahedronDebugToy {
         }
 
         if analysis.is_left_view && analysis.zone == Zone::SouthWest {
+            self.right_view_4d_rotation = !self.right_view_4d_rotation;
+            return;
+        }
+
+        if !analysis.is_left_view && analysis.zone == Zone::Center {
             self.right_view_4d_rotation = !self.right_view_4d_rotation;
             return;
         }

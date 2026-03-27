@@ -422,11 +422,13 @@ impl TesseractRenderContext {
         }
         self.render_tetrahedron_gadget(&painter, view_rect, is_left_view, tetrahedron_rotations);
 
-        if is_left_view {
-            render_menu_label(&painter, view_rect);
-            if let Some(is_4d) = rotation_mode_4d {
-                let label = if is_4d { "Rot:4D" } else { "Rot:3D" };
+        if let Some(is_4d) = rotation_mode_4d {
+            let label = if is_4d { "Rot:4D" } else { "Rot:3D" };
+            if is_left_view {
+                render_menu_label(&painter, view_rect);
                 render_tap_zone_label(&painter, view_rect, Zone::SouthWest, label);
+            } else {
+                render_tap_zone_label(&painter, view_rect, Zone::Center, label);
             }
         }
     }
