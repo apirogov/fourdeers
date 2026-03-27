@@ -639,6 +639,7 @@ fn zone_to_direction(zone: Zone) -> ZoneDirection {
         Zone::South => ZoneDirection::Down,
         Zone::West => ZoneDirection::Left,
         Zone::East => ZoneDirection::Right,
+        _ => ZoneDirection::Up,
     }
 }
 

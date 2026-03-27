@@ -5,7 +5,7 @@ use nalgebra::{UnitQuaternion, Vector3};
 use std::collections::HashMap;
 
 use crate::camera::{Camera, CameraAction};
-use crate::input::{analyze_tap_in_stereo_view, DragView, TapAnalysis, TetraId, Zone};
+use crate::input::{analyze_tap_in_stereo_view, DragView, TapAnalysis, TetraId, Zone, ZoneMode};
 use crate::render::{
     draw_background, draw_center_divider, split_stereo_views, StereoSettings,
     TesseractRenderContext,
@@ -63,6 +63,7 @@ impl TesseractToy {
             Zone::South => (view_rect.center().x, view_rect.max.y - layout.edge_offset),
             Zone::West => (view_rect.min.x + layout.edge_offset, view_rect.center().y),
             Zone::East => (view_rect.max.x - layout.edge_offset, view_rect.center().y),
+            _ => (view_rect.center().x, view_rect.center().y),
         }
     }
 
@@ -95,13 +96,18 @@ impl TesseractToy {
         self.camera.apply_action(action, speed);
     }
 
-    fn zone_to_action(zone: Zone, is_left_view: bool) -> CameraAction {
-        if is_left_view {
+    fn zone_to_action(zone: Zone, is_left_view: bool) -> Option<CameraAction> {
+        if !zone.is_cardinal() {
+            return None;
+        }
+
+        let action = if is_left_view {
             match zone {
                 Zone::North => CameraAction::MoveUp,
                 Zone::South => CameraAction::MoveDown,
                 Zone::West => CameraAction::StrafeLeft,
                 Zone::East => CameraAction::StrafeRight,
+                _ => unreachable!(),
             }
         } else {
             match zone {
@@ -109,8 +115,10 @@ impl TesseractToy {
                 Zone::South => CameraAction::MoveSliceBackward,
                 Zone::West => CameraAction::MoveSliceOrthogonalNeg,
                 Zone::East => CameraAction::MoveSliceOrthogonalPos,
+                _ => unreachable!(),
             }
-        }
+        };
+        Some(action)
     }
 }
 
@@ -399,8 +407,9 @@ impl Toy for TesseractToy {
         self.drag_state.last_tap_zone = Some(analysis.zone);
         self.drag_state.last_tap_view_left = analysis.is_left_view;
 
-        let action = Self::zone_to_action(analysis.zone, analysis.is_left_view);
-        self.apply_camera_action(action, 0.15);
+        if let Some(action) = Self::zone_to_action(analysis.zone, analysis.is_left_view) {
+            self.apply_camera_action(action, 0.15);
+        }
     }
 
     fn handle_drag(&mut self, _is_left_view: bool, from: egui::Pos2, to: egui::Pos2) {
@@ -427,8 +436,12 @@ impl Toy for TesseractToy {
 
         if let Some(visualization_rect) = self.visualization_rect {
             if visualization_rect.contains(from) {
-                if let Some(analysis) = analyze_tap_in_stereo_view(visualization_rect, from) {
-                    if Self::is_mouse_over_tetrahedron(from, analysis.view_rect, analysis.zone) {
+                if let Some(analysis) =
+                    analyze_tap_in_stereo_view(visualization_rect, from, ZoneMode::FourZones)
+                {
+                    if analysis.zone.is_cardinal()
+                        && Self::is_mouse_over_tetrahedron(from, analysis.view_rect, analysis.zone)
+                    {
                         let tetra_id = TetraId {
                             is_left_view: analysis.is_left_view,
                             zone: analysis.zone,
@@ -457,8 +470,9 @@ impl Toy for TesseractToy {
     }
 
     fn handle_hold(&mut self, analysis: &TapAnalysis) {
-        let action = Self::zone_to_action(analysis.zone, analysis.is_left_view);
-        self.apply_camera_action(action, 0.08);
+        if let Some(action) = Self::zone_to_action(analysis.zone, analysis.is_left_view) {
+            self.apply_camera_action(action, 0.08);
+        }
     }
 
     fn handle_drag_start(&mut self, drag_view: DragView) {

@@ -3,7 +3,7 @@
 use eframe::egui;
 use std::any::Any;
 
-use crate::input::{DragView, TapAnalysis, TetraId, Zone};
+use crate::input::{DragView, TapAnalysis, TetraId, Zone, ZoneMode};
 
 pub mod manager;
 pub mod registry;
@@ -30,10 +30,15 @@ pub trait Toy: Any {
     fn get_visualization_rect(&self) -> Option<egui::Rect>;
     fn set_visualization_rect(&mut self, rect: egui::Rect);
 
+    fn get_zone_mode(&self) -> ZoneMode {
+        ZoneMode::default()
+    }
+
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
+#[derive(Default)]
 pub struct DragState {
     pub is_dragging: bool,
     pub is_drag_mode: bool,
@@ -46,21 +51,6 @@ pub struct DragState {
     pub last_tap_view_left: bool,
 }
 
-impl Default for DragState {
-    fn default() -> Self {
-        Self {
-            is_dragging: false,
-            is_drag_mode: false,
-            drag_view: None,
-            last_mouse_pos: None,
-            dragging_tetrahedron: None,
-            last_tetra_drag_pos: None,
-            last_tap_pos: None,
-            last_tap_zone: None,
-            last_tap_view_left: false,
-        }
-    }
-}
 
 impl DragState {
     pub fn new() -> Self {

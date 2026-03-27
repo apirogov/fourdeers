@@ -135,10 +135,13 @@ impl FourDeersApp {
 
     fn process_hold(&mut self, pos: egui::Pos2) {
         let vis_rect = self.toy_manager.active_toy().get_visualization_rect();
+        let zone_mode = self.toy_manager.active_toy().get_zone_mode();
 
         if let Some(visualization_rect) = vis_rect {
             if visualization_rect.contains(pos) {
-                if let Some(analysis) = analyze_tap_in_stereo_view(visualization_rect, pos) {
+                if let Some(analysis) =
+                    analyze_tap_in_stereo_view(visualization_rect, pos, zone_mode)
+                {
                     self.toy_manager.active_toy_mut().handle_hold(&analysis);
                 }
             }
@@ -280,6 +283,7 @@ impl FourDeersApp {
 
     fn handle_tap_zone(&mut self, pos: egui::Pos2) {
         let vis_rect = self.toy_manager.active_toy().get_visualization_rect();
+        let zone_mode = self.toy_manager.active_toy().get_zone_mode();
 
         let Some(visualization_rect) = vis_rect else {
             return;
@@ -289,7 +293,7 @@ impl FourDeersApp {
             return;
         }
 
-        let Some(analysis) = analyze_tap_in_stereo_view(visualization_rect, pos) else {
+        let Some(analysis) = analyze_tap_in_stereo_view(visualization_rect, pos, zone_mode) else {
             return;
         };
 

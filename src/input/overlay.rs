@@ -1,69 +1,88 @@
 //! Pluggable control overlay for zone-based input
 
+use std::collections::HashMap;
+
 use eframe::egui;
 
-use super::zones::{TapAnalysis, Zone};
+use super::zones::{TapAnalysis, Zone, ZoneMode};
 
 pub type TapAction = Box<dyn FnMut()>;
 pub type DragHandler = Box<dyn FnMut(egui::Pos2, egui::Pos2)>;
 
+#[derive(Default)]
 pub struct ZoneBindings {
-    north: Option<TapAction>,
-    east: Option<TapAction>,
-    south: Option<TapAction>,
-    west: Option<TapAction>,
+    bindings: HashMap<Zone, TapAction>,
 }
 
-impl Default for ZoneBindings {
-    fn default() -> Self {
-        Self {
-            north: None,
-            east: None,
-            south: None,
-            west: None,
-        }
-    }
-}
 
 impl ZoneBindings {
     pub fn new() -> Self {
         Self::default()
     }
 
+    pub fn zone(mut self, zone: Zone, action: TapAction) -> Self {
+        self.bindings.insert(zone, action);
+        self
+    }
+
     pub fn north(mut self, action: TapAction) -> Self {
-        self.north = Some(action);
+        self.bindings.insert(Zone::North, action);
         self
     }
 
     pub fn east(mut self, action: TapAction) -> Self {
-        self.east = Some(action);
+        self.bindings.insert(Zone::East, action);
         self
     }
 
     pub fn south(mut self, action: TapAction) -> Self {
-        self.south = Some(action);
+        self.bindings.insert(Zone::South, action);
         self
     }
 
     pub fn west(mut self, action: TapAction) -> Self {
-        self.west = Some(action);
+        self.bindings.insert(Zone::West, action);
+        self
+    }
+
+    pub fn north_west(mut self, action: TapAction) -> Self {
+        self.bindings.insert(Zone::NorthWest, action);
+        self
+    }
+
+    pub fn north_east(mut self, action: TapAction) -> Self {
+        self.bindings.insert(Zone::NorthEast, action);
+        self
+    }
+
+    pub fn center(mut self, action: TapAction) -> Self {
+        self.bindings.insert(Zone::Center, action);
+        self
+    }
+
+    pub fn south_west(mut self, action: TapAction) -> Self {
+        self.bindings.insert(Zone::SouthWest, action);
+        self
+    }
+
+    pub fn south_east(mut self, action: TapAction) -> Self {
+        self.bindings.insert(Zone::SouthEast, action);
         self
     }
 
     pub fn trigger(&mut self, zone: Zone) {
-        let action = match zone {
-            Zone::North => &mut self.north,
-            Zone::East => &mut self.east,
-            Zone::South => &mut self.south,
-            Zone::West => &mut self.west,
-        };
-        if let Some(action) = action {
+        if let Some(action) = self.bindings.get_mut(&zone) {
             action();
         }
+    }
+
+    pub fn has_binding(&self, zone: Zone) -> bool {
+        self.bindings.contains_key(&zone)
     }
 }
 
 pub struct ControlOverlay {
+    zone_mode: ZoneMode,
     left_bindings: ZoneBindings,
     right_bindings: ZoneBindings,
     left_drag_handler: Option<DragHandler>,
@@ -73,6 +92,7 @@ pub struct ControlOverlay {
 impl Default for ControlOverlay {
     fn default() -> Self {
         Self {
+            zone_mode: ZoneMode::default(),
             left_bindings: ZoneBindings::new(),
             right_bindings: ZoneBindings::new(),
             left_drag_handler: None,
@@ -84,6 +104,11 @@ impl Default for ControlOverlay {
 impl ControlOverlay {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn zone_mode(mut self, mode: ZoneMode) -> Self {
+        self.zone_mode = mode;
+        self
     }
 
     pub fn left_bindings(mut self, bindings: ZoneBindings) -> Self {
@@ -104,6 +129,10 @@ impl ControlOverlay {
     pub fn right_drag(mut self, handler: DragHandler) -> Self {
         self.right_drag_handler = Some(handler);
         self
+    }
+
+    pub fn get_zone_mode(&self) -> ZoneMode {
+        self.zone_mode
     }
 
     pub fn trigger(&mut self, analysis: &TapAnalysis) {
@@ -146,23 +175,18 @@ impl ControlOverlayBuilder {
         }
     }
 
+    pub fn zone_mode(mut self, mode: ZoneMode) -> Self {
+        self.overlay.zone_mode = mode;
+        self
+    }
+
     pub fn left_zone(mut self, zone: Zone, action: TapAction) -> Self {
-        match zone {
-            Zone::North => self.overlay.left_bindings.north = Some(action),
-            Zone::East => self.overlay.left_bindings.east = Some(action),
-            Zone::South => self.overlay.left_bindings.south = Some(action),
-            Zone::West => self.overlay.left_bindings.west = Some(action),
-        }
+        self.overlay.left_bindings.bindings.insert(zone, action);
         self
     }
 
     pub fn right_zone(mut self, zone: Zone, action: TapAction) -> Self {
-        match zone {
-            Zone::North => self.overlay.right_bindings.north = Some(action),
-            Zone::East => self.overlay.right_bindings.east = Some(action),
-            Zone::South => self.overlay.right_bindings.south = Some(action),
-            Zone::West => self.overlay.right_bindings.west = Some(action),
-        }
+        self.overlay.right_bindings.bindings.insert(zone, action);
         self
     }
 
