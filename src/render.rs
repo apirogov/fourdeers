@@ -405,6 +405,7 @@ impl TesseractRenderContext {
         eye_sign: f32,
         is_left_view: bool,
         show_debug: bool,
+        show_controls: bool,
         tetrahedron_rotations: &std::collections::HashMap<TetraId, UnitQuaternion<f32>>,
         rotation_mode_4d: Option<bool>,
     ) {
@@ -420,14 +421,22 @@ impl TesseractRenderContext {
         if show_debug {
             self.render_zone_labels(&painter, view_rect, is_left_view);
         }
-        self.render_tetrahedron_gadget(&painter, view_rect, is_left_view, tetrahedron_rotations);
+
+        if is_left_view || show_controls {
+            self.render_tetrahedron_gadget(
+                &painter,
+                view_rect,
+                is_left_view,
+                tetrahedron_rotations,
+            );
+        }
 
         if let Some(is_4d) = rotation_mode_4d {
             let label = if is_4d { "Rot:4D" } else { "Rot:3D" };
             if is_left_view {
                 render_menu_label(&painter, view_rect);
                 render_tap_zone_label(&painter, view_rect, Zone::SouthWest, label);
-            } else {
+            } else if show_controls {
                 render_tap_zone_label(&painter, view_rect, Zone::Center, label);
             }
         }

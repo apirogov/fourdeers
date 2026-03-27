@@ -6,13 +6,13 @@ use std::collections::HashMap;
 
 use crate::camera::{Camera, CameraAction};
 use crate::geometry::apply_so4_rotation;
-use crate::input::{analyze_tap_in_stereo_view, DragView, TapAnalysis, TetraId, Zone, ZoneMode};
+use crate::input::{DragView, TapAnalysis, TetraId, Zone};
 use crate::polytopes::create_polytope;
 use crate::render::{
     draw_background, draw_center_divider, render_menu_label, render_stereo_tetrahedron_overlay,
     render_tap_zone_label, split_stereo_views, w_to_color, StereoProjector, StereoSettings,
 };
-use crate::tetrahedron::{get_tetrahedron_layout, magnitude_4d};
+use crate::tetrahedron::magnitude_4d;
 use crate::toy::{DragState, Toy};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,6 +36,7 @@ pub struct TetrahedronDebugToy {
     stereo: StereoSettings,
     tetrahedron_rotations: HashMap<TetraId, UnitQuaternion<f32>>,
     right_view_4d_rotation: bool,
+    show_controls: bool,
 }
 
 impl Default for TetrahedronDebugToy {
@@ -61,38 +62,8 @@ impl TetrahedronDebugToy {
             stereo: StereoSettings::new(),
             tetrahedron_rotations: HashMap::new(),
             right_view_4d_rotation: false,
+            show_controls: false,
         }
-    }
-
-    fn get_tetrahedron_center(view_rect: egui::Rect, zone: Zone) -> (f32, f32) {
-        let layout = get_tetrahedron_layout(view_rect);
-        match zone {
-            Zone::North => (view_rect.center().x, view_rect.min.y + layout.edge_offset),
-            Zone::South => (view_rect.center().x, view_rect.max.y - layout.edge_offset),
-            Zone::West => (view_rect.min.x + layout.edge_offset, view_rect.center().y),
-            Zone::East => (view_rect.max.x - layout.edge_offset, view_rect.center().y),
-            _ => (view_rect.center().x, view_rect.center().y),
-        }
-    }
-
-    fn is_mouse_over_tetrahedron(pos: egui::Pos2, view_rect: egui::Rect, zone: Zone) -> bool {
-        let (center_x, center_y) = Self::get_tetrahedron_center(view_rect, zone);
-        let layout = get_tetrahedron_layout(view_rect);
-        let hit_radius = layout.scale * 1.5;
-        let dx = pos.x - center_x;
-        let dy = pos.y - center_y;
-        (dx * dx + dy * dy) <= hit_radius * hit_radius
-    }
-
-    fn get_tetrahedron_rotation(&self, id: TetraId) -> UnitQuaternion<f32> {
-        self.tetrahedron_rotations
-            .get(&id)
-            .copied()
-            .unwrap_or_else(UnitQuaternion::identity)
-    }
-
-    fn set_tetrahedron_rotation(&mut self, id: TetraId, rotation: UnitQuaternion<f32>) {
-        self.tetrahedron_rotations.insert(id, rotation);
     }
 
     fn reset_tetrahedron_rotations(&mut self) {
@@ -272,8 +243,10 @@ impl TetrahedronDebugToy {
         };
         render_tap_zone_label(&left_painter, left_rect, Zone::SouthWest, rot_label);
 
-        let right_painter = ui.painter().with_clip_rect(right_rect);
-        render_tap_zone_label(&right_painter, right_rect, Zone::Center, rot_label);
+        if self.show_controls {
+            let right_painter = ui.painter().with_clip_rect(right_rect);
+            render_tap_zone_label(&right_painter, right_rect, Zone::Center, rot_label);
+        }
     }
 }
 
@@ -321,6 +294,8 @@ impl Toy for TetrahedronDebugToy {
         });
 
         ui.separator();
+
+        ui.checkbox(&mut self.show_controls, "Show Controls");
 
         if self.view_mode == ViewMode::Camera {
             ui.label("Arrows: Move | PgUp/Dn: Up/Down | ,/. : W-slice");
@@ -525,8 +500,10 @@ impl Toy for TetrahedronDebugToy {
                 };
                 render_tap_zone_label(&left_painter, left_rect, Zone::SouthWest, rot_label);
 
-                let right_painter = ui.painter().with_clip_rect(right_rect);
-                render_tap_zone_label(&right_painter, right_rect, Zone::Center, rot_label);
+                if self.show_controls {
+                    let right_painter = ui.painter().with_clip_rect(right_rect);
+                    render_tap_zone_label(&right_painter, right_rect, Zone::Center, rot_label);
+                }
             }
         }
     }
@@ -585,47 +562,7 @@ impl Toy for TetrahedronDebugToy {
             return;
         }
 
-        if let Some(tetra_id) = self.drag_state.dragging_tetrahedron {
-            if let Some(last_pos) = self.drag_state.last_tetra_drag_pos {
-                let delta = to - last_pos;
-                let current_rot = self.get_tetrahedron_rotation(tetra_id);
-
-                let yaw_rot = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), -delta.x * 0.005);
-                let pitch_rot =
-                    UnitQuaternion::from_axis_angle(&Vector3::x_axis(), delta.y * 0.005);
-
-                let incremental = pitch_rot * yaw_rot;
-                let new_rot = incremental * current_rot;
-
-                self.set_tetrahedron_rotation(tetra_id, new_rot);
-            }
-            self.drag_state.last_tetra_drag_pos = Some(to);
-            self.drag_state.is_dragging = true;
-            return;
-        }
-
         let delta = to - from;
-
-        if let Some(visualization_rect) = self.visualization_rect {
-            if visualization_rect.contains(from) {
-                if let Some(analysis) =
-                    analyze_tap_in_stereo_view(visualization_rect, from, ZoneMode::FourZones)
-                {
-                    if analysis.zone.is_cardinal()
-                        && Self::is_mouse_over_tetrahedron(from, analysis.view_rect, analysis.zone)
-                    {
-                        let tetra_id = TetraId {
-                            is_left_view: analysis.is_left_view,
-                            zone: analysis.zone,
-                        };
-                        self.drag_state.dragging_tetrahedron = Some(tetra_id);
-                        self.drag_state.last_tetra_drag_pos = Some(to);
-                        self.drag_state.is_dragging = true;
-                        return;
-                    }
-                }
-            }
-        }
 
         match self.drag_state.drag_view {
             Some(DragView::Left) => {
