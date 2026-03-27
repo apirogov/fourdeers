@@ -33,14 +33,53 @@ pub fn draw_center_divider(ui: &mut egui::Ui, rect: egui::Rect) {
     );
 }
 
-pub fn render_menu_label(painter: &egui::Painter, view_rect: egui::Rect) {
+pub fn render_tap_zone_label(
+    painter: &egui::Painter,
+    view_rect: egui::Rect,
+    zone: Zone,
+    label: &str,
+) {
     let third_w = view_rect.width() / 3.0;
     let third_h = view_rect.height() / 3.0;
 
-    let label_pos = egui::Pos2::new(
-        view_rect.min.x + third_w * 0.5,
-        view_rect.min.y + third_h * 0.5,
-    );
+    let label_pos = match zone {
+        Zone::NorthWest => egui::Pos2::new(
+            view_rect.min.x + third_w * 0.5,
+            view_rect.min.y + third_h * 0.5,
+        ),
+        Zone::North => egui::Pos2::new(
+            view_rect.min.x + third_w * 1.5,
+            view_rect.min.y + third_h * 0.5,
+        ),
+        Zone::NorthEast => egui::Pos2::new(
+            view_rect.min.x + third_w * 2.5,
+            view_rect.min.y + third_h * 0.5,
+        ),
+        Zone::West => egui::Pos2::new(
+            view_rect.min.x + third_w * 0.5,
+            view_rect.min.y + third_h * 1.5,
+        ),
+        Zone::Center => egui::Pos2::new(
+            view_rect.min.x + third_w * 1.5,
+            view_rect.min.y + third_h * 1.5,
+        ),
+        Zone::East => egui::Pos2::new(
+            view_rect.min.x + third_w * 2.5,
+            view_rect.min.y + third_h * 1.5,
+        ),
+        Zone::SouthWest => egui::Pos2::new(
+            view_rect.min.x + third_w * 0.5,
+            view_rect.min.y + third_h * 2.5,
+        ),
+        Zone::South => egui::Pos2::new(
+            view_rect.min.x + third_w * 1.5,
+            view_rect.min.y + third_h * 2.5,
+        ),
+        Zone::SouthEast => egui::Pos2::new(
+            view_rect.min.x + third_w * 2.5,
+            view_rect.min.y + third_h * 2.5,
+        ),
+    };
 
     let font_id = egui::FontId::proportional(11.0);
     let outline_color = egui::Color32::from_rgba_unmultiplied(0, 0, 0, 180);
@@ -49,17 +88,21 @@ pub fn render_menu_label(painter: &egui::Painter, view_rect: egui::Rect) {
     painter.text(
         label_pos + egui::Vec2::new(0.5, 0.5),
         egui::Align2::CENTER_CENTER,
-        "Menu",
+        label,
         font_id.clone(),
         outline_color,
     );
     painter.text(
         label_pos,
         egui::Align2::CENTER_CENTER,
-        "Menu",
+        label,
         font_id,
         text_color,
     );
+}
+
+pub fn render_menu_label(painter: &egui::Painter, view_rect: egui::Rect) {
+    render_tap_zone_label(painter, view_rect, Zone::NorthWest, "Menu");
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -363,6 +406,7 @@ impl TesseractRenderContext {
         is_left_view: bool,
         show_debug: bool,
         tetrahedron_rotations: &std::collections::HashMap<TetraId, UnitQuaternion<f32>>,
+        rotation_mode_4d: Option<bool>,
     ) {
         let center = view_rect.center();
         let scale = view_rect.height().min(view_rect.width()) * 0.35;
@@ -380,6 +424,10 @@ impl TesseractRenderContext {
 
         if is_left_view {
             render_menu_label(&painter, view_rect);
+            if let Some(is_4d) = rotation_mode_4d {
+                let label = if is_4d { "Rot:4D" } else { "Rot:3D" };
+                render_tap_zone_label(&painter, view_rect, Zone::SouthWest, label);
+            }
         }
     }
 

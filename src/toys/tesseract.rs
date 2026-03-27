@@ -31,6 +31,7 @@ pub struct TesseractToy {
     pub drag_state: DragState,
     tetrahedron_rotations: HashMap<TetraId, UnitQuaternion<f32>>,
     stereo: StereoSettings,
+    right_view_4d_rotation: bool,
 }
 
 impl Default for TesseractToy {
@@ -58,6 +59,7 @@ impl TesseractToy {
             drag_state: DragState::new(),
             tetrahedron_rotations: HashMap::new(),
             stereo: StereoSettings::new(),
+            right_view_4d_rotation: false,
         }
     }
 
@@ -408,6 +410,7 @@ impl Toy for TesseractToy {
             true,
             show_debug || self.show_debug,
             &self.tetrahedron_rotations,
+            Some(self.right_view_4d_rotation),
         );
         ctx.render_eye_view(
             ui,
@@ -416,6 +419,7 @@ impl Toy for TesseractToy {
             false,
             show_debug || self.show_debug,
             &self.tetrahedron_rotations,
+            None,
         );
     }
 
@@ -429,6 +433,11 @@ impl Toy for TesseractToy {
     }
 
     fn handle_tap(&mut self, analysis: &TapAnalysis) {
+        if analysis.is_left_view && analysis.zone == Zone::SouthWest {
+            self.right_view_4d_rotation = !self.right_view_4d_rotation;
+            return;
+        }
+
         self.drag_state.last_tap_pos = Some(egui::Pos2::new(
             analysis.view_rect.min.x + analysis.norm_x * analysis.view_rect.width(),
             analysis.view_rect.min.y + analysis.norm_y * analysis.view_rect.height(),
@@ -490,7 +499,11 @@ impl Toy for TesseractToy {
                 self.reset_tetrahedron_rotations();
             }
             Some(DragView::Right) => {
-                self.camera.rotate_4d(delta.x, delta.y);
+                if self.right_view_4d_rotation {
+                    self.camera.rotate_4d(delta.x, delta.y);
+                } else {
+                    self.camera.rotate(delta.x, delta.y);
+                }
                 self.reset_tetrahedron_rotations();
             }
             None => {}

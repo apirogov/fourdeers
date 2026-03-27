@@ -10,7 +10,7 @@ use crate::input::{analyze_tap_in_stereo_view, DragView, TapAnalysis, TetraId, Z
 use crate::polytopes::create_polytope;
 use crate::render::{
     draw_background, draw_center_divider, render_menu_label, render_stereo_tetrahedron_overlay,
-    split_stereo_views, w_to_color, StereoProjector, StereoSettings,
+    render_tap_zone_label, split_stereo_views, w_to_color, StereoProjector, StereoSettings,
 };
 use crate::tetrahedron::{get_tetrahedron_layout, magnitude_4d};
 use crate::toy::{DragState, Toy};
@@ -35,6 +35,7 @@ pub struct TetrahedronDebugToy {
     glome_rot_zw: f32,
     stereo: StereoSettings,
     tetrahedron_rotations: HashMap<TetraId, UnitQuaternion<f32>>,
+    right_view_4d_rotation: bool,
 }
 
 impl Default for TetrahedronDebugToy {
@@ -59,6 +60,7 @@ impl TetrahedronDebugToy {
             glome_rot_zw: 0.0,
             stereo: StereoSettings::new(),
             tetrahedron_rotations: HashMap::new(),
+            right_view_4d_rotation: false,
         }
     }
 
@@ -261,7 +263,14 @@ impl TetrahedronDebugToy {
             }
         }
 
-        render_menu_label(&ui.painter().with_clip_rect(left_rect), left_rect);
+        let left_painter = ui.painter().with_clip_rect(left_rect);
+        render_menu_label(&left_painter, left_rect);
+        let rot_label = if self.right_view_4d_rotation {
+            "Rot:4D"
+        } else {
+            "Rot:3D"
+        };
+        render_tap_zone_label(&left_painter, left_rect, Zone::SouthWest, rot_label);
     }
 }
 
@@ -504,7 +513,14 @@ impl Toy for TetrahedronDebugToy {
                 );
 
                 let (left_rect, _) = split_stereo_views(rect);
-                render_menu_label(&ui.painter().with_clip_rect(left_rect), left_rect);
+                let left_painter = ui.painter().with_clip_rect(left_rect);
+                render_menu_label(&left_painter, left_rect);
+                let rot_label = if self.right_view_4d_rotation {
+                    "Rot:4D"
+                } else {
+                    "Rot:3D"
+                };
+                render_tap_zone_label(&left_painter, left_rect, Zone::SouthWest, rot_label);
             }
         }
     }
@@ -527,6 +543,11 @@ impl Toy for TetrahedronDebugToy {
                 self.tetrahedron_rotation = UnitQuaternion::identity();
                 return;
             }
+            return;
+        }
+
+        if analysis.is_left_view && analysis.zone == Zone::SouthWest {
+            self.right_view_4d_rotation = !self.right_view_4d_rotation;
             return;
         }
 
@@ -601,7 +622,11 @@ impl Toy for TetrahedronDebugToy {
                 self.reset_tetrahedron_rotations();
             }
             Some(DragView::Right) => {
-                self.camera.rotate_4d(delta.x, delta.y);
+                if self.right_view_4d_rotation {
+                    self.camera.rotate_4d(delta.x, delta.y);
+                } else {
+                    self.camera.rotate(delta.x, delta.y);
+                }
                 self.reset_tetrahedron_rotations();
             }
             None => {}
