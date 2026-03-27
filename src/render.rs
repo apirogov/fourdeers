@@ -624,6 +624,13 @@ impl TesseractRenderContext {
                 .copied()
                 .unwrap_or_else(UnitQuaternion::identity);
 
+            let base_label = zone_to_direction_label(zone);
+            let base_label = if base_label.is_empty() {
+                None
+            } else {
+                Some(base_label)
+            };
+
             render_single_tetrahedron(
                 painter,
                 vector_4d,
@@ -634,6 +641,7 @@ impl TesseractRenderContext {
                 layout.scale,
                 true,
                 false,
+                base_label,
             );
         }
     }
@@ -649,6 +657,20 @@ fn zone_to_direction(zone: Zone) -> ZoneDirection {
     }
 }
 
+fn zone_to_direction_label(zone: Zone) -> &'static str {
+    match zone {
+        Zone::North => "U",
+        Zone::South => "D",
+        Zone::West => "L",
+        Zone::East => "R",
+        Zone::NorthEast => "F",
+        Zone::SouthWest => "B",
+        Zone::NorthWest => "A",
+        Zone::SouthEast => "K",
+        Zone::Center => "",
+    }
+}
+
 fn render_single_tetrahedron(
     painter: &egui::Painter,
     vector_4d: nalgebra::Vector4<f32>,
@@ -659,6 +681,7 @@ fn render_single_tetrahedron(
     scale: f32,
     show_captions: bool,
     show_magnitudes: bool,
+    base_label: Option<&str>,
 ) {
     let gadget = TetrahedronGadget::for_zone(vector_4d, zone_dir, user_rotation, scale);
     let focal_length = scale * 3.0;
@@ -830,6 +853,28 @@ fn render_single_tetrahedron(
         } else if arrow_vec.length() > 1e-3 {
             painter.circle_filled(arrow_end, 3.0, egui::Color32::from_rgb(255, 150, 50));
         }
+    }
+
+    if let Some(label) = base_label {
+        let base_pos = egui::Pos2::new(center_x, center_y + 18.0);
+        let font_id = egui::FontId::proportional(11.0);
+        let outline_color = egui::Color32::from_rgba_unmultiplied(0, 0, 0, 180);
+        let text_color = egui::Color32::from_rgb(255, 180, 80);
+
+        painter.text(
+            base_pos + egui::Vec2::new(0.5, 0.5),
+            egui::Align2::CENTER_CENTER,
+            label,
+            font_id.clone(),
+            outline_color,
+        );
+        painter.text(
+            base_pos,
+            egui::Align2::CENTER_CENTER,
+            label,
+            font_id,
+            text_color,
+        );
     }
 }
 

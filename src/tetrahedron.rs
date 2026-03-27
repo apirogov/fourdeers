@@ -163,6 +163,7 @@ pub struct TetrahedronGadget {
     pub center: Pos3D,
     pub scale: f32,
     pub tip_label: Option<String>,
+    pub base_label: Option<String>,
     pub component_values: [f32; 4],
     pub vector_magnitude: f32,
 }
@@ -196,6 +197,7 @@ impl TetrahedronGadget {
             center,
             scale,
             tip_label: None,
+            base_label: None,
             component_values,
             vector_magnitude,
         }
@@ -203,6 +205,11 @@ impl TetrahedronGadget {
 
     pub fn with_tip_label(mut self, label: impl Into<String>) -> Self {
         self.tip_label = Some(label.into());
+        self
+    }
+
+    pub fn with_base_label(mut self, label: impl Into<String>) -> Self {
+        self.base_label = Some(label.into());
         self
     }
 
@@ -390,6 +397,10 @@ impl TetrahedronGadget {
 
     pub fn tip_label(&self) -> Option<&String> {
         self.tip_label.as_ref()
+    }
+
+    pub fn base_label(&self) -> Option<&String> {
+        self.base_label.as_ref()
     }
 }
 
