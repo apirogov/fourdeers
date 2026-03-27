@@ -469,8 +469,8 @@ impl TesseractRenderContext {
         let offset = layout.edge_offset;
         let third_w = view_rect.width() / 3.0;
 
-        let labels = if is_left_view {
-            [
+        let labels: Vec<(&str, String, &str, f32, f32)> = if is_left_view {
+            vec![
                 (
                     "↑",
                     format_4d_vector_compact(basis[1]),
@@ -501,19 +501,47 @@ impl TesseractRenderContext {
                 ),
             ]
         } else {
-            [
+            vec![
+                (
+                    "↑",
+                    format_4d_vector_compact(basis[1]),
+                    "Up",
+                    view_rect.center().x,
+                    view_rect.min.y + offset * 0.5,
+                ),
+                (
+                    "↓",
+                    format_4d_vector_compact(neg_vec(basis[1])),
+                    "Down",
+                    view_rect.center().x,
+                    view_rect.max.y - offset * 0.7,
+                ),
+                (
+                    "←",
+                    format_4d_vector_compact(neg_vec(basis[0])),
+                    "Left",
+                    view_rect.min.x + offset * 0.5,
+                    view_rect.center().y,
+                ),
+                (
+                    "→",
+                    format_4d_vector_compact(basis[0]),
+                    "Right",
+                    view_rect.max.x - offset * 0.4,
+                    view_rect.center().y,
+                ),
                 (
                     "↗",
                     format_4d_vector_compact(basis[2]),
                     "Fwd",
-                    view_rect.min.x + third_w * 2.0,
+                    view_rect.min.x + third_w * 2.5,
                     view_rect.min.y + offset * 0.5,
                 ),
                 (
                     "↙",
                     format_4d_vector_compact(neg_vec(basis[2])),
                     "Back",
-                    view_rect.min.x + third_w,
+                    view_rect.min.x + third_w * 0.5,
                     view_rect.max.y - offset * 0.7,
                 ),
                 (
@@ -588,15 +616,39 @@ impl TesseractRenderContext {
         } else {
             vec![
                 (
+                    nalgebra::Vector4::from(basis[1]),
+                    Zone::North,
+                    view_rect.center().x,
+                    view_rect.min.y + offset,
+                ),
+                (
+                    nalgebra::Vector4::from(neg_vec(basis[1])),
+                    Zone::South,
+                    view_rect.center().x,
+                    view_rect.max.y - offset,
+                ),
+                (
+                    nalgebra::Vector4::from(neg_vec(basis[0])),
+                    Zone::West,
+                    view_rect.min.x + offset,
+                    view_rect.center().y,
+                ),
+                (
+                    nalgebra::Vector4::from(basis[0]),
+                    Zone::East,
+                    view_rect.max.x - offset,
+                    view_rect.center().y,
+                ),
+                (
                     nalgebra::Vector4::from(basis[2]),
                     Zone::NorthEast,
-                    view_rect.min.x + third_w * 2.0,
+                    view_rect.min.x + third_w * 2.5,
                     view_rect.min.y + offset,
                 ),
                 (
                     nalgebra::Vector4::from(neg_vec(basis[2])),
                     Zone::SouthWest,
-                    view_rect.min.x + third_w,
+                    view_rect.min.x + third_w * 0.5,
                     view_rect.max.y - offset,
                 ),
                 (
