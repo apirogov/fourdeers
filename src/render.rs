@@ -33,6 +33,35 @@ pub fn draw_center_divider(ui: &mut egui::Ui, rect: egui::Rect) {
     );
 }
 
+pub fn render_menu_label(painter: &egui::Painter, view_rect: egui::Rect) {
+    let third_w = view_rect.width() / 3.0;
+    let third_h = view_rect.height() / 3.0;
+
+    let label_pos = egui::Pos2::new(
+        view_rect.min.x + third_w * 0.5,
+        view_rect.min.y + third_h * 0.5,
+    );
+
+    let font_id = egui::FontId::proportional(11.0);
+    let outline_color = egui::Color32::from_rgba_unmultiplied(0, 0, 0, 180);
+    let text_color = egui::Color32::from_rgb(255, 180, 80);
+
+    painter.text(
+        label_pos + egui::Vec2::new(0.5, 0.5),
+        egui::Align2::CENTER_CENTER,
+        "Menu",
+        font_id.clone(),
+        outline_color,
+    );
+    painter.text(
+        label_pos,
+        egui::Align2::CENTER_CENTER,
+        "Menu",
+        font_id,
+        text_color,
+    );
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ProjectionMode {
     #[default]
@@ -348,6 +377,10 @@ impl TesseractRenderContext {
             self.render_zone_labels(&painter, view_rect, is_left_view);
         }
         self.render_tetrahedron_gadget(&painter, view_rect, is_left_view, tetrahedron_rotations);
+
+        if is_left_view {
+            render_menu_label(&painter, view_rect);
+        }
     }
 
     fn render_tesseract_edges(

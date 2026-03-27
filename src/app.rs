@@ -2,12 +2,12 @@
 
 use eframe::egui;
 
-use crate::input::{analyze_tap_in_stereo_view, DragView};
+use crate::input::{analyze_tap_in_stereo_view, DragView, Zone};
 use crate::toy::ToyManager;
 
 pub struct FourDeersApp {
     toy_manager: ToyManager,
-    sidebar_open: bool,
+    menu_open: bool,
     last_tap_time: Option<f64>,
     mouse_down_pos: Option<egui::Pos2>,
     mouse_down_time: Option<f64>,
@@ -20,7 +20,7 @@ impl FourDeersApp {
     pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
         Self {
             toy_manager: ToyManager::new(),
-            sidebar_open: true,
+            menu_open: false,
             last_tap_time: None,
             mouse_down_pos: None,
             mouse_down_time: None,
@@ -173,52 +173,71 @@ impl FourDeersApp {
     }
 
     fn render_ui(&mut self, ctx: &egui::Context) {
-        if self.sidebar_open {
-            eframe::egui::SidePanel::left("controls")
-                .default_width(280.0)
-                .resizable(true)
-                .show(ctx, |ui| {
-                    egui::ScrollArea::vertical().show(ui, |ui| {
-                        self.draw_common_controls(ui);
-                        ui.separator();
-                        self.toy_manager.active_toy_mut().render_sidebar(ui);
-                    });
-                });
-        }
-
-        if !self.sidebar_open {
-            eframe::egui::Window::new("Menu")
-                .collapsible(false)
-                .resizable(false)
-                .title_bar(false)
-                .fixed_pos([10.0, 10.0])
-                .default_size([120.0, 40.0])
-                .show(ctx, |ui| {
-                    if ui.button("Controls").clicked() {
-                        self.sidebar_open = true;
-                    }
-                });
-        }
+        let mut visualization_rect = None;
 
         eframe::egui::CentralPanel::default().show(ctx, |ui| {
             let rect = ui.available_rect_before_wrap();
+            visualization_rect = Some(rect);
             self.toy_manager
                 .active_toy_mut()
                 .render_scene(ui, rect, false);
         });
+
+        if let Some(vis_rect) = visualization_rect {
+            self.render_menu_overlay(ctx, vis_rect);
+        }
+    }
+
+    fn render_menu_overlay(&mut self, ctx: &egui::Context, vis_rect: egui::Rect) {
+        if !self.menu_open {
+            return;
+        }
+
+        let left_rect = egui::Rect {
+            min: vis_rect.min,
+            max: egui::pos2(vis_rect.center().x, vis_rect.max.y),
+        };
+
+        let mut close_menu = false;
+
+        egui::Window::new("menu_overlay")
+            .title_bar(false)
+            .resizable(false)
+            .movable(false)
+            .interactable(true)
+            .frame(egui::Frame {
+                fill: egui::Color32::from_rgb(35, 35, 45),
+                corner_radius: egui::CornerRadius::ZERO,
+                stroke: egui::Stroke::NONE,
+                inner_margin: egui::Margin::same(12),
+                ..Default::default()
+            })
+            .fixed_pos(left_rect.min)
+            .fixed_size(egui::Vec2::new(left_rect.width(), left_rect.height()))
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.heading("FourDeers");
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.button("X").on_hover_text("Close menu").clicked() {
+                            close_menu = true;
+                        }
+                    });
+                });
+                ui.separator();
+
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    self.draw_common_controls(ui);
+                    ui.separator();
+                    self.toy_manager.active_toy_mut().render_sidebar(ui);
+                });
+            });
+
+        if close_menu {
+            self.menu_open = false;
+        }
     }
 
     fn draw_common_controls(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| {
-            ui.heading("FourDeers");
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button("X").on_hover_text("Close sidebar").clicked() {
-                    self.sidebar_open = false;
-                }
-            });
-        });
-        ui.separator();
-
         ui.label("Select Toy:");
         let toy_list: Vec<_> = self.toy_manager.toy_list();
         let active_id = self.toy_manager.active_toy_id().to_string();
@@ -296,6 +315,11 @@ impl FourDeersApp {
         let Some(analysis) = analyze_tap_in_stereo_view(visualization_rect, pos, zone_mode) else {
             return;
         };
+
+        if analysis.is_left_view && analysis.zone == Zone::NorthWest {
+            self.menu_open = !self.menu_open;
+            return;
+        }
 
         self.toy_manager.active_toy_mut().handle_tap(&analysis);
     }

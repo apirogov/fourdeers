@@ -9,8 +9,8 @@ use crate::geometry::apply_so4_rotation;
 use crate::input::{analyze_tap_in_stereo_view, DragView, TapAnalysis, TetraId, Zone, ZoneMode};
 use crate::polytopes::create_polytope;
 use crate::render::{
-    draw_background, draw_center_divider, render_stereo_tetrahedron_overlay, split_stereo_views,
-    w_to_color, StereoProjector, StereoSettings,
+    draw_background, draw_center_divider, render_menu_label, render_stereo_tetrahedron_overlay,
+    split_stereo_views, w_to_color, StereoProjector, StereoSettings,
 };
 use crate::tetrahedron::{get_tetrahedron_layout, magnitude_4d};
 use crate::toy::{DragState, Toy};
@@ -260,6 +260,8 @@ impl TetrahedronDebugToy {
                 painter.line_segment([s0, s1], egui::Stroke::new(2.5, color));
             }
         }
+
+        render_menu_label(&ui.painter().with_clip_rect(left_rect), left_rect);
     }
 }
 
@@ -500,6 +502,9 @@ impl Toy for TetrahedronDebugToy {
                     &self.tetrahedron_rotation,
                     &projector,
                 );
+
+                let (left_rect, _) = split_stereo_views(rect);
+                render_menu_label(&ui.painter().with_clip_rect(left_rect), left_rect);
             }
         }
     }
