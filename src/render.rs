@@ -698,8 +698,8 @@ fn zone_to_direction_label(zone: Zone) -> &'static str {
         Zone::East => "R",
         Zone::NorthEast => "F",
         Zone::SouthWest => "B",
-        Zone::NorthWest => "A",
-        Zone::SouthEast => "K",
+        Zone::NorthWest => "K",
+        Zone::SouthEast => "A",
         Zone::Center => "",
     }
 }
