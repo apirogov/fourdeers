@@ -630,6 +630,7 @@ impl TesseractRenderContext {
                 y,
                 user_rotation,
                 layout.scale,
+                true,
                 false,
             );
         }
@@ -654,7 +655,8 @@ fn render_single_tetrahedron(
     center_y: f32,
     user_rotation: UnitQuaternion<f32>,
     scale: f32,
-    show_labels: bool,
+    show_captions: bool,
+    show_magnitudes: bool,
 ) {
     let gadget = TetrahedronGadget::for_zone(vector_4d, zone_dir, user_rotation, scale);
     let focal_length = scale * 3.0;
@@ -693,76 +695,82 @@ fn render_single_tetrahedron(
         }
     }
 
-    if show_labels {
+    if show_captions || show_magnitudes {
         let component_mags: [f32; 4] = gadget.component_values.map(|v| v.abs());
         let max_mag = component_mags.iter().cloned().fold(0.0f32, f32::max);
 
         for (i, vertex) in gadget.vertices.iter().enumerate() {
             let component = gadget.component_values[i];
-            let color = crate::tetrahedron::compute_component_color(component, max_mag);
-            let egui_color = color.to_egui_color();
 
             if let Some(pos) = gadget.get_vertex_3d(i) {
                 let z_offset = focal_length + pos.z;
                 if z_offset > 0.1 {
                     let s = focal_length / z_offset;
                     let screen_pos = egui::Pos2::new(center_x + pos.x * s, center_y - pos.y * s);
-                    let font_id = egui::FontId::proportional(14.0);
-                    let outline_color = egui::Color32::from_rgba_unmultiplied(0, 0, 0, 180);
 
-                    painter.text(
-                        screen_pos + egui::Vec2::new(0.5, 0.5),
-                        egui::Align2::CENTER_CENTER,
-                        &vertex.label,
-                        font_id.clone(),
-                        outline_color,
-                    );
-                    painter.text(
-                        screen_pos + egui::Vec2::new(-0.5, -0.5),
-                        egui::Align2::CENTER_CENTER,
-                        &vertex.label,
-                        font_id.clone(),
-                        outline_color,
-                    );
-                    painter.text(
-                        screen_pos,
-                        egui::Align2::CENTER_CENTER,
-                        &vertex.label,
-                        font_id,
-                        egui_color,
-                    );
-
-                    if let Some(normal) = gadget.get_vertex_normal(i) {
-                        let label_x = pos.x + normal.x * 20.0;
-                        let label_y = pos.y + normal.y * 20.0;
-                        let label_pos =
-                            egui::Pos2::new(center_x + label_x * s, center_y - label_y * s);
-                        let value_text = crate::tetrahedron::format_component_value(component);
-                        let font_id = egui::FontId::monospace(10.0);
-                        let outline_color = egui::Color32::from_rgba_unmultiplied(0, 0, 0, 160);
-                        let text_color = egui::Color32::from_rgba_unmultiplied(230, 230, 230, 255);
+                    if show_captions {
+                        let color = crate::tetrahedron::compute_component_color(component, max_mag);
+                        let egui_color = color.to_egui_color();
+                        let font_id = egui::FontId::proportional(14.0);
+                        let outline_color = egui::Color32::from_rgba_unmultiplied(0, 0, 0, 180);
 
                         painter.text(
-                            label_pos + egui::Vec2::new(0.5, 0.5),
+                            screen_pos + egui::Vec2::new(0.5, 0.5),
                             egui::Align2::CENTER_CENTER,
-                            &value_text,
+                            &vertex.label,
                             font_id.clone(),
                             outline_color,
                         );
                         painter.text(
-                            label_pos + egui::Vec2::new(-0.5, -0.5),
+                            screen_pos + egui::Vec2::new(-0.5, -0.5),
                             egui::Align2::CENTER_CENTER,
-                            &value_text,
+                            &vertex.label,
                             font_id.clone(),
                             outline_color,
                         );
                         painter.text(
-                            label_pos,
+                            screen_pos,
                             egui::Align2::CENTER_CENTER,
-                            &value_text,
+                            &vertex.label,
                             font_id,
-                            text_color,
+                            egui_color,
                         );
+                    }
+
+                    if show_magnitudes {
+                        if let Some(normal) = gadget.get_vertex_normal(i) {
+                            let label_x = pos.x + normal.x * 20.0;
+                            let label_y = pos.y + normal.y * 20.0;
+                            let label_pos =
+                                egui::Pos2::new(center_x + label_x * s, center_y - label_y * s);
+                            let value_text = crate::tetrahedron::format_component_value(component);
+                            let font_id = egui::FontId::monospace(10.0);
+                            let outline_color = egui::Color32::from_rgba_unmultiplied(0, 0, 0, 160);
+                            let text_color =
+                                egui::Color32::from_rgba_unmultiplied(230, 230, 230, 255);
+
+                            painter.text(
+                                label_pos + egui::Vec2::new(0.5, 0.5),
+                                egui::Align2::CENTER_CENTER,
+                                &value_text,
+                                font_id.clone(),
+                                outline_color,
+                            );
+                            painter.text(
+                                label_pos + egui::Vec2::new(-0.5, -0.5),
+                                egui::Align2::CENTER_CENTER,
+                                &value_text,
+                                font_id.clone(),
+                                outline_color,
+                            );
+                            painter.text(
+                                label_pos,
+                                egui::Align2::CENTER_CENTER,
+                                &value_text,
+                                font_id,
+                                text_color,
+                            );
+                        }
                     }
                 }
             }
