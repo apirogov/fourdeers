@@ -501,6 +501,7 @@ impl TesseractRenderContext {
                 ),
             ]
         } else {
+            let third_h = view_rect.height() / 3.0;
             vec![
                 (
                     "↑",
@@ -535,28 +536,28 @@ impl TesseractRenderContext {
                     format_4d_vector_compact(basis[2]),
                     "Fwd",
                     view_rect.min.x + third_w * 2.5,
-                    view_rect.min.y + offset * 0.5,
+                    view_rect.min.y + third_h * 0.5,
                 ),
                 (
                     "↙",
                     format_4d_vector_compact(neg_vec(basis[2])),
                     "Back",
                     view_rect.min.x + third_w * 0.5,
-                    view_rect.max.y - offset * 0.7,
+                    view_rect.min.y + third_h * 2.5,
                 ),
                 (
                     "↖",
-                    format_4d_vector_compact(neg_vec(basis[3])),
-                    "Ana",
-                    view_rect.min.x + offset * 0.5,
-                    view_rect.min.y + offset * 0.5,
+                    format_4d_vector_compact(basis[3]),
+                    "Kata",
+                    view_rect.min.x + third_w * 0.5,
+                    view_rect.min.y + third_h * 0.5,
                 ),
                 (
                     "↘",
-                    format_4d_vector_compact(basis[3]),
-                    "Kata",
-                    view_rect.max.x - offset * 0.4,
-                    view_rect.max.y - offset * 0.7,
+                    format_4d_vector_compact(neg_vec(basis[3])),
+                    "Ana",
+                    view_rect.min.x + third_w * 2.5,
+                    view_rect.min.y + third_h * 2.5,
                 ),
             ]
         };
@@ -614,6 +615,7 @@ impl TesseractRenderContext {
                 ),
             ]
         } else {
+            let third_h = view_rect.height() / 3.0;
             vec![
                 (
                     nalgebra::Vector4::from(basis[1]),
@@ -643,25 +645,25 @@ impl TesseractRenderContext {
                     nalgebra::Vector4::from(basis[2]),
                     Zone::NorthEast,
                     view_rect.min.x + third_w * 2.5,
-                    view_rect.min.y + offset,
+                    view_rect.min.y + third_h * 0.5,
                 ),
                 (
                     nalgebra::Vector4::from(neg_vec(basis[2])),
                     Zone::SouthWest,
                     view_rect.min.x + third_w * 0.5,
-                    view_rect.max.y - offset,
-                ),
-                (
-                    nalgebra::Vector4::from(neg_vec(basis[3])),
-                    Zone::NorthWest,
-                    view_rect.min.x + offset,
-                    view_rect.min.y + offset,
+                    view_rect.min.y + third_h * 2.5,
                 ),
                 (
                     nalgebra::Vector4::from(basis[3]),
+                    Zone::NorthWest,
+                    view_rect.min.x + third_w * 0.5,
+                    view_rect.min.y + third_h * 0.5,
+                ),
+                (
+                    nalgebra::Vector4::from(neg_vec(basis[3])),
                     Zone::SouthEast,
-                    view_rect.max.x - offset,
-                    view_rect.max.y - offset,
+                    view_rect.min.x + third_w * 2.5,
+                    view_rect.min.y + third_h * 2.5,
                 ),
             ]
         };

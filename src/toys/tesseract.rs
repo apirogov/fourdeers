@@ -115,8 +115,8 @@ impl TesseractToy {
                 Zone::East => Some(CameraAction::MoveRight),
                 Zone::NorthEast => Some(CameraAction::MoveSliceForward),
                 Zone::SouthWest => Some(CameraAction::MoveSliceBackward),
-                Zone::NorthWest => Some(CameraAction::MoveAna),
-                Zone::SouthEast => Some(CameraAction::MoveKata),
+                Zone::NorthWest => Some(CameraAction::MoveKata),
+                Zone::SouthEast => Some(CameraAction::MoveAna),
                 _ => None,
             }
         }
