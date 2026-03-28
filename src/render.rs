@@ -125,7 +125,7 @@ impl Default for StereoSettings {
         Self {
             eye_separation: 0.12,
             projection_distance: 3.0,
-            projection_mode: ProjectionMode::default(),
+            projection_mode: ProjectionMode::Orthographic,
             w_thickness: 2.5,
         }
     }
@@ -1060,38 +1060,40 @@ fn render_tetrahedron_with_projector(
         let color = crate::tetrahedron::compute_component_color(component, max_mag);
         let egui_color = color.to_egui_color();
 
-        if let Some(p) = gadget
-            .get_vertex_3d(i)
-            .and_then(|pos| projector.project_3d(pos.x, pos.y, pos.z, eye_sign))
-        {
-            let font_id = egui::FontId::proportional(16.0);
-            let outline_color = egui::Color32::from_rgba_unmultiplied(0, 0, 0, 180);
+        if let (Some(pos), Some(normal)) = (gadget.get_vertex_3d(i), gadget.get_vertex_normal(i)) {
+            let label_offset = 0.15;
+            let label_x = pos.x + normal.x * label_offset;
+            let label_y = pos.y + normal.y * label_offset;
+            if let Some(p) = projector.project_3d(label_x, label_y, pos.z, eye_sign) {
+                let font_id = egui::FontId::proportional(16.0);
+                let outline_color = egui::Color32::from_rgba_unmultiplied(0, 0, 0, 180);
 
-            painter.text(
-                p.screen_pos + egui::Vec2::new(0.5, 0.5),
-                egui::Align2::CENTER_CENTER,
-                &vertex.label,
-                font_id.clone(),
-                outline_color,
-            );
-            painter.text(
-                p.screen_pos + egui::Vec2::new(-0.5, -0.5),
-                egui::Align2::CENTER_CENTER,
-                &vertex.label,
-                font_id.clone(),
-                outline_color,
-            );
-            painter.text(
-                p.screen_pos,
-                egui::Align2::CENTER_CENTER,
-                &vertex.label,
-                font_id,
-                egui_color,
-            );
+                painter.text(
+                    p.screen_pos + egui::Vec2::new(0.5, 0.5),
+                    egui::Align2::CENTER_CENTER,
+                    &vertex.label,
+                    font_id.clone(),
+                    outline_color,
+                );
+                painter.text(
+                    p.screen_pos + egui::Vec2::new(-0.5, -0.5),
+                    egui::Align2::CENTER_CENTER,
+                    &vertex.label,
+                    font_id.clone(),
+                    outline_color,
+                );
+                painter.text(
+                    p.screen_pos,
+                    egui::Align2::CENTER_CENTER,
+                    &vertex.label,
+                    font_id,
+                    egui_color,
+                );
+            }
         }
 
         if let (Some(pos), Some(normal)) = (gadget.get_vertex_3d(i), gadget.get_vertex_normal(i)) {
-            let label_offset = 0.15;
+            let label_offset = 0.35;
             let label_x = pos.x + normal.x * label_offset;
             let label_y = pos.y + normal.y * label_offset;
             if let Some(label_p) = projector.project_3d(label_x, label_y, pos.z, eye_sign) {
