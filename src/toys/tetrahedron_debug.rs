@@ -476,7 +476,7 @@ impl Toy for TetrahedronDebugToy {
         } else {
             "Rot:3D"
         };
-        render_tap_zone_label(painter, rect, Zone::Center, rot_label);
+        render_tap_zone_label(painter, rect, Zone::Center, rot_label, None);
     }
 
     fn set_stereo_settings(&mut self, settings: &crate::render::StereoSettings) {

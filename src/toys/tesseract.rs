@@ -342,8 +342,9 @@ impl Toy for TesseractToy {
         } else {
             "Rot:3D"
         };
-        // Indicator in top-right of right view
-        render_tap_zone_label(painter, rect, Zone::NorthEast, rot_label);
+        // Indicator in top-right of right view (gray since not interactive)
+        let gray = Some(egui::Color32::from_rgb(180, 180, 180));
+        render_tap_zone_label(painter, rect, Zone::NorthEast, rot_label, gray);
     }
 
     fn set_stereo_settings(&mut self, settings: &crate::render::StereoSettings) {

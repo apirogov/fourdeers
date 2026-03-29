@@ -38,6 +38,7 @@ pub fn render_tap_zone_label(
     view_rect: egui::Rect,
     zone: Zone,
     label: &str,
+    text_color: Option<egui::Color32>,
 ) {
     let third_w = view_rect.width() / 3.0;
     let third_h = view_rect.height() / 3.0;
@@ -74,14 +75,15 @@ pub fn render_tap_zone_label(
 
     let font_id = egui::FontId::proportional(11.0);
     let outline_color = egui::Color32::from_rgba_unmultiplied(0, 0, 0, 180);
-    let text_color = egui::Color32::from_rgb(255, 180, 80);
+    let default_color = egui::Color32::from_rgb(255, 180, 80);
+    let final_color = text_color.unwrap_or(default_color);
 
     painter.text(label_pos, align, label, font_id.clone(), outline_color);
-    painter.text(label_pos, align, label, font_id, text_color);
+    painter.text(label_pos, align, label, font_id, final_color);
 }
 
 pub fn render_menu_label(painter: &egui::Painter, view_rect: egui::Rect) {
-    render_tap_zone_label(painter, view_rect, Zone::NorthWest, "Menu");
+    render_tap_zone_label(painter, view_rect, Zone::NorthWest, "Menu", None);
 }
 
 pub fn render_stereo_menu<F>(painter: &egui::Painter, view_rect: egui::Rect, toy_menu: F)
@@ -102,7 +104,7 @@ where
 }
 
 pub fn render_common_menu_half(painter: &egui::Painter, rect: egui::Rect) {
-    render_tap_zone_label(painter, rect, Zone::NorthWest, "Menu");
+    render_tap_zone_label(painter, rect, Zone::NorthWest, "Menu", None);
 }
 
 pub fn render_toy_menu_half<F>(painter: &egui::Painter, rect: egui::Rect, toy_menu: F)
