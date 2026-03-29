@@ -493,16 +493,26 @@ pub fn quaternion_from_yaw_pitch(yaw: f32, pitch: f32) -> UnitQuaternion<f32> {
 }
 
 pub fn quaternion_to_yaw_pitch_4d(q: &UnitQuaternion<f32>) -> (f32, f32) {
+    // For XW plane rotation: how much has X rotated toward W?
+    // For YW plane rotation: how much has Y rotated toward W?
+    // Using the same pattern as q_left but adapted for 4D
     let x_axis = q * Vector3::new(1.0, 0.0, 0.0);
-    let yaw = x_axis.x.atan2(x_axis.z);
-    let pitch = x_axis.y.atan2(x_axis.x.abs());
+    let y_axis = q * Vector3::new(0.0, 1.0, 0.0);
+
+    // XW plane: X component indicates rotation toward W
+    let yaw = x_axis.z.atan2(x_axis.x);
+    // YW plane: Y component indicates rotation toward W
+    let pitch = y_axis.z.atan2(y_axis.y);
+
     (yaw, pitch)
 }
 
 pub fn quaternion_from_yaw_pitch_4d(yaw: f32, pitch: f32) -> UnitQuaternion<f32> {
-    let yaw_rot = UnitQuaternion::from_axis_angle(&Vector3::x_axis(), yaw);
-    let pitch_rot = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), pitch);
-    yaw_rot * pitch_rot
+    // XW plane for yaw (horizontal), YW plane for pitch (vertical)
+    let yaw_rot = Rotation4D::from_plane_angle(RotationPlane::XW, yaw);
+    let pitch_rot = Rotation4D::from_plane_angle(RotationPlane::YW, pitch);
+    // Combine: yaw then pitch (same order as q_left version)
+    *pitch_rot.q_left() * *yaw_rot.q_left()
 }
 
 #[cfg(test)]
