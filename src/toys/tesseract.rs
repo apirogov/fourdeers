@@ -145,6 +145,12 @@ impl Toy for TesseractToy {
         let is_portrait =
             ui.available_rect_before_wrap().height() > ui.available_rect_before_wrap().width();
 
+        ui.label(format!(
+            "Position: ({:.1}, {:.1}, {:.1}, {:.1})",
+            self.camera.x, self.camera.y, self.camera.z, self.camera.w
+        ));
+
+        // X + Y
         ui.horizontal(|ui| {
             ui.label("X:");
             ui.add(egui::Slider::new(&mut self.camera.x, -10.0..=10.0).text(""));
@@ -153,10 +159,6 @@ impl Toy for TesseractToy {
             }
             ui.label("Y:");
             ui.add(egui::Slider::new(&mut self.camera.y, -10.0..=10.0).text(""));
-            ui.label("Z:");
-            ui.add(egui::Slider::new(&mut self.camera.z, -10.0..=10.0).text(""));
-            ui.label("W:");
-            ui.add(egui::Slider::new(&mut self.camera.w, -3.0..=3.0).text(""));
         });
 
         if is_portrait {
@@ -164,10 +166,20 @@ impl Toy for TesseractToy {
                 ui.label("Y:");
                 ui.add(egui::Slider::new(&mut self.camera.y, -10.0..=10.0).text(""));
             });
-            ui.horizontal(|ui| {
-                ui.label("Z:");
-                ui.add(egui::Slider::new(&mut self.camera.z, -10.0..=10.0).text(""));
-            });
+        }
+
+        // Z + W
+        ui.horizontal(|ui| {
+            ui.label("Z:");
+            ui.add(egui::Slider::new(&mut self.camera.z, -10.0..=10.0).text(""));
+            if is_portrait {
+                return;
+            }
+            ui.label("W:");
+            ui.add(egui::Slider::new(&mut self.camera.w, -3.0..=3.0).text(""));
+        });
+
+        if is_portrait {
             ui.horizontal(|ui| {
                 ui.label("W:");
                 ui.add(egui::Slider::new(&mut self.camera.w, -3.0..=3.0).text(""));
@@ -273,14 +285,6 @@ impl Toy for TesseractToy {
                 }
             });
         }
-
-        ui.horizontal(|ui| {
-            ui.label(format!(
-                "Position: ({:.2}, {:.2}, {:.2})",
-                self.camera.x, self.camera.y, self.camera.z
-            ));
-            ui.label(format!("W: {:.2}", self.camera.w));
-        });
 
         ui.separator();
         ui.add_space(4.0);
