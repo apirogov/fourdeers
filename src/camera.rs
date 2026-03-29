@@ -128,6 +128,10 @@ impl Camera {
         // Apply in same order as 3D: new_xw * old * new_yw
         let new_q_right = *tilt_xw.q_left() * *self.rotation_4d.q_right() * *tilt_yw.q_left();
         self.rotation_4d = Rotation4D::new(*self.rotation_4d.q_left(), new_q_right);
+
+        // Update cached values
+        self.yaw_r += -delta_x * ROTATION_SENSITIVITY;
+        self.pitch_r += delta_y * ROTATION_SENSITIVITY;
     }
 
     /// Get yaw angle (rotation around Y axis) in radians - for q_left
