@@ -100,11 +100,9 @@ impl Camera {
         // Modify q_right (the 4D-specific rotation)
         let tilt_zw = Rotation4D::from_plane_angle(RotationPlane::ZW, -delta_x * 0.005);
         let tilt_yw = Rotation4D::from_plane_angle(RotationPlane::YW, delta_y * 0.005);
-        let delta_rot = tilt_zw.then(&tilt_yw);
-        self.rotation_4d = Rotation4D::new(
-            *self.rotation_4d.q_left(),
-            *delta_rot.q_right() * *self.rotation_4d.q_right(),
-        );
+        // from_plane_angle stores 4D rotations in q_left, so use q_left
+        let new_q_right = *tilt_zw.q_left() * *tilt_yw.q_left() * *self.rotation_4d.q_right();
+        self.rotation_4d = Rotation4D::new(*self.rotation_4d.q_left(), new_q_right);
     }
 
     /// Get yaw angle (rotation around Y axis) in radians
@@ -145,34 +143,26 @@ impl Camera {
 
     pub fn tilt_slice_up(&mut self, amount: f32) {
         let tilt = Rotation4D::from_plane_angle(RotationPlane::YW, amount * 0.02);
-        self.rotation_4d = Rotation4D::new(
-            *self.rotation_4d.q_left(),
-            *tilt.q_right() * *self.rotation_4d.q_right(),
-        );
+        let new_q_right = *tilt.q_left() * *self.rotation_4d.q_right();
+        self.rotation_4d = Rotation4D::new(*self.rotation_4d.q_left(), new_q_right);
     }
 
     pub fn tilt_slice_down(&mut self, amount: f32) {
         let tilt = Rotation4D::from_plane_angle(RotationPlane::YW, -amount * 0.02);
-        self.rotation_4d = Rotation4D::new(
-            *self.rotation_4d.q_left(),
-            *tilt.q_right() * *self.rotation_4d.q_right(),
-        );
+        let new_q_right = *tilt.q_left() * *self.rotation_4d.q_right();
+        self.rotation_4d = Rotation4D::new(*self.rotation_4d.q_left(), new_q_right);
     }
 
     pub fn tilt_slice_left(&mut self, amount: f32) {
         let tilt = Rotation4D::from_plane_angle(RotationPlane::ZW, amount * 0.02);
-        self.rotation_4d = Rotation4D::new(
-            *self.rotation_4d.q_left(),
-            *tilt.q_right() * *self.rotation_4d.q_right(),
-        );
+        let new_q_right = *tilt.q_left() * *self.rotation_4d.q_right();
+        self.rotation_4d = Rotation4D::new(*self.rotation_4d.q_left(), new_q_right);
     }
 
     pub fn tilt_slice_right(&mut self, amount: f32) {
         let tilt = Rotation4D::from_plane_angle(RotationPlane::ZW, -amount * 0.02);
-        self.rotation_4d = Rotation4D::new(
-            *self.rotation_4d.q_left(),
-            *tilt.q_right() * *self.rotation_4d.q_right(),
-        );
+        let new_q_right = *tilt.q_left() * *self.rotation_4d.q_right();
+        self.rotation_4d = Rotation4D::new(*self.rotation_4d.q_left(), new_q_right);
     }
 
     pub fn get_4d_basis(&self) -> [[f32; 4]; 4] {
