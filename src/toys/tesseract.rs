@@ -5,6 +5,7 @@ use nalgebra::UnitQuaternion;
 use std::collections::HashMap;
 
 use crate::camera::{Camera, CameraAction};
+use crate::colors::label_inactive;
 use crate::input::{DragView, TapAnalysis, TetraId, Zone, ZoneMode};
 use crate::polytopes::{create_polytope, PolytopeType};
 use crate::render::{
@@ -343,7 +344,7 @@ impl Toy for TesseractToy {
             "Rot:3D"
         };
         // Indicator in top-right of right view (gray since not interactive)
-        let gray = Some(egui::Color32::from_rgb(180, 180, 180));
+        let gray = Some(label_inactive());
         render_tap_zone_label(painter, rect, Zone::NorthEast, rot_label, gray);
     }
 

@@ -2,6 +2,7 @@
 
 use eframe::egui;
 
+use crate::colors::panel_fill;
 use crate::input::{analyze_tap_in_stereo_view, DragView, Zone};
 use crate::render::{
     render_common_menu_half, split_stereo_views, FourDSettings, ProjectionMode, StereoSettings,
@@ -246,7 +247,7 @@ impl FourDeersApp {
                 ui.set_height(left_rect.height());
 
                 egui::Frame {
-                    fill: egui::Color32::from_rgb(35, 35, 45),
+                    fill: panel_fill(),
                     corner_radius: egui::CornerRadius::ZERO,
                     stroke: egui::Stroke::NONE,
                     inner_margin: egui::Margin::same(12),
@@ -276,7 +277,7 @@ impl FourDeersApp {
                 ui.set_height(right_rect.height());
 
                 egui::Frame {
-                    fill: egui::Color32::from_rgb(35, 35, 45),
+                    fill: panel_fill(),
                     corner_radius: egui::CornerRadius::ZERO,
                     stroke: egui::Stroke::NONE,
                     inner_margin: egui::Margin::same(12),

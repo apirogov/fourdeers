@@ -7,6 +7,8 @@
 use eframe::egui;
 use nalgebra::{UnitQuaternion, Vector3, Vector4};
 
+use crate::input::Zone;
+
 /// Square root of 3 - used to convert between scale and vertex coordinates
 const SQRT_3: f32 = 1.732_050_8;
 
@@ -123,15 +125,6 @@ impl Pos3D {
     }
 }
 
-/// Which zone the tetrahedron represents
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ZoneDirection {
-    Up,
-    Down,
-    Left,
-    Right,
-}
-
 /// A vertex of the tetrahedron with label information
 #[derive(Debug, Clone)]
 pub struct TetrahedronVertex {
@@ -222,25 +215,27 @@ impl TetrahedronGadget {
 
     pub fn for_zone(
         vector_4d: Vector4<f32>,
-        zone_dir: ZoneDirection,
+        zone: Zone,
         user_rotation: UnitQuaternion<f32>,
         scale: f32,
     ) -> Self {
-        let base_rotation = Self::compute_base_rotation_for_zone(&vector_4d, zone_dir);
+        let base_rotation = Self::compute_base_rotation_for_zone(&vector_4d, zone);
         let total_rotation = user_rotation * base_rotation;
         Self::from_4d_vector_with_quaternion(vector_4d, total_rotation, scale)
     }
 
-    fn compute_base_rotation_for_zone(
-        vector_4d: &Vector4<f32>,
-        zone_dir: ZoneDirection,
-    ) -> UnitQuaternion<f32> {
+    fn compute_base_rotation_for_zone(vector_4d: &Vector4<f32>, zone: Zone) -> UnitQuaternion<f32> {
         let arrow_dir = compute_weighted_direction_3d(*vector_4d);
-        let target = match zone_dir {
-            ZoneDirection::Up => Vector3::new(0.0, 1.0, 0.0),
-            ZoneDirection::Down => Vector3::new(0.0, -1.0, 0.0),
-            ZoneDirection::Left => Vector3::new(-1.0, 0.0, 0.0),
-            ZoneDirection::Right => Vector3::new(1.0, 0.0, 0.0),
+        let target = match zone {
+            Zone::North => Vector3::new(0.0, 1.0, 0.0),
+            Zone::South => Vector3::new(0.0, -1.0, 0.0),
+            Zone::East => Vector3::new(1.0, 0.0, 0.0),
+            Zone::West => Vector3::new(-1.0, 0.0, 0.0),
+            Zone::NorthEast => Vector3::new(1.0, 1.0, 0.0).normalize(),
+            Zone::NorthWest => Vector3::new(-1.0, 1.0, 0.0).normalize(),
+            Zone::SouthEast => Vector3::new(1.0, -1.0, 0.0).normalize(),
+            Zone::SouthWest => Vector3::new(-1.0, -1.0, 0.0).normalize(),
+            Zone::Center => Vector3::new(0.0, 1.0, 0.0),
         };
 
         let current = arrow_dir.to_vector3();
@@ -859,7 +854,7 @@ mod tests {
     fn test_for_zone_up() {
         let vector = Vector4::new(0.0, 0.0, 1.0, 0.0);
         let gadget =
-            TetrahedronGadget::for_zone(vector, ZoneDirection::Up, UnitQuaternion::identity(), 1.0);
+            TetrahedronGadget::for_zone(vector, Zone::North, UnitQuaternion::identity(), 1.0);
 
         let arrow = gadget.vector_arrow.end_position;
         assert!(
@@ -872,12 +867,8 @@ mod tests {
     #[test]
     fn test_for_zone_right() {
         let vector = Vector4::new(0.0, 1.0, 0.0, 0.0);
-        let gadget = TetrahedronGadget::for_zone(
-            vector,
-            ZoneDirection::Right,
-            UnitQuaternion::identity(),
-            1.0,
-        );
+        let gadget =
+            TetrahedronGadget::for_zone(vector, Zone::East, UnitQuaternion::identity(), 1.0);
 
         let arrow = gadget.vector_arrow.end_position;
         assert!(

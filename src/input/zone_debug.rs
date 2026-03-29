@@ -3,6 +3,7 @@
 use eframe::egui;
 
 use super::zones::{Zone, ZoneMode};
+use crate::colors::{debug_boundary, debug_label};
 
 #[derive(Debug, Clone)]
 pub struct ZoneDebugOptions {
@@ -18,8 +19,8 @@ impl Default for ZoneDebugOptions {
         Self {
             show_boundaries: true,
             show_labels: true,
-            boundary_color: egui::Color32::from_rgba_unmultiplied(100, 100, 100, 100),
-            label_color: egui::Color32::from_rgba_unmultiplied(200, 200, 200, 150),
+            boundary_color: debug_boundary(),
+            label_color: debug_label(),
             label_font_size: 10.0,
         }
     }
