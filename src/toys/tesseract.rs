@@ -280,6 +280,7 @@ impl Toy for TesseractToy {
         ui.add_space(4.0);
 
         ui.collapsing("4D Object Rotation", |ui| {
+            // XY + XZ
             ui.horizontal(|ui| {
                 ui.add(
                     egui::Slider::new(
@@ -288,15 +289,29 @@ impl Toy for TesseractToy {
                     )
                     .text("XY"),
                 );
-                ui.add(
-                    egui::Slider::new(
-                        &mut self.rot_xz,
-                        -std::f32::consts::PI..=std::f32::consts::PI,
-                    )
-                    .text("XZ"),
-                );
+                if !is_portrait {
+                    ui.add(
+                        egui::Slider::new(
+                            &mut self.rot_xz,
+                            -std::f32::consts::PI..=std::f32::consts::PI,
+                        )
+                        .text("XZ"),
+                    );
+                }
             });
+            if is_portrait {
+                ui.horizontal(|ui| {
+                    ui.add(
+                        egui::Slider::new(
+                            &mut self.rot_xz,
+                            -std::f32::consts::PI..=std::f32::consts::PI,
+                        )
+                        .text("XZ"),
+                    );
+                });
+            }
 
+            // YZ + XW
             ui.horizontal(|ui| {
                 ui.add(
                     egui::Slider::new(
@@ -305,15 +320,29 @@ impl Toy for TesseractToy {
                     )
                     .text("YZ"),
                 );
-                ui.add(
-                    egui::Slider::new(
-                        &mut self.rot_xw,
-                        -std::f32::consts::PI..=std::f32::consts::PI,
-                    )
-                    .text("XW"),
-                );
+                if !is_portrait {
+                    ui.add(
+                        egui::Slider::new(
+                            &mut self.rot_xw,
+                            -std::f32::consts::PI..=std::f32::consts::PI,
+                        )
+                        .text("XW"),
+                    );
+                }
             });
+            if is_portrait {
+                ui.horizontal(|ui| {
+                    ui.add(
+                        egui::Slider::new(
+                            &mut self.rot_xw,
+                            -std::f32::consts::PI..=std::f32::consts::PI,
+                        )
+                        .text("XW"),
+                    );
+                });
+            }
 
+            // YW + ZW
             ui.horizontal(|ui| {
                 ui.add(
                     egui::Slider::new(
@@ -322,14 +351,27 @@ impl Toy for TesseractToy {
                     )
                     .text("YW"),
                 );
-                ui.add(
-                    egui::Slider::new(
-                        &mut self.rot_zw,
-                        -std::f32::consts::PI..=std::f32::consts::PI,
-                    )
-                    .text("ZW"),
-                );
+                if !is_portrait {
+                    ui.add(
+                        egui::Slider::new(
+                            &mut self.rot_zw,
+                            -std::f32::consts::PI..=std::f32::consts::PI,
+                        )
+                        .text("ZW"),
+                    );
+                }
             });
+            if is_portrait {
+                ui.horizontal(|ui| {
+                    ui.add(
+                        egui::Slider::new(
+                            &mut self.rot_zw,
+                            -std::f32::consts::PI..=std::f32::consts::PI,
+                        )
+                        .text("ZW"),
+                    );
+                });
+            }
         });
 
         ui.add_space(4.0);
