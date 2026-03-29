@@ -168,7 +168,7 @@ impl Default for StereoSettings {
         Self {
             eye_separation: 0.12,
             projection_distance: 3.0,
-            projection_mode: ProjectionMode::Orthographic,
+            projection_mode: ProjectionMode::Perspective,
             w_thickness: 2.5,
         }
     }
