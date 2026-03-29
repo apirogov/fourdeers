@@ -25,3 +25,12 @@ web-sys = { version = "0.3", features = ["Window", "Document", "HtmlCanvasElemen
 
 [dependencies.eframe]
 version = "0.33"
+
+[profile.dev]
+opt-level = 0
+debug = true
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
