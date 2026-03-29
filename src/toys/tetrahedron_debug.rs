@@ -346,19 +346,18 @@ impl Toy for TetrahedronDebugToy {
             ui.separator();
         }
 
-        let yaw = self.camera.yaw();
-        let mut pitch = self.camera.pitch();
+        let mut pitch_l = self.camera.pitch_l();
 
         ui.horizontal(|ui| {
-            ui.label("Pitch:");
+            ui.label("Pitch(L):");
             if ui
                 .add(
-                    egui::Slider::new(&mut pitch, -std::f32::consts::PI..=std::f32::consts::PI)
+                    egui::Slider::new(&mut pitch_l, -std::f32::consts::PI..=std::f32::consts::PI)
                         .text(""),
                 )
                 .changed()
             {
-                self.camera.set_yaw_pitch(yaw, pitch);
+                self.camera.set_pitch_l(pitch_l);
             }
         });
 

@@ -155,32 +155,59 @@ impl Toy for TesseractToy {
             ui.add(egui::Slider::new(&mut self.camera.w, -3.0..=3.0).text(""));
         });
 
-        let mut yaw = self.camera.yaw();
-
+        let mut yaw_l = self.camera.yaw_l();
         ui.horizontal(|ui| {
-            ui.label("Yaw");
+            ui.label("Yaw(L)");
             if ui
                 .add(
-                    egui::Slider::new(&mut yaw, -std::f32::consts::PI..=std::f32::consts::PI)
+                    egui::Slider::new(&mut yaw_l, -std::f32::consts::PI..=std::f32::consts::PI)
                         .text(""),
                 )
                 .changed()
             {
-                self.camera.set_yaw(yaw);
+                self.camera.set_yaw_l(yaw_l);
             }
         });
 
-        let mut pitch = self.camera.pitch();
+        let mut pitch_l = self.camera.pitch_l();
         ui.horizontal(|ui| {
-            ui.label("Pitch");
+            ui.label("Pitch(L)");
             if ui
                 .add(
-                    egui::Slider::new(&mut pitch, -std::f32::consts::PI..=std::f32::consts::PI)
+                    egui::Slider::new(&mut pitch_l, -std::f32::consts::PI..=std::f32::consts::PI)
                         .text(""),
                 )
                 .changed()
             {
-                self.camera.set_pitch(pitch);
+                self.camera.set_pitch_l(pitch_l);
+            }
+        });
+
+        let mut yaw_r = self.camera.yaw_r();
+        ui.horizontal(|ui| {
+            ui.label("Yaw(R)");
+            if ui
+                .add(
+                    egui::Slider::new(&mut yaw_r, -std::f32::consts::PI..=std::f32::consts::PI)
+                        .text(""),
+                )
+                .changed()
+            {
+                self.camera.set_yaw_r(yaw_r);
+            }
+        });
+
+        let mut pitch_r = self.camera.pitch_r();
+        ui.horizontal(|ui| {
+            ui.label("Pitch(R)");
+            if ui
+                .add(
+                    egui::Slider::new(&mut pitch_r, -std::f32::consts::PI..=std::f32::consts::PI)
+                        .text(""),
+                )
+                .changed()
+            {
+                self.camera.set_pitch_r(pitch_r);
             }
         });
 
