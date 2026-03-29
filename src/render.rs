@@ -75,10 +75,10 @@ pub fn render_tap_zone_label(
 
     let font_id = egui::FontId::proportional(11.0);
     let outline_color = outline_default();
-    let default_color = label_default();
+    let text_color = text_color.unwrap_or_else(label_default);
 
     painter.text(label_pos, align, label, font_id.clone(), outline_color);
-    painter.text(label_pos, align, label, font_id, default_color);
+    painter.text(label_pos, align, label, font_id, text_color);
 }
 
 pub fn render_menu_label(painter: &egui::Painter, view_rect: egui::Rect) {
