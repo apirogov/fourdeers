@@ -76,9 +76,27 @@ pub fn render_tap_zone_label(
             view_rect.min.y + third_h * 2.9,
         ),
         Zone::SouthEast => egui::Pos2::new(
-            view_rect.min.x + third_w * 2.9,
-            view_rect.min.y + third_h * 2.9,
+            view_rect.min.x + third_w * 2.8,
+            view_rect.min.y + third_h * 2.8,
         ),
+    };
+
+    let align = match zone {
+        Zone::NorthWest | Zone::West | Zone::SouthWest => egui::Align2::LEFT_CENTER,
+        Zone::NorthEast | Zone::East | Zone::SouthEast => egui::Align2::RIGHT_CENTER,
+        _ => egui::Align2::CENTER_CENTER,
+    };
+
+    let offset_factor = 0.25;
+    let label_pos = match zone {
+        Zone::NorthWest | Zone::West | Zone::SouthWest => {
+            egui::Pos2::new(view_rect.min.x + third_w * offset_factor, label_pos.y)
+        }
+        Zone::NorthEast | Zone::East | Zone::SouthEast => egui::Pos2::new(
+            view_rect.min.x + third_w * (3.0 - offset_factor),
+            label_pos.y,
+        ),
+        _ => label_pos,
     };
 
     let font_id = egui::FontId::proportional(11.0);
@@ -87,18 +105,12 @@ pub fn render_tap_zone_label(
 
     painter.text(
         label_pos + egui::Vec2::new(0.5, 0.5),
-        egui::Align2::CENTER_CENTER,
+        align,
         label,
         font_id.clone(),
         outline_color,
     );
-    painter.text(
-        label_pos,
-        egui::Align2::CENTER_CENTER,
-        label,
-        font_id,
-        text_color,
-    );
+    painter.text(label_pos, align, label, font_id, text_color);
 }
 
 pub fn render_menu_label(painter: &egui::Painter, view_rect: egui::Rect) {
