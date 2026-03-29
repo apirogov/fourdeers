@@ -481,11 +481,11 @@ impl Toy for TetrahedronDebugToy {
     }
 
     fn set_stereo_settings(&mut self, settings: &crate::render::StereoSettings) {
-        self.stereo = settings.clone();
+        self.stereo = *settings;
     }
 
     fn set_four_d_settings(&mut self, settings: &FourDSettings) {
-        self.four_d = settings.clone();
+        self.four_d = *settings;
     }
 
     fn handle_tap(&mut self, analysis: &TapAnalysis) {

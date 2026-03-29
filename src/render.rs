@@ -40,8 +40,8 @@ pub fn render_tap_zone_label(
     label: &str,
     text_color: Option<egui::Color32>,
 ) {
-    let third_w = view_rect.width() / 3.0;
-    let third_h = view_rect.height() / 3.0;
+    let _third_w = view_rect.width() / 3.0;
+    let _third_h = view_rect.height() / 3.0;
 
     let (label_pos, align) = match zone {
         Zone::NorthWest => (view_rect.min, egui::Align2::LEFT_TOP),
