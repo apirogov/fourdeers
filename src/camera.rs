@@ -127,10 +127,7 @@ impl Camera {
         // from_plane_angle stores 4D rotations in q_left, so use q_left
         let new_q_right = *tilt_xw.q_left() * *tilt_yw.q_left() * *self.rotation_4d.q_right();
         self.rotation_4d = Rotation4D::new(*self.rotation_4d.q_left(), new_q_right);
-
-        // Update cached values
-        self.yaw_r += -delta_x * ROTATION_SENSITIVITY;
-        self.pitch_r += delta_y * ROTATION_SENSITIVITY;
+        // Note: don't update cached yaw_r/pitch_r - quaternion composition is not additive
     }
 
     /// Get yaw angle (rotation around Y axis) in radians - for q_left
