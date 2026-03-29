@@ -4,6 +4,8 @@ use nalgebra::{UnitQuaternion, Vector3};
 
 use crate::rotation4d::{Rotation4D, RotationPlane};
 
+const ROTATION_SENSITIVITY: f32 = 0.005;
+
 /// First-person camera state with 4D orientation
 #[derive(Clone)]
 pub struct Camera {
@@ -98,9 +100,11 @@ impl Camera {
     /// - Drag down -> look down (world appears to move up)
     pub fn rotate(&mut self, delta_x: f32, delta_y: f32) {
         // Negative yaw for drag right to look right
-        let yaw_rot = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), delta_x * 0.005);
+        let yaw_rot =
+            UnitQuaternion::from_axis_angle(&Vector3::y_axis(), delta_x * ROTATION_SENSITIVITY);
         // Positive pitch for drag down to look down
-        let pitch_rot = UnitQuaternion::from_axis_angle(&Vector3::x_axis(), delta_y * 0.005);
+        let pitch_rot =
+            UnitQuaternion::from_axis_angle(&Vector3::x_axis(), delta_y * ROTATION_SENSITIVITY);
 
         // Apply rotations: yaw (around world Y) then pitch (around local X)
         // Modify q_left (the 3D-like rotation)
@@ -108,23 +112,25 @@ impl Camera {
         self.rotation_4d = Rotation4D::new(new_q_left, *self.rotation_4d.q_right());
 
         // Update cached values
-        self.yaw_l += delta_x * 0.005;
-        self.pitch_l += delta_y * 0.005;
+        self.yaw_l += delta_x * ROTATION_SENSITIVITY;
+        self.pitch_l += delta_y * ROTATION_SENSITIVITY;
     }
 
     /// Rotate 4D camera (4D mode - affects q_right)
     pub fn rotate_4d(&mut self, delta_x: f32, delta_y: f32) {
         // Modify q_right (the 4D-specific rotation)
         // XW plane for horizontal (like XZ in 3D), YW plane for vertical (like YZ in 3D)
-        let tilt_xw = Rotation4D::from_plane_angle(RotationPlane::XW, -delta_x * 0.005);
-        let tilt_yw = Rotation4D::from_plane_angle(RotationPlane::YW, delta_y * 0.005);
+        let tilt_xw =
+            Rotation4D::from_plane_angle(RotationPlane::XW, -delta_x * ROTATION_SENSITIVITY);
+        let tilt_yw =
+            Rotation4D::from_plane_angle(RotationPlane::YW, delta_y * ROTATION_SENSITIVITY);
         // from_plane_angle stores 4D rotations in q_left, so use q_left
         let new_q_right = *tilt_xw.q_left() * *tilt_yw.q_left() * *self.rotation_4d.q_right();
         self.rotation_4d = Rotation4D::new(*self.rotation_4d.q_left(), new_q_right);
 
         // Update cached values
-        self.yaw_r += -delta_x * 0.005;
-        self.pitch_r += delta_y * 0.005;
+        self.yaw_r += -delta_x * ROTATION_SENSITIVITY;
+        self.pitch_r += delta_y * ROTATION_SENSITIVITY;
     }
 
     /// Get yaw angle (rotation around Y axis) in radians - for q_left
@@ -186,34 +192,6 @@ impl Camera {
         let yaw = self.yaw_r;
         self.rotation_4d.set_q_right_from_yaw_pitch(yaw, pitch);
         self.pitch_r = pitch;
-    }
-
-    pub fn tilt_slice_up(&mut self, amount: f32) {
-        let tilt = Rotation4D::from_plane_angle(RotationPlane::YW, amount * 0.02);
-        let new_q_right = *tilt.q_left() * *self.rotation_4d.q_right();
-        self.rotation_4d = Rotation4D::new(*self.rotation_4d.q_left(), new_q_right);
-        self.pitch_r += amount * 0.02;
-    }
-
-    pub fn tilt_slice_down(&mut self, amount: f32) {
-        let tilt = Rotation4D::from_plane_angle(RotationPlane::YW, -amount * 0.02);
-        let new_q_right = *tilt.q_left() * *self.rotation_4d.q_right();
-        self.rotation_4d = Rotation4D::new(*self.rotation_4d.q_left(), new_q_right);
-        self.pitch_r -= amount * 0.02;
-    }
-
-    pub fn tilt_slice_left(&mut self, amount: f32) {
-        let tilt = Rotation4D::from_plane_angle(RotationPlane::XW, amount * 0.02);
-        let new_q_right = *tilt.q_left() * *self.rotation_4d.q_right();
-        self.rotation_4d = Rotation4D::new(*self.rotation_4d.q_left(), new_q_right);
-        self.yaw_r += amount * 0.02;
-    }
-
-    pub fn tilt_slice_right(&mut self, amount: f32) {
-        let tilt = Rotation4D::from_plane_angle(RotationPlane::XW, -amount * 0.02);
-        let new_q_right = *tilt.q_left() * *self.rotation_4d.q_right();
-        self.rotation_4d = Rotation4D::new(*self.rotation_4d.q_left(), new_q_right);
-        self.yaw_r -= amount * 0.02;
     }
 
     pub fn get_4d_basis(&self) -> [[f32; 4]; 4] {
