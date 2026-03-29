@@ -140,80 +140,87 @@ impl Toy for TesseractToy {
         });
 
         ui.add_space(8.0);
-        ui.heading("Camera");
 
-        ui.label(format!(
-            "Position: ({:.1}, {:.1}, {:.1}, {:.1})",
-            self.camera.x, self.camera.y, self.camera.z, self.camera.w
-        ));
+        ui.collapsing("Camera", |ui| {
+            ui.label(format!(
+                "Position: ({:.1}, {:.1}, {:.1}, {:.1})",
+                self.camera.x, self.camera.y, self.camera.z, self.camera.w
+            ));
 
-        // X + Y
-        ui.horizontal(|ui| {
-            ui.label("X:");
-            ui.add(egui::Slider::new(&mut self.camera.x, -10.0..=10.0).text(""));
-            ui.label("Y:");
-            ui.add(egui::Slider::new(&mut self.camera.y, -10.0..=10.0).text(""));
-        });
+            // X + Y
+            ui.horizontal(|ui| {
+                ui.label("X:");
+                ui.add(egui::Slider::new(&mut self.camera.x, -10.0..=10.0).text(""));
+                ui.label("Y:");
+                ui.add(egui::Slider::new(&mut self.camera.y, -10.0..=10.0).text(""));
+            });
 
-        // Z + W
-        ui.horizontal(|ui| {
-            ui.label("Z:");
-            ui.add(egui::Slider::new(&mut self.camera.z, -10.0..=10.0).text(""));
-            ui.label("W:");
-            ui.add(egui::Slider::new(&mut self.camera.w, -3.0..=3.0).text(""));
-        });
+            // Z + W
+            ui.horizontal(|ui| {
+                ui.label("Z:");
+                ui.add(egui::Slider::new(&mut self.camera.z, -10.0..=10.0).text(""));
+                ui.label("W:");
+                ui.add(egui::Slider::new(&mut self.camera.w, -3.0..=3.0).text(""));
+            });
 
-        // Yaw(L) + Pitch(L)
-        ui.horizontal(|ui| {
-            let mut yaw_l = self.camera.yaw_l();
-            ui.label("Yaw(L)");
-            if ui
-                .add(
-                    egui::Slider::new(&mut yaw_l, -std::f32::consts::PI..=std::f32::consts::PI)
+            // Yaw(L) + Pitch(L)
+            ui.horizontal(|ui| {
+                let mut yaw_l = self.camera.yaw_l();
+                ui.label("Yaw(L)");
+                if ui
+                    .add(
+                        egui::Slider::new(&mut yaw_l, -std::f32::consts::PI..=std::f32::consts::PI)
+                            .text(""),
+                    )
+                    .changed()
+                {
+                    self.camera.set_yaw_l(yaw_l);
+                }
+                let mut pitch_l = self.camera.pitch_l();
+                ui.label("Pitch(L)");
+                if ui
+                    .add(
+                        egui::Slider::new(
+                            &mut pitch_l,
+                            -std::f32::consts::PI..=std::f32::consts::PI,
+                        )
                         .text(""),
-                )
-                .changed()
-            {
-                self.camera.set_yaw_l(yaw_l);
-            }
-            let mut pitch_l = self.camera.pitch_l();
-            ui.label("Pitch(L)");
-            if ui
-                .add(
-                    egui::Slider::new(&mut pitch_l, -std::f32::consts::PI..=std::f32::consts::PI)
-                        .text(""),
-                )
-                .changed()
-            {
-                self.camera.set_pitch_l(pitch_l);
-            }
-        });
+                    )
+                    .changed()
+                {
+                    self.camera.set_pitch_l(pitch_l);
+                }
+            });
 
-        // Yaw(R) + Pitch(R)
-        ui.horizontal(|ui| {
-            let mut yaw_r = self.camera.yaw_r();
-            ui.label("Yaw(R)");
-            if ui
-                .add(
-                    egui::Slider::new(&mut yaw_r, -std::f32::consts::PI..=std::f32::consts::PI)
+            // Yaw(R) + Pitch(R)
+            ui.horizontal(|ui| {
+                let mut yaw_r = self.camera.yaw_r();
+                ui.label("Yaw(R)");
+                if ui
+                    .add(
+                        egui::Slider::new(&mut yaw_r, -std::f32::consts::PI..=std::f32::consts::PI)
+                            .text(""),
+                    )
+                    .changed()
+                {
+                    self.camera.set_yaw_r(yaw_r);
+                }
+                let mut pitch_r = self.camera.pitch_r();
+                ui.label("Pitch(R)");
+                if ui
+                    .add(
+                        egui::Slider::new(
+                            &mut pitch_r,
+                            -std::f32::consts::PI..=std::f32::consts::PI,
+                        )
                         .text(""),
-                )
-                .changed()
-            {
-                self.camera.set_yaw_r(yaw_r);
-            }
-            let mut pitch_r = self.camera.pitch_r();
-            ui.label("Pitch(R)");
-            if ui
-                .add(
-                    egui::Slider::new(&mut pitch_r, -std::f32::consts::PI..=std::f32::consts::PI)
-                        .text(""),
-                )
-                .changed()
-            {
-                self.camera.set_pitch_r(pitch_r);
-            }
-        });
+                    )
+                    .changed()
+                {
+                    self.camera.set_pitch_r(pitch_r);
+                }
+            });
+        }); // Camera collapsible
 
         ui.separator();
         ui.add_space(4.0);
