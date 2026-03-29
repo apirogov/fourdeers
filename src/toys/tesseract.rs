@@ -155,8 +155,8 @@ impl Toy for TesseractToy {
             ui.add(egui::Slider::new(&mut self.camera.w, -3.0..=3.0).text(""));
         });
 
-        let mut yaw_l = self.camera.yaw_l();
         ui.horizontal(|ui| {
+            let mut yaw_l = self.camera.yaw_l();
             ui.label("Yaw(L)");
             if ui
                 .add(
@@ -167,10 +167,8 @@ impl Toy for TesseractToy {
             {
                 self.camera.set_yaw_l(yaw_l);
             }
-        });
 
-        let mut pitch_l = self.camera.pitch_l();
-        ui.horizontal(|ui| {
+            let mut pitch_l = self.camera.pitch_l();
             ui.label("Pitch(L)");
             if ui
                 .add(
@@ -183,8 +181,8 @@ impl Toy for TesseractToy {
             }
         });
 
-        let mut yaw_r = self.camera.yaw_r();
         ui.horizontal(|ui| {
+            let mut yaw_r = self.camera.yaw_r();
             ui.label("Yaw(R)");
             if ui
                 .add(
@@ -195,10 +193,8 @@ impl Toy for TesseractToy {
             {
                 self.camera.set_yaw_r(yaw_r);
             }
-        });
 
-        let mut pitch_r = self.camera.pitch_r();
-        ui.horizontal(|ui| {
+            let mut pitch_r = self.camera.pitch_r();
             ui.label("Pitch(R)");
             if ui
                 .add(
