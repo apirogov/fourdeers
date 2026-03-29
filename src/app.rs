@@ -213,11 +213,9 @@ impl FourDeersApp {
                 .active_toy()
                 .render_toy_menu(&right_painter, right_menu_rect);
 
-            let mut stereo_with_w = self.settings.stereo;
-            stereo_with_w.w_thickness = self.settings.four_d.w_thickness;
             self.toy_manager
                 .active_toy_mut()
-                .set_stereo_settings(&stereo_with_w);
+                .set_stereo_settings(&self.settings.stereo);
             self.toy_manager
                 .active_toy_mut()
                 .set_four_d_settings(&self.settings.four_d);

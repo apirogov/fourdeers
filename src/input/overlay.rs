@@ -14,7 +14,6 @@ pub struct ZoneBindings {
     bindings: HashMap<Zone, TapAction>,
 }
 
-
 impl ZoneBindings {
     pub fn new() -> Self {
         Self::default()
@@ -161,52 +160,5 @@ impl ControlOverlay {
 
     pub fn right_bindings_mut(&mut self) -> &mut ZoneBindings {
         &mut self.right_bindings
-    }
-}
-
-pub struct ControlOverlayBuilder {
-    overlay: ControlOverlay,
-}
-
-impl ControlOverlayBuilder {
-    pub fn new() -> Self {
-        Self {
-            overlay: ControlOverlay::new(),
-        }
-    }
-
-    pub fn zone_mode(mut self, mode: ZoneMode) -> Self {
-        self.overlay.zone_mode = mode;
-        self
-    }
-
-    pub fn left_zone(mut self, zone: Zone, action: TapAction) -> Self {
-        self.overlay.left_bindings.bindings.insert(zone, action);
-        self
-    }
-
-    pub fn right_zone(mut self, zone: Zone, action: TapAction) -> Self {
-        self.overlay.right_bindings.bindings.insert(zone, action);
-        self
-    }
-
-    pub fn left_drag(mut self, handler: DragHandler) -> Self {
-        self.overlay.left_drag_handler = Some(handler);
-        self
-    }
-
-    pub fn right_drag(mut self, handler: DragHandler) -> Self {
-        self.overlay.right_drag_handler = Some(handler);
-        self
-    }
-
-    pub fn build(self) -> ControlOverlay {
-        self.overlay
-    }
-}
-
-impl Default for ControlOverlayBuilder {
-    fn default() -> Self {
-        Self::new()
     }
 }

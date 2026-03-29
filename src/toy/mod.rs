@@ -3,7 +3,7 @@
 use eframe::egui;
 use std::any::Any;
 
-use crate::input::{DragView, TapAnalysis, TetraId, Zone, ZoneMode};
+use crate::input::{DragView, TapAnalysis, ZoneMode};
 use crate::render::{FourDSettings, StereoSettings};
 
 pub mod manager;
@@ -49,11 +49,6 @@ pub struct DragState {
     pub is_drag_mode: bool,
     pub drag_view: Option<crate::input::DragView>,
     pub last_mouse_pos: Option<egui::Pos2>,
-    pub dragging_tetrahedron: Option<TetraId>,
-    pub last_tetra_drag_pos: Option<egui::Pos2>,
-    pub last_tap_pos: Option<egui::Pos2>,
-    pub last_tap_zone: Option<Zone>,
-    pub last_tap_view_left: bool,
 }
 
 impl DragState {
@@ -65,7 +60,5 @@ impl DragState {
         self.is_dragging = false;
         self.drag_view = None;
         self.last_mouse_pos = None;
-        self.dragging_tetrahedron = None;
-        self.last_tetra_drag_pos = None;
     }
 }

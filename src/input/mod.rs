@@ -4,7 +4,7 @@ pub mod overlay;
 pub mod zone_debug;
 pub mod zones;
 
-pub use overlay::{ControlOverlay, ControlOverlayBuilder, DragHandler, TapAction, ZoneBindings};
+pub use overlay::{ControlOverlay, DragHandler, TapAction, ZoneBindings};
 pub use zone_debug::{
     get_cardinal_zone_center_with_offset, get_zone_center, render_zone_debug_overlay,
     ZoneDebugOptions,

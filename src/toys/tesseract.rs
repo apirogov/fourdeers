@@ -50,7 +50,7 @@ impl TesseractToy {
             rot_xw: 0.0,
             rot_yw: 0.0,
             rot_zw: 0.0,
-            show_controls: false,
+            show_controls: true,
             zone_mode: ZoneMode::NineZones,
             visualization_rect: None,
             drag_state: DragState::new(),
@@ -313,6 +313,7 @@ impl Toy for TesseractToy {
             self.rot_xw,
             self.rot_yw,
             self.rot_zw,
+            self.four_d.w_thickness,
             self.four_d.w_color_intensity,
             &self.stereo,
         );
@@ -371,13 +372,6 @@ impl Toy for TesseractToy {
             self.right_view_4d_rotation = !self.right_view_4d_rotation;
             return;
         }
-
-        self.drag_state.last_tap_pos = Some(egui::Pos2::new(
-            analysis.view_rect.min.x + analysis.norm_x * analysis.view_rect.width(),
-            analysis.view_rect.min.y + analysis.norm_y * analysis.view_rect.height(),
-        ));
-        self.drag_state.last_tap_zone = Some(analysis.zone);
-        self.drag_state.last_tap_view_left = analysis.is_left_view;
 
         if let Some(action) = Self::zone_to_action(analysis.zone, analysis.is_left_view) {
             self.apply_camera_action(action, 0.15);

@@ -64,7 +64,7 @@ impl TetrahedronDebugToy {
             four_d: FourDSettings::default(),
             tetrahedron_rotations: HashMap::new(),
             right_view_4d_rotation: false,
-            show_controls: false,
+            show_controls: true,
         }
     }
 
@@ -476,7 +476,8 @@ impl Toy for TetrahedronDebugToy {
         } else {
             "Rot:3D"
         };
-        render_tap_zone_label(painter, rect, Zone::Center, rot_label, None);
+        let gray = Some(crate::colors::label_inactive());
+        render_tap_zone_label(painter, rect, Zone::Center, rot_label, gray);
     }
 
     fn set_stereo_settings(&mut self, settings: &crate::render::StereoSettings) {
@@ -509,13 +510,6 @@ impl Toy for TetrahedronDebugToy {
             self.right_view_4d_rotation = !self.right_view_4d_rotation;
             return;
         }
-
-        self.drag_state.last_tap_pos = Some(egui::Pos2::new(
-            analysis.view_rect.min.x + analysis.norm_x * analysis.view_rect.width(),
-            analysis.view_rect.min.y + analysis.norm_y * analysis.view_rect.height(),
-        ));
-        self.drag_state.last_tap_zone = Some(analysis.zone);
-        self.drag_state.last_tap_view_left = analysis.is_left_view;
 
         if let Some(action) = Self::zone_to_action(analysis.zone, analysis.is_left_view) {
             self.apply_camera_action(action, 0.15);

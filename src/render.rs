@@ -140,7 +140,6 @@ pub struct StereoSettings {
     pub eye_separation: f32,
     pub projection_distance: f32,
     pub projection_mode: ProjectionMode,
-    pub w_thickness: f32,
 }
 
 impl Default for StereoSettings {
@@ -149,7 +148,6 @@ impl Default for StereoSettings {
             eye_separation: 0.12,
             projection_distance: 3.0,
             projection_mode: ProjectionMode::Perspective,
-            w_thickness: 2.5,
         }
     }
 }
@@ -390,6 +388,7 @@ impl TesseractRenderContext {
         rot_xw: f32,
         rot_yw: f32,
         rot_zw: f32,
+        w_thickness: f32,
         w_color_intensity: f32,
         stereo: &StereoSettings,
     ) -> Self {
@@ -403,7 +402,7 @@ impl TesseractRenderContext {
             rot_xw,
             rot_yw,
             rot_zw,
-            stereo.w_thickness,
+            w_thickness,
             w_color_intensity,
             stereo.eye_separation,
             stereo.projection_distance,
