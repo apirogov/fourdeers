@@ -118,14 +118,15 @@ impl Camera {
 
     /// Rotate 4D camera (4D mode - affects q_right)
     pub fn rotate_4d(&mut self, delta_x: f32, delta_y: f32) {
-        // Modify q_right (the 4D-specific rotation)
         // XW plane for horizontal (like XZ in 3D), YW plane for vertical (like YZ in 3D)
+        // Match 3D pattern: yaw * old * pitch
         let tilt_xw =
             Rotation4D::from_plane_angle(RotationPlane::XW, -delta_x * ROTATION_SENSITIVITY);
         let tilt_yw =
             Rotation4D::from_plane_angle(RotationPlane::YW, delta_y * ROTATION_SENSITIVITY);
-        // Apply new rotations after old rotation
-        let new_q_right = *self.rotation_4d.q_right() * *tilt_xw.q_left() * *tilt_yw.q_left();
+
+        // Apply in same order as 3D: new_xw * old * new_yw
+        let new_q_right = *tilt_xw.q_left() * *self.rotation_4d.q_right() * *tilt_yw.q_left();
         self.rotation_4d = Rotation4D::new(*self.rotation_4d.q_left(), new_q_right);
     }
 
@@ -744,5 +745,66 @@ mod tests {
         let yaw2 = camera.yaw_l();
 
         assert_approx_eq(yaw1, yaw2, 1e-6);
+    }
+
+    #[test]
+    fn test_rotate_4d_circular_drag_returns_to_start() {
+        // Simulate circular drag with larger values (like actual mouse drag)
+        let mut camera = Camera::new();
+
+        let initial_q_right = *camera.rotation_4d.q_right();
+
+        // Right, Down, Left, Up - larger values like real drag
+        camera.rotate_4d(100.0, 0.0);
+        camera.rotate_4d(0.0, 100.0);
+        camera.rotate_4d(-100.0, 0.0);
+        camera.rotate_4d(0.0, -100.0);
+
+        let final_q_right = *camera.rotation_4d.q_right();
+
+        // Should be back to identity
+        let expected = UnitQuaternion::identity();
+        assert_approx_eq(final_q_right.w, expected.w, 1e-3);
+        assert_approx_eq(final_q_right.i, expected.i, 1e-3);
+        assert_approx_eq(final_q_right.j, expected.j, 1e-3);
+        assert_approx_eq(final_q_right.k, expected.k, 1e-3);
+    }
+
+    #[test]
+    fn test_rotate_4d_horizontal_then_back_returns_to_start() {
+        // Drag right then left by same amount should cancel out
+        let mut camera = Camera::new();
+
+        let initial_q_right = *camera.rotation_4d.q_right();
+
+        // Right then left - larger values
+        camera.rotate_4d(100.0, 0.0);
+        camera.rotate_4d(-100.0, 0.0);
+
+        let final_q_right = *camera.rotation_4d.q_right();
+
+        assert_approx_eq(final_q_right.w, initial_q_right.w, 1e-3);
+        assert_approx_eq(final_q_right.i, initial_q_right.i, 1e-3);
+        assert_approx_eq(final_q_right.j, initial_q_right.j, 1e-3);
+        assert_approx_eq(final_q_right.k, initial_q_right.k, 1e-3);
+    }
+
+    #[test]
+    fn test_rotate_4d_vertical_then_back_returns_to_start() {
+        // Drag down then up by same amount should cancel out
+        let mut camera = Camera::new();
+
+        let initial_q_right = *camera.rotation_4d.q_right();
+
+        // Down then up
+        camera.rotate_4d(0.0, 100.0);
+        camera.rotate_4d(0.0, -100.0);
+
+        let final_q_right = *camera.rotation_4d.q_right();
+
+        assert_approx_eq(final_q_right.w, initial_q_right.w, 1e-3);
+        assert_approx_eq(final_q_right.i, initial_q_right.i, 1e-3);
+        assert_approx_eq(final_q_right.j, initial_q_right.j, 1e-3);
+        assert_approx_eq(final_q_right.k, initial_q_right.k, 1e-3);
     }
 }
