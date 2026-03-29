@@ -616,4 +616,98 @@ mod tests {
         assert_approx_eq(camera.y, 1.0, 1e-6);
         assert_approx_eq(camera.z, -5.0 + 1.5, 1e-6);
     }
+
+    #[test]
+    fn test_rotate_affects_q_left_only() {
+        let mut camera = Camera::new();
+
+        let initial_q_right = *camera.rotation_4d.q_right();
+
+        camera.rotate(1.0, 0.5);
+
+        let new_q_right = *camera.rotation_4d.q_right();
+        assert_eq!(
+            initial_q_right, new_q_right,
+            "rotate() should not affect q_right"
+        );
+
+        let forward = camera.forward_vector();
+        assert!(
+            forward.0.abs() > 1e-6 || forward.2.abs() < 0.99,
+            "rotate() should change forward vector"
+        );
+    }
+
+    #[test]
+    fn test_rotate_4d_affects_q_right_only() {
+        let mut camera = Camera::new();
+
+        let initial_q_left = *camera.rotation_4d.q_left();
+
+        camera.rotate_4d(1.0, 0.5);
+
+        let new_q_left = *camera.rotation_4d.q_left();
+        assert_eq!(
+            initial_q_left, new_q_left,
+            "rotate_4d() should not affect q_left"
+        );
+
+        let basis_w = camera.rotation_4d.basis_w();
+        assert!(
+            basis_w[3] != 1.0 || basis_w[0].abs() > 1e-6,
+            "rotate_4d() should change W axis"
+        );
+    }
+
+    #[test]
+    fn test_rotate_4d_changes_basis_w() {
+        let mut camera = Camera::new();
+
+        let initial_basis_w = camera.rotation_4d.basis_w();
+        assert_approx_eq(initial_basis_w[3], 1.0, 1e-6);
+
+        camera.rotate_4d(1.0, 0.5);
+
+        let new_basis_w = camera.rotation_4d.basis_w();
+        assert!(
+            new_basis_w[3].abs() < 0.99 || new_basis_w[0].abs() > 1e-6,
+            "rotate_4d() should tilt W axis"
+        );
+    }
+
+    #[test]
+    fn test_rotate_and_rotate_4d_independent() {
+        let mut camera = Camera::new();
+
+        camera.rotate(1.0, 0.5);
+        let q_left_after_rotate = *camera.rotation_4d.q_left();
+        let q_right_after_rotate = *camera.rotation_4d.q_right();
+
+        camera.rotate_4d(0.5, 1.0);
+
+        let q_left_after_both = *camera.rotation_4d.q_left();
+        let q_right_after_both = *camera.rotation_4d.q_right();
+
+        assert_eq!(
+            q_left_after_rotate, q_left_after_both,
+            "rotate_4d() should not change q_left"
+        );
+        assert!(
+            q_right_after_both != q_right_after_rotate,
+            "rotate_4d() should change q_right"
+        );
+    }
+
+    #[test]
+    fn test_yaw_pitch_preservation() {
+        let mut camera = Camera::new();
+
+        camera.set_yaw(PI / 4.0);
+        let yaw1 = camera.yaw();
+
+        camera.set_pitch(PI / 6.0);
+        let yaw2 = camera.yaw();
+
+        assert_approx_eq(yaw1, yaw2, 1e-6);
+    }
 }
