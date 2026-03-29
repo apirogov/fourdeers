@@ -42,74 +42,41 @@ pub fn render_tap_zone_label(
     let third_w = view_rect.width() / 3.0;
     let third_h = view_rect.height() / 3.0;
 
-    let label_pos = match zone {
-        Zone::NorthWest => egui::Pos2::new(
-            view_rect.min.x + third_w * 0.1,
-            view_rect.min.y + third_h * 0.25,
+    let (label_pos, align) = match zone {
+        Zone::NorthWest => (view_rect.min, egui::Align2::LEFT_TOP),
+        Zone::NorthEast => (
+            egui::Pos2::new(view_rect.max.x, view_rect.min.y),
+            egui::Align2::RIGHT_TOP,
         ),
-        Zone::North => egui::Pos2::new(
-            view_rect.min.x + third_w * 1.5,
-            view_rect.min.y + third_h * 0.25,
+        Zone::SouthWest => (
+            egui::Pos2::new(view_rect.min.x, view_rect.max.y),
+            egui::Align2::LEFT_BOTTOM,
         ),
-        Zone::NorthEast => egui::Pos2::new(
-            view_rect.min.x + third_w * 2.9,
-            view_rect.min.y + third_h * 0.25,
+        Zone::SouthEast => (view_rect.max, egui::Align2::RIGHT_BOTTOM),
+        Zone::North => (
+            egui::Pos2::new(view_rect.center().x, view_rect.min.y),
+            egui::Align2::CENTER_TOP,
         ),
-        Zone::West => egui::Pos2::new(
-            view_rect.min.x + third_w * 0.1,
-            view_rect.min.y + third_h * 1.5,
+        Zone::South => (
+            egui::Pos2::new(view_rect.center().x, view_rect.max.y),
+            egui::Align2::CENTER_BOTTOM,
         ),
-        Zone::Center => egui::Pos2::new(
-            view_rect.min.x + third_w * 1.5,
-            view_rect.min.y + third_h * 1.5,
+        Zone::West => (
+            egui::Pos2::new(view_rect.min.x, view_rect.center().y),
+            egui::Align2::LEFT_CENTER,
         ),
-        Zone::East => egui::Pos2::new(
-            view_rect.min.x + third_w * 2.9,
-            view_rect.min.y + third_h * 1.5,
+        Zone::East => (
+            egui::Pos2::new(view_rect.max.x, view_rect.center().y),
+            egui::Align2::RIGHT_CENTER,
         ),
-        Zone::SouthWest => egui::Pos2::new(
-            view_rect.min.x + third_w * 0.1,
-            view_rect.min.y + third_h * 2.75,
-        ),
-        Zone::South => egui::Pos2::new(
-            view_rect.min.x + third_w * 1.5,
-            view_rect.min.y + third_h * 2.75,
-        ),
-        Zone::SouthEast => egui::Pos2::new(
-            view_rect.min.x + third_w * 2.9,
-            view_rect.min.y + third_h * 2.75,
-        ),
-    };
-
-    let align = match zone {
-        Zone::NorthWest | Zone::West | Zone::SouthWest => egui::Align2::LEFT_CENTER,
-        Zone::NorthEast | Zone::East | Zone::SouthEast => egui::Align2::RIGHT_CENTER,
-        _ => egui::Align2::CENTER_CENTER,
-    };
-
-    let offset_factor = 0.15;
-    let label_pos = match zone {
-        Zone::NorthWest | Zone::West | Zone::SouthWest => {
-            egui::Pos2::new(view_rect.min.x + third_w * offset_factor, label_pos.y)
-        }
-        Zone::NorthEast | Zone::East | Zone::SouthEast => egui::Pos2::new(
-            view_rect.min.x + third_w * (3.0 - offset_factor),
-            label_pos.y,
-        ),
-        _ => label_pos,
+        Zone::Center => (view_rect.center(), egui::Align2::CENTER_CENTER),
     };
 
     let font_id = egui::FontId::proportional(11.0);
     let outline_color = egui::Color32::from_rgba_unmultiplied(0, 0, 0, 180);
     let text_color = egui::Color32::from_rgb(255, 180, 80);
 
-    painter.text(
-        label_pos + egui::Vec2::new(0.5, 0.5),
-        align,
-        label,
-        font_id.clone(),
-        outline_color,
-    );
+    painter.text(label_pos, align, label, font_id.clone(), outline_color);
     painter.text(label_pos, align, label, font_id, text_color);
 }
 
