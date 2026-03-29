@@ -156,7 +156,6 @@ impl Toy for TesseractToy {
         });
 
         let mut yaw = self.camera.yaw();
-        let mut pitch = self.camera.pitch();
 
         ui.horizontal(|ui| {
             ui.label("Yaw");
@@ -167,8 +166,12 @@ impl Toy for TesseractToy {
                 )
                 .changed()
             {
-                self.camera.set_yaw_pitch(yaw, pitch);
+                self.camera.set_yaw(yaw);
             }
+        });
+
+        let mut pitch = self.camera.pitch();
+        ui.horizontal(|ui| {
             ui.label("Pitch");
             if ui
                 .add(
@@ -177,7 +180,7 @@ impl Toy for TesseractToy {
                 )
                 .changed()
             {
-                self.camera.set_yaw_pitch(yaw, pitch);
+                self.camera.set_pitch(pitch);
             }
         });
 

@@ -127,6 +127,22 @@ impl Camera {
         self.rotation_4d = Rotation4D::new(yaw_rot * pitch_rot, *self.rotation_4d.q_right());
     }
 
+    /// Set yaw only, preserving current pitch
+    pub fn set_yaw(&mut self, yaw: f32) {
+        let pitch = self.pitch();
+        let yaw_rot = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), yaw);
+        let pitch_rot = UnitQuaternion::from_axis_angle(&Vector3::x_axis(), pitch);
+        self.rotation_4d = Rotation4D::new(yaw_rot * pitch_rot, *self.rotation_4d.q_right());
+    }
+
+    /// Set pitch only, preserving current yaw
+    pub fn set_pitch(&mut self, pitch: f32) {
+        let yaw = self.yaw();
+        let yaw_rot = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), yaw);
+        let pitch_rot = UnitQuaternion::from_axis_angle(&Vector3::x_axis(), pitch);
+        self.rotation_4d = Rotation4D::new(yaw_rot * pitch_rot, *self.rotation_4d.q_right());
+    }
+
     pub fn tilt_slice_up(&mut self, amount: f32) {
         let tilt = Rotation4D::from_plane_angle(RotationPlane::YW, amount * 0.02);
         self.rotation_4d = Rotation4D::new(
