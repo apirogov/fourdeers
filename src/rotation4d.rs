@@ -511,8 +511,8 @@ pub fn quaternion_from_yaw_pitch_4d(yaw: f32, pitch: f32) -> UnitQuaternion<f32>
     // XW plane for yaw (horizontal), YW plane for pitch (vertical)
     let yaw_rot = Rotation4D::from_plane_angle(RotationPlane::XW, yaw);
     let pitch_rot = Rotation4D::from_plane_angle(RotationPlane::YW, pitch);
-    // Combine: yaw then pitch (same order as q_left version)
-    *pitch_rot.q_left() * *yaw_rot.q_left()
+    // Combine in same order as rotate_4d: tilt_xw * tilt_yw (XW applied last)
+    *yaw_rot.q_left() * *pitch_rot.q_left()
 }
 
 #[cfg(test)]
