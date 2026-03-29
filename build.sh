@@ -40,9 +40,7 @@ case "$BUILD_TYPE" in
         echo "✓ WASM build complete! Output in 'pkg/' directory"
         echo ""
         echo "To serve the application:"
-        echo "  python3 -m http.server 8888"
-        echo "  # or: miniserve --index index.html"
-        echo "  # or: npx serve ."
+        echo "  npx http-server . -p 8888 -a 0.0.0.0 -c-1"
         echo ""
         echo "Then open http://localhost:8888 in your browser"
         ;;
