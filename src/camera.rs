@@ -14,6 +14,11 @@ pub struct Camera {
     pub w: f32,
 
     pub rotation_4d: Rotation4D,
+
+    yaw_l: f32,
+    pitch_l: f32,
+    yaw_r: f32,
+    pitch_r: f32,
 }
 
 impl Default for Camera {
@@ -24,6 +29,10 @@ impl Default for Camera {
             z: -5.0,
             w: 0.0,
             rotation_4d: Rotation4D::identity(),
+            yaw_l: 0.0,
+            pitch_l: 0.0,
+            yaw_r: 0.0,
+            pitch_r: 0.0,
         }
     }
 }
@@ -39,6 +48,10 @@ impl Camera {
         self.z = -5.0;
         self.w = 0.0;
         self.rotation_4d = Rotation4D::identity();
+        self.yaw_l = 0.0;
+        self.pitch_l = 0.0;
+        self.yaw_r = 0.0;
+        self.pitch_r = 0.0;
     }
 
     /// Forward vector in world space (direction camera is looking)
@@ -93,6 +106,10 @@ impl Camera {
         // Modify q_left (the 3D-like rotation)
         let new_q_left = yaw_rot * *self.rotation_4d.q_left() * pitch_rot;
         self.rotation_4d = Rotation4D::new(new_q_left, *self.rotation_4d.q_right());
+
+        // Update cached values
+        self.yaw_l += delta_x * 0.005;
+        self.pitch_l += delta_y * 0.005;
     }
 
     /// Rotate 4D camera (4D mode - affects q_right)
@@ -104,19 +121,20 @@ impl Camera {
         // from_plane_angle stores 4D rotations in q_left, so use q_left
         let new_q_right = *tilt_xw.q_left() * *tilt_yw.q_left() * *self.rotation_4d.q_right();
         self.rotation_4d = Rotation4D::new(*self.rotation_4d.q_left(), new_q_right);
+
+        // Update cached values
+        self.yaw_r += -delta_x * 0.005;
+        self.pitch_r += delta_y * 0.005;
     }
 
     /// Get yaw angle (rotation around Y axis) in radians - for q_left
     pub fn yaw_l(&self) -> f32 {
-        let forward = self.forward_vector();
-        forward.0.atan2(forward.2)
+        self.yaw_l
     }
 
     /// Get pitch angle (rotation around X axis) in radians - for q_left
     pub fn pitch_l(&self) -> f32 {
-        let forward = self.forward_vector();
-        let horizontal_len = (forward.0 * forward.0 + forward.2 * forward.2).sqrt();
-        forward.1.atan2(horizontal_len)
+        self.pitch_l
     }
 
     /// Set q_left (3D orientation) from yaw and pitch angles
@@ -124,70 +142,78 @@ impl Camera {
         let yaw_rot = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), yaw);
         let pitch_rot = UnitQuaternion::from_axis_angle(&Vector3::x_axis(), pitch);
         self.rotation_4d = Rotation4D::new(yaw_rot * pitch_rot, *self.rotation_4d.q_right());
+        self.yaw_l = yaw;
+        self.pitch_l = pitch;
     }
 
     /// Set yaw only for q_left, preserving current pitch
     pub fn set_yaw_l(&mut self, yaw: f32) {
-        let pitch = self.pitch_l();
+        let pitch = self.pitch_l;
         let yaw_rot = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), yaw);
         let pitch_rot = UnitQuaternion::from_axis_angle(&Vector3::x_axis(), pitch);
         self.rotation_4d = Rotation4D::new(yaw_rot * pitch_rot, *self.rotation_4d.q_right());
+        self.yaw_l = yaw;
     }
 
     /// Set pitch only for q_left, preserving current yaw
     pub fn set_pitch_l(&mut self, pitch: f32) {
-        let yaw = self.yaw_l();
+        let yaw = self.yaw_l;
         let yaw_rot = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), yaw);
         let pitch_rot = UnitQuaternion::from_axis_angle(&Vector3::x_axis(), pitch);
         self.rotation_4d = Rotation4D::new(yaw_rot * pitch_rot, *self.rotation_4d.q_right());
+        self.pitch_l = pitch;
     }
 
     /// Get yaw angle for q_right (4D rotation in XW plane)
     pub fn yaw_r(&self) -> f32 {
-        let (yaw, _) = self.rotation_4d.get_q_right_as_yaw_pitch();
-        yaw
+        self.yaw_r
     }
 
     /// Get pitch angle for q_right (4D rotation in YW plane)
     pub fn pitch_r(&self) -> f32 {
-        let (_, pitch) = self.rotation_4d.get_q_right_as_yaw_pitch();
-        pitch
+        self.pitch_r
     }
 
     /// Set yaw only for q_right, preserving current pitch
     pub fn set_yaw_r(&mut self, yaw: f32) {
-        let pitch = self.pitch_r();
+        let pitch = self.pitch_r;
         self.rotation_4d.set_q_right_from_yaw_pitch(yaw, pitch);
+        self.yaw_r = yaw;
     }
 
     /// Set pitch only for q_right, preserving current yaw
     pub fn set_pitch_r(&mut self, pitch: f32) {
-        let yaw = self.yaw_r();
+        let yaw = self.yaw_r;
         self.rotation_4d.set_q_right_from_yaw_pitch(yaw, pitch);
+        self.pitch_r = pitch;
     }
 
     pub fn tilt_slice_up(&mut self, amount: f32) {
         let tilt = Rotation4D::from_plane_angle(RotationPlane::YW, amount * 0.02);
         let new_q_right = *tilt.q_left() * *self.rotation_4d.q_right();
         self.rotation_4d = Rotation4D::new(*self.rotation_4d.q_left(), new_q_right);
+        self.pitch_r += amount * 0.02;
     }
 
     pub fn tilt_slice_down(&mut self, amount: f32) {
         let tilt = Rotation4D::from_plane_angle(RotationPlane::YW, -amount * 0.02);
         let new_q_right = *tilt.q_left() * *self.rotation_4d.q_right();
         self.rotation_4d = Rotation4D::new(*self.rotation_4d.q_left(), new_q_right);
+        self.pitch_r -= amount * 0.02;
     }
 
     pub fn tilt_slice_left(&mut self, amount: f32) {
         let tilt = Rotation4D::from_plane_angle(RotationPlane::XW, amount * 0.02);
         let new_q_right = *tilt.q_left() * *self.rotation_4d.q_right();
         self.rotation_4d = Rotation4D::new(*self.rotation_4d.q_left(), new_q_right);
+        self.yaw_r += amount * 0.02;
     }
 
     pub fn tilt_slice_right(&mut self, amount: f32) {
         let tilt = Rotation4D::from_plane_angle(RotationPlane::XW, -amount * 0.02);
         let new_q_right = *tilt.q_left() * *self.rotation_4d.q_right();
         self.rotation_4d = Rotation4D::new(*self.rotation_4d.q_left(), new_q_right);
+        self.yaw_r -= amount * 0.02;
     }
 
     pub fn get_4d_basis(&self) -> [[f32; 4]; 4] {
@@ -415,6 +441,7 @@ mod tests {
 
             w: 0.0,
             rotation_4d: Rotation4D::identity(),
+            ..Camera::new()
         };
 
         let forward = camera.forward_vector();
@@ -432,6 +459,7 @@ mod tests {
 
             w: 0.0,
             rotation_4d: Rotation4D::identity(),
+            ..Camera::new()
         };
 
         let right = camera.right_vector();
@@ -449,6 +477,7 @@ mod tests {
 
             w: 0.0,
             rotation_4d: Rotation4D::identity(),
+            ..Camera::new()
         };
 
         let up = camera.up_vector();
@@ -466,6 +495,7 @@ mod tests {
             z: -5.0,
             w: 0.0,
             rotation_4d: Rotation4D::from_plane_angle(RotationPlane::XZ, PI / 2.0),
+            ..Camera::new()
         };
 
         let forward = camera.forward_vector();
@@ -483,6 +513,7 @@ mod tests {
             z: 0.0,
             w: 0.0,
             rotation_4d: Rotation4D::from_plane_angle(RotationPlane::YZ, PI / 4.0),
+            ..Camera::new()
         };
 
         let forward = camera.forward_vector();
@@ -502,6 +533,7 @@ mod tests {
 
             w: 0.0,
             rotation_4d: Rotation4D::identity(),
+            ..Camera::new()
         };
 
         camera.rotate(1.0, 0.0);
@@ -528,6 +560,7 @@ mod tests {
                 z: 0.0,
                 w: 0.0,
                 rotation_4d,
+                ..Camera::new()
             };
 
             let forward = camera.forward_vector();
@@ -574,6 +607,7 @@ mod tests {
 
             w: 0.0,
             rotation_4d: Rotation4D::identity(),
+            ..Camera::new()
         };
 
         let initial_z = camera.z;
@@ -595,6 +629,7 @@ mod tests {
 
             w: 0.0,
             rotation_4d: Rotation4D::identity(),
+            ..Camera::new()
         };
 
         let initial_x = camera.x;
@@ -616,6 +651,7 @@ mod tests {
 
             w: 0.0,
             rotation_4d: Rotation4D::identity(),
+            ..Camera::new()
         };
 
         let initial_z = camera.z;
