@@ -44,19 +44,19 @@ pub fn render_tap_zone_label(
 
     let label_pos = match zone {
         Zone::NorthWest => egui::Pos2::new(
-            view_rect.min.x + third_w * 0.5,
-            view_rect.min.y + third_h * 0.5,
+            view_rect.min.x + third_w * 0.1,
+            view_rect.min.y + third_h * 0.1,
         ),
         Zone::North => egui::Pos2::new(
             view_rect.min.x + third_w * 1.5,
-            view_rect.min.y + third_h * 0.5,
+            view_rect.min.y + third_h * 0.1,
         ),
         Zone::NorthEast => egui::Pos2::new(
-            view_rect.min.x + third_w * 2.5,
-            view_rect.min.y + third_h * 0.5,
+            view_rect.min.x + third_w * 2.9,
+            view_rect.min.y + third_h * 0.1,
         ),
         Zone::West => egui::Pos2::new(
-            view_rect.min.x + third_w * 0.5,
+            view_rect.min.x + third_w * 0.1,
             view_rect.min.y + third_h * 1.5,
         ),
         Zone::Center => egui::Pos2::new(
@@ -64,20 +64,20 @@ pub fn render_tap_zone_label(
             view_rect.min.y + third_h * 1.5,
         ),
         Zone::East => egui::Pos2::new(
-            view_rect.min.x + third_w * 2.5,
+            view_rect.min.x + third_w * 2.9,
             view_rect.min.y + third_h * 1.5,
         ),
         Zone::SouthWest => egui::Pos2::new(
-            view_rect.min.x + third_w * 0.5,
-            view_rect.min.y + third_h * 2.5,
+            view_rect.min.x + third_w * 0.1,
+            view_rect.min.y + third_h * 2.9,
         ),
         Zone::South => egui::Pos2::new(
             view_rect.min.x + third_w * 1.5,
-            view_rect.min.y + third_h * 2.5,
+            view_rect.min.y + third_h * 2.9,
         ),
         Zone::SouthEast => egui::Pos2::new(
-            view_rect.min.x + third_w * 2.5,
-            view_rect.min.y + third_h * 2.5,
+            view_rect.min.x + third_w * 2.9,
+            view_rect.min.y + third_h * 2.9,
         ),
     };
 
