@@ -155,6 +155,10 @@ impl Toy for TesseractToy {
             ui.add(egui::Slider::new(&mut self.camera.w, -3.0..=3.0).text(""));
         });
 
+        let is_portrait =
+            ui.available_rect_before_wrap().height() > ui.available_rect_before_wrap().width();
+
+        // Yaw(L) - always shown
         ui.horizontal(|ui| {
             let mut yaw_l = self.camera.yaw_l();
             ui.label("Yaw(L)");
@@ -167,20 +171,44 @@ impl Toy for TesseractToy {
             {
                 self.camera.set_yaw_l(yaw_l);
             }
-
-            let mut pitch_l = self.camera.pitch_l();
-            ui.label("Pitch(L)");
-            if ui
-                .add(
-                    egui::Slider::new(&mut pitch_l, -std::f32::consts::PI..=std::f32::consts::PI)
+            if !is_portrait {
+                let mut pitch_l = self.camera.pitch_l();
+                ui.label("Pitch(L)");
+                if ui
+                    .add(
+                        egui::Slider::new(
+                            &mut pitch_l,
+                            -std::f32::consts::PI..=std::f32::consts::PI,
+                        )
                         .text(""),
-                )
-                .changed()
-            {
-                self.camera.set_pitch_l(pitch_l);
+                    )
+                    .changed()
+                {
+                    self.camera.set_pitch_l(pitch_l);
+                }
             }
         });
 
+        if is_portrait {
+            ui.horizontal(|ui| {
+                let mut pitch_l = self.camera.pitch_l();
+                ui.label("Pitch(L)");
+                if ui
+                    .add(
+                        egui::Slider::new(
+                            &mut pitch_l,
+                            -std::f32::consts::PI..=std::f32::consts::PI,
+                        )
+                        .text(""),
+                    )
+                    .changed()
+                {
+                    self.camera.set_pitch_l(pitch_l);
+                }
+            });
+        }
+
+        // Yaw(R) - always shown
         ui.horizontal(|ui| {
             let mut yaw_r = self.camera.yaw_r();
             ui.label("Yaw(R)");
@@ -193,19 +221,42 @@ impl Toy for TesseractToy {
             {
                 self.camera.set_yaw_r(yaw_r);
             }
-
-            let mut pitch_r = self.camera.pitch_r();
-            ui.label("Pitch(R)");
-            if ui
-                .add(
-                    egui::Slider::new(&mut pitch_r, -std::f32::consts::PI..=std::f32::consts::PI)
+            if !is_portrait {
+                let mut pitch_r = self.camera.pitch_r();
+                ui.label("Pitch(R)");
+                if ui
+                    .add(
+                        egui::Slider::new(
+                            &mut pitch_r,
+                            -std::f32::consts::PI..=std::f32::consts::PI,
+                        )
                         .text(""),
-                )
-                .changed()
-            {
-                self.camera.set_pitch_r(pitch_r);
+                    )
+                    .changed()
+                {
+                    self.camera.set_pitch_r(pitch_r);
+                }
             }
         });
+
+        if is_portrait {
+            ui.horizontal(|ui| {
+                let mut pitch_r = self.camera.pitch_r();
+                ui.label("Pitch(R)");
+                if ui
+                    .add(
+                        egui::Slider::new(
+                            &mut pitch_r,
+                            -std::f32::consts::PI..=std::f32::consts::PI,
+                        )
+                        .text(""),
+                    )
+                    .changed()
+                {
+                    self.camera.set_pitch_r(pitch_r);
+                }
+            });
+        }
 
         ui.horizontal(|ui| {
             ui.label(format!(
