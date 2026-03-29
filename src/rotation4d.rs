@@ -44,9 +44,30 @@ impl Rotation4D {
         &self.q_right
     }
 
+    pub fn set_q_left_from_yaw_pitch(&mut self, yaw: f32, pitch: f32) {
+        let yaw_rot = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), yaw);
+        let pitch_rot = UnitQuaternion::from_axis_angle(&Vector3::x_axis(), pitch);
+        self.q_left = yaw_rot * pitch_rot;
+    }
+
+    pub fn get_q_left_as_yaw_pitch(&self) -> (f32, f32) {
+        let forward = self.q_left * Vector3::new(0.0, 0.0, 1.0);
+        let yaw = forward.x.atan2(forward.z);
+        let horizontal_len = (forward.x * forward.x + forward.z * forward.z).sqrt();
+        let pitch = forward.y.atan2(horizontal_len);
+        (yaw, pitch)
+    }
+
     pub fn inverse(&self) -> Self {
         Self {
             q_left: self.q_left.inverse(),
+            q_right: self.q_right.inverse(),
+        }
+    }
+
+    pub fn inverse_q_right_only(&self) -> Self {
+        Self {
+            q_left: UnitQuaternion::identity(),
             q_right: self.q_right.inverse(),
         }
     }

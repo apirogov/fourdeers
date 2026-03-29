@@ -125,7 +125,7 @@ impl TetrahedronDebugToy {
         let (sin_zw, cos_zw) = self.glome_rot_zw.sin_cos();
 
         let (vertices, indices) = create_polytope(crate::polytopes::PolytopeType::SixteenCell);
-        let inv_orientation = self.camera.orientation.inverse();
+        let inv_q_left = self.camera.rotation_4d.q_left().inverse();
         let camera_4d_rotation_inverse = self.camera.rotation_4d.inverse();
         let w_half = self.four_d.w_thickness * 0.5;
 
@@ -197,8 +197,8 @@ impl TetrahedronDebugToy {
                 let p0_rel = Vector3::new(p0_4d.x, p0_4d.y, p0_4d.z);
                 let p1_rel = Vector3::new(p1_4d.x, p1_4d.y, p1_4d.z);
 
-                let p0_cam = inv_orientation.transform_vector(&p0_rel);
-                let p1_cam = inv_orientation.transform_vector(&p1_rel);
+                let p0_cam = inv_q_left.transform_vector(&p0_rel);
+                let p1_cam = inv_q_left.transform_vector(&p1_rel);
 
                 let dist = self.stereo.projection_distance;
 

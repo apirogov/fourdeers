@@ -336,7 +336,7 @@ pub struct TesseractRenderContext {
     pub cos_yw: f32,
     pub sin_zw: f32,
     pub cos_zw: f32,
-    pub inv_orientation: UnitQuaternion<f32>,
+    pub inv_q_left: UnitQuaternion<f32>,
     pub w_half: f32,
     pub camera_4d_rotation_inverse: Rotation4D,
     pub camera: Camera,
@@ -370,9 +370,9 @@ impl TesseractRenderContext {
         let (sin_yw, cos_yw) = rot_yw.sin_cos();
         let (sin_zw, cos_zw) = rot_zw.sin_cos();
 
-        let inv_orientation = camera.orientation.inverse();
+        let inv_q_left = camera.rotation_4d.q_left().inverse();
         let w_half = w_thickness * 0.5;
-        let camera_4d_rotation_inverse = camera.rotation_4d.inverse();
+        let camera_4d_rotation_inverse = camera.rotation_4d.inverse_q_right_only();
 
         Self {
             vertices,
@@ -389,7 +389,7 @@ impl TesseractRenderContext {
             cos_yw,
             sin_zw,
             cos_zw,
-            inv_orientation,
+            inv_q_left,
             w_half,
             camera_4d_rotation_inverse,
             camera: camera.clone(),
@@ -561,8 +561,8 @@ impl TesseractRenderContext {
         let p0_rel = Vector3::new(p0_4d.x, p0_4d.y, p0_4d.z);
         let p1_rel = Vector3::new(p1_4d.x, p1_4d.y, p1_4d.z);
 
-        let p0_cam = self.inv_orientation.transform_vector(&p0_rel);
-        let p1_cam = self.inv_orientation.transform_vector(&p1_rel);
+        let p0_cam = self.inv_q_left.transform_vector(&p0_rel);
+        let p1_cam = self.inv_q_left.transform_vector(&p1_rel);
 
         let s0 = projector
             .project_3d(p0_cam.x, p0_cam.y, p0_cam.z, eye_sign)
