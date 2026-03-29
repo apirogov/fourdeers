@@ -148,11 +148,11 @@ impl Toy for TesseractToy {
         ui.horizontal(|ui| {
             ui.label("X:");
             ui.add(egui::Slider::new(&mut self.camera.x, -10.0..=10.0).text(""));
-            ui.label("Y:");
-            ui.add(egui::Slider::new(&mut self.camera.y, -10.0..=10.0).text(""));
             if is_portrait {
                 return;
             }
+            ui.label("Y:");
+            ui.add(egui::Slider::new(&mut self.camera.y, -10.0..=10.0).text(""));
             ui.label("Z:");
             ui.add(egui::Slider::new(&mut self.camera.z, -10.0..=10.0).text(""));
             ui.label("W:");
@@ -161,8 +161,14 @@ impl Toy for TesseractToy {
 
         if is_portrait {
             ui.horizontal(|ui| {
+                ui.label("Y:");
+                ui.add(egui::Slider::new(&mut self.camera.y, -10.0..=10.0).text(""));
+            });
+            ui.horizontal(|ui| {
                 ui.label("Z:");
                 ui.add(egui::Slider::new(&mut self.camera.z, -10.0..=10.0).text(""));
+            });
+            ui.horizontal(|ui| {
                 ui.label("W:");
                 ui.add(egui::Slider::new(&mut self.camera.w, -3.0..=3.0).text(""));
             });
@@ -280,95 +286,104 @@ impl Toy for TesseractToy {
         ui.add_space(4.0);
 
         ui.collapsing("4D Object Rotation", |ui| {
-            // XY + XZ
+            // XY
             ui.horizontal(|ui| {
+                ui.label("XY:");
                 ui.add(
                     egui::Slider::new(
                         &mut self.rot_xy,
                         -std::f32::consts::PI..=std::f32::consts::PI,
                     )
-                    .text("XY"),
+                    .text(""),
                 );
                 if !is_portrait {
+                    ui.label("XZ:");
                     ui.add(
                         egui::Slider::new(
                             &mut self.rot_xz,
                             -std::f32::consts::PI..=std::f32::consts::PI,
                         )
-                        .text("XZ"),
+                        .text(""),
                     );
                 }
             });
             if is_portrait {
                 ui.horizontal(|ui| {
+                    ui.label("XZ:");
                     ui.add(
                         egui::Slider::new(
                             &mut self.rot_xz,
                             -std::f32::consts::PI..=std::f32::consts::PI,
                         )
-                        .text("XZ"),
+                        .text(""),
                     );
                 });
             }
 
             // YZ + XW
             ui.horizontal(|ui| {
+                ui.label("YZ:");
                 ui.add(
                     egui::Slider::new(
                         &mut self.rot_yz,
                         -std::f32::consts::PI..=std::f32::consts::PI,
                     )
-                    .text("YZ"),
+                    .text(""),
                 );
                 if !is_portrait {
+                    ui.label("XW:");
                     ui.add(
                         egui::Slider::new(
                             &mut self.rot_xw,
                             -std::f32::consts::PI..=std::f32::consts::PI,
                         )
-                        .text("XW"),
+                        .text(""),
                     );
                 }
             });
             if is_portrait {
                 ui.horizontal(|ui| {
+                    ui.label("XW:");
                     ui.add(
                         egui::Slider::new(
                             &mut self.rot_xw,
                             -std::f32::consts::PI..=std::f32::consts::PI,
                         )
-                        .text("XW"),
+                        .text(""),
                     );
                 });
             }
 
             // YW + ZW
             ui.horizontal(|ui| {
+                ui.label("YW:");
                 ui.add(
                     egui::Slider::new(
                         &mut self.rot_yw,
                         -std::f32::consts::PI..=std::f32::consts::PI,
                     )
-                    .text("YW"),
+                    .text(""),
                 );
                 if !is_portrait {
+                    ui.label("ZW:");
                     ui.add(
                         egui::Slider::new(
                             &mut self.rot_zw,
                             -std::f32::consts::PI..=std::f32::consts::PI,
                         )
-                        .text("ZW"),
+                        .text(""),
                     );
                 }
             });
             if is_portrait {
                 ui.horizontal(|ui| {
+                    ui.label("ZW:");
                     ui.add(
                         egui::Slider::new(
                             &mut self.rot_zw,
                             -std::f32::consts::PI..=std::f32::consts::PI,
                         )
-                        .text("ZW"),
+                        .text(""),
                     );
                 });
             }
