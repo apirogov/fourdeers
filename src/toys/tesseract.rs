@@ -342,7 +342,8 @@ impl Toy for TesseractToy {
         } else {
             "Rot:3D"
         };
-        render_tap_zone_label(painter, rect, Zone::Center, rot_label);
+        // Indicator in top-right of right view
+        render_tap_zone_label(painter, rect, Zone::NorthEast, rot_label);
     }
 
     fn set_stereo_settings(&mut self, settings: &crate::render::StereoSettings) {
@@ -363,11 +364,7 @@ impl Toy for TesseractToy {
     }
 
     fn handle_tap(&mut self, analysis: &TapAnalysis) {
-        if analysis.is_left_view && analysis.zone == Zone::SouthWest {
-            self.right_view_4d_rotation = !self.right_view_4d_rotation;
-            return;
-        }
-
+        // Toggle 4D rotation mode on right view center tap
         if !analysis.is_left_view && analysis.zone == Zone::Center {
             self.right_view_4d_rotation = !self.right_view_4d_rotation;
             return;
