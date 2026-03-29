@@ -142,21 +142,31 @@ impl Toy for TesseractToy {
         ui.add_space(8.0);
         ui.heading("Camera");
 
+        let is_portrait =
+            ui.available_rect_before_wrap().height() > ui.available_rect_before_wrap().width();
+
         ui.horizontal(|ui| {
             ui.label("X:");
             ui.add(egui::Slider::new(&mut self.camera.x, -10.0..=10.0).text(""));
             ui.label("Y:");
             ui.add(egui::Slider::new(&mut self.camera.y, -10.0..=10.0).text(""));
-        });
-        ui.horizontal(|ui| {
+            if is_portrait {
+                return;
+            }
             ui.label("Z:");
             ui.add(egui::Slider::new(&mut self.camera.z, -10.0..=10.0).text(""));
             ui.label("W:");
             ui.add(egui::Slider::new(&mut self.camera.w, -3.0..=3.0).text(""));
         });
 
-        let is_portrait =
-            ui.available_rect_before_wrap().height() > ui.available_rect_before_wrap().width();
+        if is_portrait {
+            ui.horizontal(|ui| {
+                ui.label("Z:");
+                ui.add(egui::Slider::new(&mut self.camera.z, -10.0..=10.0).text(""));
+                ui.label("W:");
+                ui.add(egui::Slider::new(&mut self.camera.w, -3.0..=3.0).text(""));
+            });
+        }
 
         // Yaw(L) - always shown
         ui.horizontal(|ui| {
