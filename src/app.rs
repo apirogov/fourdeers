@@ -3,11 +3,22 @@
 use eframe::egui;
 
 use crate::input::{analyze_tap_in_stereo_view, DragView, Zone};
+use crate::render::{
+    render_common_menu_half, split_stereo_views, FourDSettings, ProjectionMode, StereoSettings,
+};
 use crate::toy::ToyManager;
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CommonSettings {
+    pub show_debug: bool,
+    pub four_d: FourDSettings,
+    pub stereo: StereoSettings,
+}
 
 pub struct FourDeersApp {
     toy_manager: ToyManager,
     menu_open: bool,
+    settings: CommonSettings,
     last_tap_time: Option<f64>,
     mouse_down_pos: Option<egui::Pos2>,
     mouse_down_time: Option<f64>,
@@ -21,6 +32,7 @@ impl FourDeersApp {
         Self {
             toy_manager: ToyManager::new(),
             menu_open: false,
+            settings: CommonSettings::default(),
             last_tap_time: None,
             mouse_down_pos: None,
             mouse_down_time: None,
@@ -180,55 +192,102 @@ impl FourDeersApp {
             visualization_rect = Some(rect);
             self.toy_manager
                 .active_toy_mut()
-                .render_scene(ui, rect, false);
-        });
+                .render_scene(ui, rect, self.settings.show_debug);
 
-        if let Some(vis_rect) = visualization_rect {
-            self.render_menu_overlay(ctx, vis_rect);
-        }
+            let (left_rect, right_rect) = split_stereo_views(rect);
+            let left_painter = ui.painter().with_clip_rect(left_rect);
+            let right_painter = ui.painter().with_clip_rect(right_rect);
+
+            let left_menu_rect = egui::Rect {
+                min: left_rect.min,
+                max: egui::pos2(left_rect.max.x, left_rect.min.y + 30.0),
+            };
+            let right_menu_rect = egui::Rect {
+                min: right_rect.min,
+                max: egui::pos2(right_rect.max.x, right_rect.min.y + 30.0),
+            };
+
+            render_common_menu_half(&left_painter, left_menu_rect);
+            self.toy_manager
+                .active_toy()
+                .render_toy_menu(&right_painter, right_menu_rect);
+
+            let mut stereo_with_w = self.settings.stereo;
+            stereo_with_w.w_thickness = self.settings.four_d.w_thickness;
+            self.toy_manager
+                .active_toy_mut()
+                .set_stereo_settings(&stereo_with_w);
+            self.toy_manager
+                .active_toy_mut()
+                .set_four_d_settings(&self.settings.four_d);
+
+            if self.menu_open {
+                self.render_menu_overlay(ui, rect);
+            }
+        });
     }
 
-    fn render_menu_overlay(&mut self, ctx: &egui::Context, vis_rect: egui::Rect) {
-        if !self.menu_open {
-            return;
-        }
-
+    fn render_menu_overlay(&mut self, ui: &mut egui::Ui, vis_rect: egui::Rect) {
         let left_rect = egui::Rect {
             min: vis_rect.min,
             max: egui::pos2(vis_rect.center().x, vis_rect.max.y),
         };
+        let right_rect = egui::Rect {
+            min: egui::pos2(vis_rect.center().x, vis_rect.min.y),
+            max: vis_rect.max,
+        };
 
         let mut close_menu = false;
 
-        egui::Window::new("menu_overlay")
-            .title_bar(false)
-            .resizable(false)
-            .movable(false)
-            .interactable(true)
-            .frame(egui::Frame {
-                fill: egui::Color32::from_rgb(35, 35, 45),
-                corner_radius: egui::CornerRadius::ZERO,
-                stroke: egui::Stroke::NONE,
-                inner_margin: egui::Margin::same(12),
-                ..Default::default()
-            })
+        egui::Area::new(egui::Id::new("left_menu"))
             .fixed_pos(left_rect.min)
-            .fixed_size(egui::Vec2::new(left_rect.width(), left_rect.height()))
-            .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    ui.heading("FourDeers");
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            .show(ui.ctx(), |ui| {
+                ui.set_width(left_rect.width());
+                ui.set_height(left_rect.height());
+
+                egui::Frame {
+                    fill: egui::Color32::from_rgb(35, 35, 45),
+                    corner_radius: egui::CornerRadius::ZERO,
+                    stroke: egui::Stroke::NONE,
+                    inner_margin: egui::Margin::same(12),
+                    ..Default::default()
+                }
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
                         if ui.button("X").on_hover_text("Close menu").clicked() {
                             close_menu = true;
                         }
+                        ui.heading("FourDeers");
                     });
-                });
-                ui.separator();
-
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    self.draw_common_controls(ui);
                     ui.separator();
-                    self.toy_manager.active_toy_mut().render_sidebar(ui);
+
+                    egui::ScrollArea::both()
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            self.draw_common_controls(ui);
+                        });
+                });
+            });
+
+        egui::Area::new(egui::Id::new("right_menu"))
+            .fixed_pos(right_rect.min)
+            .show(ui.ctx(), |ui| {
+                ui.set_width(right_rect.width());
+                ui.set_height(right_rect.height());
+
+                egui::Frame {
+                    fill: egui::Color32::from_rgb(35, 35, 45),
+                    corner_radius: egui::CornerRadius::ZERO,
+                    stroke: egui::Stroke::NONE,
+                    inner_margin: egui::Margin::same(12),
+                    ..Default::default()
+                }
+                .show(ui, |ui| {
+                    egui::ScrollArea::both()
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            self.toy_manager.active_toy_mut().render_sidebar(ui);
+                        });
                 });
             });
 
@@ -260,6 +319,58 @@ impl FourDeersApp {
         if ui.button("Reset").clicked() {
             self.toy_manager.reset_active();
         }
+
+        ui.collapsing("Debug Settings", |ui| {
+            ui.checkbox(&mut self.settings.show_debug, "Show Debug Overlay");
+        });
+
+        ui.collapsing("4D Settings", |ui| {
+            ui.add(
+                egui::Slider::new(&mut self.settings.four_d.w_thickness, 0.1..=5.0)
+                    .text("W Thickness"),
+            );
+            ui.label("Controls the range of W dimension visible in the slice");
+
+            ui.add(
+                egui::Slider::new(&mut self.settings.four_d.w_color_intensity, 0.0..=1.0)
+                    .text("W Color Intensity"),
+            );
+            ui.label("Controls how strongly the W dimension affects edge coloring");
+        });
+
+        ui.collapsing("Stereoscopic Settings", |ui| {
+            ui.add(
+                egui::Slider::new(&mut self.settings.stereo.eye_separation, 0.0..=1.0)
+                    .text("Eye Separation"),
+            );
+            ui.add(
+                egui::Slider::new(&mut self.settings.stereo.projection_distance, 1.0..=10.0)
+                    .text("Projection Distance"),
+            );
+
+            ui.separator();
+            ui.label("Projection Mode:");
+            if ui
+                .radio_value(
+                    &mut self.settings.stereo.projection_mode,
+                    ProjectionMode::Perspective,
+                    "Perspective",
+                )
+                .clicked()
+            {
+                // Already handled by radio_value
+            }
+            if ui
+                .radio_value(
+                    &mut self.settings.stereo.projection_mode,
+                    ProjectionMode::Orthographic,
+                    "Orthographic",
+                )
+                .clicked()
+            {
+                // Already handled by radio_value
+            }
+        });
 
         let commit_hash = env!("GIT_COMMIT_HASH");
         let build_time = env!("BUILD_TIME");

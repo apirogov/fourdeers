@@ -105,11 +105,54 @@ pub fn render_menu_label(painter: &egui::Painter, view_rect: egui::Rect) {
     render_tap_zone_label(painter, view_rect, Zone::NorthWest, "Menu");
 }
 
+pub fn render_stereo_menu<F>(painter: &egui::Painter, view_rect: egui::Rect, toy_menu: F)
+where
+    F: Fn(&egui::Painter, egui::Rect),
+{
+    let left_rect = egui::Rect {
+        min: view_rect.min,
+        max: egui::pos2(view_rect.center().x, view_rect.min.y + 30.0),
+    };
+    let right_rect = egui::Rect {
+        min: egui::pos2(view_rect.center().x, view_rect.min.y),
+        max: egui::pos2(view_rect.max.x, view_rect.min.y + 30.0),
+    };
+
+    render_common_menu_half(painter, left_rect);
+    toy_menu(painter, right_rect);
+}
+
+pub fn render_common_menu_half(painter: &egui::Painter, rect: egui::Rect) {
+    render_tap_zone_label(painter, rect, Zone::NorthWest, "Menu");
+}
+
+pub fn render_toy_menu_half<F>(painter: &egui::Painter, rect: egui::Rect, toy_menu: F)
+where
+    F: Fn(&egui::Painter, egui::Rect),
+{
+    toy_menu(painter, rect);
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ProjectionMode {
     #[default]
     Perspective,
     Orthographic,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct FourDSettings {
+    pub w_thickness: f32,
+    pub w_color_intensity: f32,
+}
+
+impl Default for FourDSettings {
+    fn default() -> Self {
+        Self {
+            w_thickness: 2.5,
+            w_color_intensity: 0.35,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -150,24 +193,19 @@ impl StereoSettings {
         self.projection_mode = mode;
         self
     }
-
-    pub fn with_w_thickness(mut self, thickness: f32) -> Self {
-        self.w_thickness = thickness;
-        self
-    }
 }
 
-pub fn w_to_color(normalized_w: f32, alpha: u8) -> egui::Color32 {
+pub fn w_to_color(normalized_w: f32, alpha: u8, intensity: f32) -> egui::Color32 {
     if normalized_w >= 0.0 {
         let t = normalized_w;
         let r = (255.0 * (1.0 - t)) as u8;
-        let g = (255.0 * (1.0 - t * 0.35)) as u8;
+        let g = (255.0 * (1.0 - t * intensity)) as u8;
         let b = (255.0 * (1.0 - t) + 255.0 * t) as u8;
         egui::Color32::from_rgba_unmultiplied(r, g, b, alpha)
     } else {
         let t = -normalized_w;
         let r = 255u8;
-        let g = (255.0 * (1.0 - t * 0.35)) as u8;
+        let g = (255.0 * (1.0 - t * intensity)) as u8;
         let b = (255.0 * (1.0 - t)) as u8;
         egui::Color32::from_rgba_unmultiplied(r, g, b, alpha)
     }
@@ -302,8 +340,7 @@ pub struct TesseractRenderContext {
     pub w_half: f32,
     pub camera_4d_rotation_inverse: Rotation4D,
     pub camera: Camera,
-    pub w_min: f32,
-    pub w_max: f32,
+    pub w_color_intensity: f32,
     pub eye_separation: f32,
     pub projection_distance: f32,
     pub projection_mode: ProjectionMode,
@@ -321,8 +358,7 @@ impl TesseractRenderContext {
         rot_yw: f32,
         rot_zw: f32,
         w_thickness: f32,
-        w_min: f32,
-        w_max: f32,
+        w_color_intensity: f32,
         eye_separation: f32,
         projection_distance: f32,
         projection_mode: ProjectionMode,
@@ -357,8 +393,7 @@ impl TesseractRenderContext {
             w_half,
             camera_4d_rotation_inverse,
             camera: camera.clone(),
-            w_min,
-            w_max,
+            w_color_intensity,
             eye_separation,
             projection_distance,
             projection_mode,
@@ -375,8 +410,7 @@ impl TesseractRenderContext {
         rot_xw: f32,
         rot_yw: f32,
         rot_zw: f32,
-        w_min: f32,
-        w_max: f32,
+        w_color_intensity: f32,
         stereo: &StereoSettings,
     ) -> Self {
         Self::new(
@@ -390,8 +424,7 @@ impl TesseractRenderContext {
             rot_yw,
             rot_zw,
             stereo.w_thickness,
-            w_min,
-            w_max,
+            w_color_intensity,
             stereo.eye_separation,
             stereo.projection_distance,
             stereo.projection_mode,
@@ -407,7 +440,6 @@ impl TesseractRenderContext {
         show_debug: bool,
         show_controls: bool,
         tetrahedron_rotations: &std::collections::HashMap<TetraId, UnitQuaternion<f32>>,
-        rotation_mode_4d: Option<bool>,
     ) {
         let center = view_rect.center();
         let scale = view_rect.height().min(view_rect.width()) * 0.35;
@@ -429,16 +461,6 @@ impl TesseractRenderContext {
                 is_left_view,
                 tetrahedron_rotations,
             );
-        }
-
-        if let Some(is_4d) = rotation_mode_4d {
-            let label = if is_4d { "Rot:4D" } else { "Rot:3D" };
-            if is_left_view {
-                render_menu_label(&painter, view_rect);
-                render_tap_zone_label(&painter, view_rect, Zone::SouthWest, label);
-            } else if show_controls {
-                render_tap_zone_label(&painter, view_rect, Zone::Center, label);
-            }
         }
     }
 
@@ -523,7 +545,7 @@ impl TesseractRenderContext {
             let alpha = if w0_in_slice && w1_in_slice { 255 } else { 100 };
 
             let normalized_w = (w_avg / self.w_half).clamp(-1.0, 1.0);
-            let color = w_to_color(normalized_w, alpha);
+            let color = w_to_color(normalized_w, alpha, self.w_color_intensity);
 
             painter.line_segment([s0, s1], egui::Stroke::new(2.5, color));
         }

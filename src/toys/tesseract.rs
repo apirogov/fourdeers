@@ -8,8 +8,8 @@ use crate::camera::{Camera, CameraAction};
 use crate::input::{DragView, TapAnalysis, TetraId, Zone, ZoneMode};
 use crate::polytopes::{create_polytope, PolytopeType};
 use crate::render::{
-    draw_background, draw_center_divider, split_stereo_views, StereoSettings,
-    TesseractRenderContext,
+    draw_background, draw_center_divider, render_tap_zone_label, split_stereo_views, FourDSettings,
+    StereoSettings, TesseractRenderContext,
 };
 use crate::toy::{DragState, Toy};
 
@@ -22,15 +22,13 @@ pub struct TesseractToy {
     rot_xw: f32,
     rot_yw: f32,
     rot_zw: f32,
-    w_min: f32,
-    w_max: f32,
-    show_debug: bool,
     show_controls: bool,
     zone_mode: ZoneMode,
     visualization_rect: Option<egui::Rect>,
     pub drag_state: DragState,
     tetrahedron_rotations: HashMap<TetraId, UnitQuaternion<f32>>,
     stereo: StereoSettings,
+    four_d: FourDSettings,
     right_view_4d_rotation: bool,
 }
 
@@ -51,15 +49,13 @@ impl TesseractToy {
             rot_xw: 0.0,
             rot_yw: 0.0,
             rot_zw: 0.0,
-            w_min: -2.0,
-            w_max: 2.0,
-            show_debug: false,
             show_controls: false,
             zone_mode: ZoneMode::NineZones,
             visualization_rect: None,
             drag_state: DragState::new(),
             tetrahedron_rotations: HashMap::new(),
             stereo: StereoSettings::new(),
+            four_d: FourDSettings::default(),
             right_view_4d_rotation: false,
         }
     }
@@ -121,7 +117,7 @@ impl Toy for TesseractToy {
     fn render_sidebar(&mut self, ui: &mut egui::Ui) {
         ui.label("4D Polytope Visualization");
 
-        egui::ComboBox::from_label("Polytope")
+        egui::ComboBox::from_label("")
             .selected_text(self.polytope_type.name())
             .show_ui(ui, |ui| {
                 for poly_type in PolytopeType::all() {
@@ -137,57 +133,31 @@ impl Toy for TesseractToy {
 
         ui.separator();
 
-        ui.label("Arrows: Move | PgUp/Dn: Up/Down | ,/. : W-slice");
-        ui.label("Mouse: Look");
-        ui.separator();
-
-        ui.checkbox(&mut self.show_debug, "Show Debug Overlay");
-        ui.checkbox(&mut self.show_controls, "Show Controls");
+        ui.collapsing("Controls", |ui| {
+            ui.label("Arrows: Move | PgUp/Dn: Up/Down | ,/. : W-slice");
+            ui.separator();
+            ui.checkbox(&mut self.show_controls, "Show Mouse Controls");
+        });
 
         ui.add_space(8.0);
-        ui.heading("Position & Orientation");
+        ui.heading("Camera");
 
-        let is_small_screen = ui.available_width() < 250.0;
-
-        if is_small_screen {
-            ui.vertical(|ui| {
-                ui.label("X Position");
-                ui.add(egui::Slider::new(&mut self.camera.x, -10.0..=10.0).text(""));
-                ui.label("Y Position");
-                ui.add(egui::Slider::new(&mut self.camera.y, -10.0..=10.0).text(""));
-                ui.label("Z Position");
-                ui.add(egui::Slider::new(&mut self.camera.z, -10.0..=10.0).text(""));
-                ui.label("W-slice:");
-                ui.add(egui::Slider::new(&mut self.camera.w, -3.0..=3.0).text(""));
-            });
-        } else {
-            ui.horizontal(|ui| {
-                ui.vertical(|ui| {
-                    ui.label("X Position");
-                    ui.add(egui::Slider::new(&mut self.camera.x, -10.0..=10.0).text(""));
-                });
-                ui.vertical(|ui| {
-                    ui.label("Y Position");
-                    ui.add(egui::Slider::new(&mut self.camera.y, -10.0..=10.0).text(""));
-                });
-            });
-
-            ui.horizontal(|ui| {
-                ui.vertical(|ui| {
-                    ui.label("Z Position");
-                    ui.add(egui::Slider::new(&mut self.camera.z, -10.0..=10.0).text(""));
-                });
-                ui.vertical(|ui| {
-                    ui.label("W-slice:");
-                    ui.add(egui::Slider::new(&mut self.camera.w, -3.0..=3.0).text(""));
-                });
-            });
-        }
+        ui.horizontal(|ui| {
+            ui.label("X:");
+            ui.add(egui::Slider::new(&mut self.camera.x, -10.0..=10.0).text(""));
+            ui.label("Y:");
+            ui.add(egui::Slider::new(&mut self.camera.y, -10.0..=10.0).text(""));
+        });
+        ui.horizontal(|ui| {
+            ui.label("Z:");
+            ui.add(egui::Slider::new(&mut self.camera.z, -10.0..=10.0).text(""));
+            ui.label("W:");
+            ui.add(egui::Slider::new(&mut self.camera.w, -3.0..=3.0).text(""));
+        });
 
         let mut yaw = self.camera.yaw();
         let mut pitch = self.camera.pitch();
 
-        ui.label("Camera Orientation:");
         ui.horizontal(|ui| {
             ui.label("Yaw");
             if ui
@@ -199,8 +169,6 @@ impl Toy for TesseractToy {
             {
                 self.camera.set_yaw_pitch(yaw, pitch);
             }
-        });
-        ui.horizontal(|ui| {
             ui.label("Pitch");
             if ui
                 .add(
@@ -219,18 +187,6 @@ impl Toy for TesseractToy {
                 self.camera.x, self.camera.y, self.camera.z
             ));
             ui.label(format!("W: {:.2}", self.camera.w));
-        });
-
-        ui.separator();
-        ui.add_space(4.0);
-
-        ui.collapsing("Keyboard Controls", |ui| {
-            ui.label("Arrow keys: Move forward/back/strafe");
-            ui.label("PageUp/Down: Move up/down");
-            ui.label(",/.: W-slice movement");
-            ui.label("");
-            ui.label("Tap & hold zones for movement");
-            ui.label("Drag to rotate camera");
         });
 
         ui.separator();
@@ -291,62 +247,7 @@ impl Toy for TesseractToy {
 
         ui.add_space(4.0);
 
-        ui.collapsing("Slice Settings", |ui| {
-            ui.add(egui::Slider::new(&mut self.stereo.w_thickness, 0.1..=2.0).text("W Thickness"));
-        });
-
         ui.add_space(4.0);
-
-        ui.collapsing("Stereoscopic", |ui| {
-            ui.add(
-                egui::Slider::new(&mut self.stereo.eye_separation, 0.0..=1.0)
-                    .text("Eye Separation"),
-            );
-            ui.add(
-                egui::Slider::new(&mut self.stereo.projection_distance, 1.0..=10.0)
-                    .text("Projection Distance"),
-            );
-            ui.horizontal(|ui| {
-                ui.label("Projection:");
-                let persp_label =
-                    if self.stereo.projection_mode == crate::render::ProjectionMode::Perspective {
-                        "● Perspective"
-                    } else {
-                        "○ Perspective"
-                    };
-                let ortho_label =
-                    if self.stereo.projection_mode == crate::render::ProjectionMode::Orthographic {
-                        "● Orthographic"
-                    } else {
-                        "○ Orthographic"
-                    };
-                if ui.button(persp_label).clicked() {
-                    self.stereo.projection_mode = crate::render::ProjectionMode::Perspective;
-                }
-                if ui.button(ortho_label).clicked() {
-                    self.stereo.projection_mode = crate::render::ProjectionMode::Orthographic;
-                }
-            });
-        });
-
-        ui.add_space(4.0);
-
-        ui.collapsing("W Coloring", |ui| {
-            ui.horizontal(|ui| {
-                ui.label("Range:");
-                ui.add(egui::DragValue::new(&mut self.w_min).speed(0.1));
-                ui.label("to");
-                ui.add(egui::DragValue::new(&mut self.w_max).speed(0.1));
-            });
-        });
-
-        ui.separator();
-        ui.label(format!("Geometry: {}", self.polytope_type.name()));
-        ui.label(format!(
-            "{} vertices, {} edges",
-            self.polytope_type.vertex_count(),
-            self.polytope_type.edge_count()
-        ));
     }
 
     fn render_scene(&mut self, ui: &mut egui::Ui, rect: egui::Rect, show_debug: bool) {
@@ -369,8 +270,7 @@ impl Toy for TesseractToy {
             self.rot_xw,
             self.rot_yw,
             self.rot_zw,
-            self.w_min,
-            self.w_max,
+            self.four_d.w_color_intensity,
             &self.stereo,
         );
 
@@ -379,21 +279,36 @@ impl Toy for TesseractToy {
             left_rect,
             -1.0,
             true,
-            show_debug || self.show_debug,
+            show_debug,
             self.show_controls,
             &self.tetrahedron_rotations,
-            Some(self.right_view_4d_rotation),
         );
         ctx.render_eye_view(
             ui,
             right_rect,
             1.0,
             false,
-            show_debug || self.show_debug,
+            show_debug,
             self.show_controls,
             &self.tetrahedron_rotations,
-            Some(self.right_view_4d_rotation),
         );
+    }
+
+    fn render_toy_menu(&self, painter: &egui::Painter, rect: egui::Rect) {
+        let rot_label = if self.right_view_4d_rotation {
+            "Rot:4D"
+        } else {
+            "Rot:3D"
+        };
+        render_tap_zone_label(painter, rect, Zone::Center, rot_label);
+    }
+
+    fn set_stereo_settings(&mut self, settings: &crate::render::StereoSettings) {
+        self.stereo = settings.clone();
+    }
+
+    fn set_four_d_settings(&mut self, settings: &FourDSettings) {
+        self.four_d = settings.clone();
     }
 
     fn render_overlay(

@@ -4,6 +4,7 @@ use eframe::egui;
 use std::any::Any;
 
 use crate::input::{DragView, TapAnalysis, TetraId, Zone, ZoneMode};
+use crate::render::{FourDSettings, StereoSettings};
 
 pub mod manager;
 pub mod registry;
@@ -34,6 +35,10 @@ pub trait Toy: Any {
         ZoneMode::default()
     }
 
+    fn render_toy_menu(&self, _painter: &egui::Painter, _rect: egui::Rect) {}
+    fn set_stereo_settings(&mut self, _settings: &StereoSettings) {}
+    fn set_four_d_settings(&mut self, _settings: &FourDSettings) {}
+
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
 }
@@ -50,7 +55,6 @@ pub struct DragState {
     pub last_tap_zone: Option<Zone>,
     pub last_tap_view_left: bool,
 }
-
 
 impl DragState {
     pub fn new() -> Self {

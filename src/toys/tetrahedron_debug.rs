@@ -9,8 +9,8 @@ use crate::geometry::apply_so4_rotation;
 use crate::input::{DragView, TapAnalysis, TetraId, Zone, ZoneMode};
 use crate::polytopes::create_polytope;
 use crate::render::{
-    draw_background, draw_center_divider, render_menu_label, render_stereo_tetrahedron_overlay,
-    render_tap_zone_label, split_stereo_views, w_to_color, StereoProjector, StereoSettings,
+    draw_background, draw_center_divider, render_stereo_tetrahedron_overlay, render_tap_zone_label,
+    split_stereo_views, w_to_color, FourDSettings, StereoProjector, StereoSettings,
 };
 use crate::tetrahedron::magnitude_4d;
 use crate::toy::{DragState, Toy};
@@ -34,6 +34,7 @@ pub struct TetrahedronDebugToy {
     glome_rot_yw: f32,
     glome_rot_zw: f32,
     stereo: StereoSettings,
+    four_d: FourDSettings,
     tetrahedron_rotations: HashMap<TetraId, UnitQuaternion<f32>>,
     right_view_4d_rotation: bool,
     show_controls: bool,
@@ -60,6 +61,7 @@ impl TetrahedronDebugToy {
             glome_rot_yw: 0.0,
             glome_rot_zw: 0.0,
             stereo: StereoSettings::new(),
+            four_d: FourDSettings::default(),
             tetrahedron_rotations: HashMap::new(),
             right_view_4d_rotation: false,
             show_controls: false,
@@ -125,7 +127,7 @@ impl TetrahedronDebugToy {
         let (vertices, indices) = create_polytope(crate::polytopes::PolytopeType::SixteenCell);
         let inv_orientation = self.camera.orientation.inverse();
         let camera_4d_rotation_inverse = self.camera.rotation_4d.inverse();
-        let w_half = self.stereo.w_thickness * 0.5;
+        let w_half = self.four_d.w_thickness * 0.5;
 
         for (eye_idx, (view_rect, eye_sign)) in [(left_rect, -1.0f32), (right_rect, 1.0f32)]
             .iter()
@@ -228,24 +230,10 @@ impl TetrahedronDebugToy {
                 let alpha = if w0_in_slice && w1_in_slice { 255 } else { 100 };
 
                 let normalized_w = (w_avg / w_half).clamp(-1.0, 1.0);
-                let color = w_to_color(normalized_w, alpha);
+                let color = w_to_color(normalized_w, alpha, self.four_d.w_color_intensity);
 
                 painter.line_segment([s0, s1], egui::Stroke::new(2.5, color));
             }
-        }
-
-        let left_painter = ui.painter().with_clip_rect(left_rect);
-        render_menu_label(&left_painter, left_rect);
-        let rot_label = if self.right_view_4d_rotation {
-            "Rot:4D"
-        } else {
-            "Rot:3D"
-        };
-        render_tap_zone_label(&left_painter, left_rect, Zone::SouthWest, rot_label);
-
-        if self.show_controls {
-            let right_painter = ui.painter().with_clip_rect(right_rect);
-            render_tap_zone_label(&right_painter, right_rect, Zone::Center, rot_label);
         }
     }
 }
@@ -315,153 +303,135 @@ impl Toy for TetrahedronDebugToy {
                 ui.add(egui::Slider::new(&mut self.camera.z, -10.0..=10.0).text(""));
             });
             ui.horizontal(|ui| {
-                ui.label("W:");
-                ui.add(egui::Slider::new(&mut self.camera.w, -5.0..=5.0).text(""));
-            });
-
-            ui.separator();
-
-            let mut yaw = self.camera.yaw();
-            let mut pitch = self.camera.pitch();
-            ui.horizontal(|ui| {
-                ui.label("Yaw:");
-                if ui
-                    .add(
-                        egui::Slider::new(&mut yaw, -std::f32::consts::PI..=std::f32::consts::PI)
-                            .text(""),
-                    )
-                    .changed()
-                {
-                    self.camera.set_yaw_pitch(yaw, pitch);
-                }
-            });
-            ui.horizontal(|ui| {
-                ui.label("Pitch:");
-                if ui
-                    .add(
-                        egui::Slider::new(&mut pitch, -std::f32::consts::PI..=std::f32::consts::PI)
-                            .text(""),
-                    )
-                    .changed()
-                {
-                    self.camera.set_yaw_pitch(yaw, pitch);
-                }
-            });
-
-            ui.separator();
-            ui.collapsing("Glome Rotation", |ui| {
-                ui.horizontal(|ui| {
-                    ui.add(
-                        egui::Slider::new(
-                            &mut self.glome_rot_xy,
-                            -std::f32::consts::PI..=std::f32::consts::PI,
-                        )
-                        .text("XY"),
-                    );
-                    ui.add(
-                        egui::Slider::new(
-                            &mut self.glome_rot_xz,
-                            -std::f32::consts::PI..=std::f32::consts::PI,
-                        )
-                        .text("XZ"),
-                    );
-                });
-                ui.horizontal(|ui| {
-                    ui.add(
-                        egui::Slider::new(
-                            &mut self.glome_rot_yz,
-                            -std::f32::consts::PI..=std::f32::consts::PI,
-                        )
-                        .text("YZ"),
-                    );
-                    ui.add(
-                        egui::Slider::new(
-                            &mut self.glome_rot_xw,
-                            -std::f32::consts::PI..=std::f32::consts::PI,
-                        )
-                        .text("XW"),
-                    );
-                });
-                ui.horizontal(|ui| {
-                    ui.add(
-                        egui::Slider::new(
-                            &mut self.glome_rot_yw,
-                            -std::f32::consts::PI..=std::f32::consts::PI,
-                        )
-                        .text("YW"),
-                    );
-                    ui.add(
-                        egui::Slider::new(
-                            &mut self.glome_rot_zw,
-                            -std::f32::consts::PI..=std::f32::consts::PI,
-                        )
-                        .text("ZW"),
-                    );
-                });
-            });
-
-            ui.collapsing("Slice Settings", |ui| {
+                ui.label("XY:");
                 ui.add(
-                    egui::Slider::new(&mut self.stereo.w_thickness, 0.1..=5.0).text("W Thickness"),
+                    egui::Slider::new(&mut self.glome_rot_xy, 0.0..=std::f32::consts::TAU).text(""),
                 );
             });
-        } else {
-            ui.label("Stereo Tetrahedron Mode");
-            ui.label("Vector: camera position to origin");
-            ui.label("");
-            ui.label("Controls:");
-            ui.label("  West (left) tap: Back to Camera");
-            ui.label("  East (right) tap: Reset rotation");
-            ui.label("  Right drag: Rotate tetrahedron");
-
-            ui.separator();
-            let to_origin = self.get_to_origin_vector();
-            let magnitude = magnitude_4d(to_origin);
-            ui.label(format!("Distance to origin: {:.2}", magnitude));
-            ui.label(format!(
-                "Vector: ({:.2}, {:.2}, {:.2}, {:.2})",
-                to_origin.x, to_origin.y, to_origin.z, to_origin.w
-            ));
-
-            ui.separator();
-            ui.add(
-                egui::Slider::new(&mut self.stereo.eye_separation, 0.0..=1.0)
-                    .text("Eye Separation"),
-            );
+            ui.horizontal(|ui| {
+                ui.label("XZ:");
+                ui.add(
+                    egui::Slider::new(&mut self.glome_rot_xz, 0.0..=std::f32::consts::TAU).text(""),
+                );
+            });
+            ui.horizontal(|ui| {
+                ui.label("YZ:");
+                ui.add(
+                    egui::Slider::new(&mut self.glome_rot_yz, 0.0..=std::f32::consts::TAU).text(""),
+                );
+            });
+            ui.horizontal(|ui| {
+                ui.label("XW:");
+                ui.add(
+                    egui::Slider::new(&mut self.glome_rot_xw, 0.0..=std::f32::consts::TAU).text(""),
+                );
+            });
+            ui.horizontal(|ui| {
+                ui.label("YW:");
+                ui.add(
+                    egui::Slider::new(&mut self.glome_rot_yw, 0.0..=std::f32::consts::TAU).text(""),
+                );
+            });
+            ui.horizontal(|ui| {
+                ui.label("ZW:");
+                ui.add(
+                    egui::Slider::new(&mut self.glome_rot_zw, 0.0..=std::f32::consts::TAU).text(""),
+                );
+            });
         }
 
+        if self.view_mode == ViewMode::StereoTetrahedron {
+            ui.label("Arrows: Rotate | PgUp/Dn: Up/Down | ,/. : W-slice");
+            ui.label("Mouse: Look");
+            ui.separator();
+        }
+
+        let yaw = self.camera.yaw();
+        let mut pitch = self.camera.pitch();
+
+        ui.horizontal(|ui| {
+            ui.label("Pitch:");
+            if ui
+                .add(
+                    egui::Slider::new(&mut pitch, -std::f32::consts::PI..=std::f32::consts::PI)
+                        .text(""),
+                )
+                .changed()
+            {
+                self.camera.set_yaw_pitch(yaw, pitch);
+            }
+        });
+
         ui.separator();
-        ui.collapsing("Stereoscopic", |ui| {
-            ui.add(
-                egui::Slider::new(&mut self.stereo.eye_separation, 0.0..=1.0)
-                    .text("Eye Separation"),
-            );
-            ui.add(
-                egui::Slider::new(&mut self.stereo.projection_distance, 1.0..=10.0)
-                    .text("Projection Distance"),
-            );
+        ui.collapsing("Glome Rotation", |ui| {
             ui.horizontal(|ui| {
-                ui.label("Projection:");
-                let persp_label =
-                    if self.stereo.projection_mode == crate::render::ProjectionMode::Perspective {
-                        "● Perspective"
-                    } else {
-                        "○ Perspective"
-                    };
-                let ortho_label =
-                    if self.stereo.projection_mode == crate::render::ProjectionMode::Orthographic {
-                        "● Orthographic"
-                    } else {
-                        "○ Orthographic"
-                    };
-                if ui.button(persp_label).clicked() {
-                    self.stereo.projection_mode = crate::render::ProjectionMode::Perspective;
-                }
-                if ui.button(ortho_label).clicked() {
-                    self.stereo.projection_mode = crate::render::ProjectionMode::Orthographic;
-                }
+                ui.add(
+                    egui::Slider::new(
+                        &mut self.glome_rot_xy,
+                        -std::f32::consts::PI..=std::f32::consts::PI,
+                    )
+                    .text("XY"),
+                );
+                ui.add(
+                    egui::Slider::new(
+                        &mut self.glome_rot_xz,
+                        -std::f32::consts::PI..=std::f32::consts::PI,
+                    )
+                    .text("XZ"),
+                );
+            });
+            ui.horizontal(|ui| {
+                ui.add(
+                    egui::Slider::new(
+                        &mut self.glome_rot_yz,
+                        -std::f32::consts::PI..=std::f32::consts::PI,
+                    )
+                    .text("YZ"),
+                );
+                ui.add(
+                    egui::Slider::new(
+                        &mut self.glome_rot_xw,
+                        -std::f32::consts::PI..=std::f32::consts::PI,
+                    )
+                    .text("XW"),
+                );
+            });
+            ui.horizontal(|ui| {
+                ui.add(
+                    egui::Slider::new(
+                        &mut self.glome_rot_yw,
+                        -std::f32::consts::PI..=std::f32::consts::PI,
+                    )
+                    .text("YW"),
+                );
+                ui.add(
+                    egui::Slider::new(
+                        &mut self.glome_rot_zw,
+                        -std::f32::consts::PI..=std::f32::consts::PI,
+                    )
+                    .text("ZW"),
+                );
             });
         });
+
+        ui.label("Stereo Tetrahedron Mode");
+        ui.label("Vector: camera position to origin");
+        ui.label("");
+        ui.label("Controls:");
+        ui.label("  West (left) tap: Back to Camera");
+        ui.label("  East (right) tap: Reset rotation");
+        ui.label("  Right drag: Rotate tetrahedron");
+
+        ui.separator();
+        let to_origin = self.get_to_origin_vector();
+        let magnitude = magnitude_4d(to_origin);
+        ui.label(format!("Distance to origin: {:.2}", magnitude));
+        ui.label(format!(
+            "Vector: ({:.2}, {:.2}, {:.2}, {:.2})",
+            to_origin.x, to_origin.y, to_origin.z, to_origin.w
+        ));
+
+        ui.separator();
     }
 
     fn render_scene(&mut self, ui: &mut egui::Ui, rect: egui::Rect, _show_debug: bool) {
@@ -489,21 +459,6 @@ impl Toy for TetrahedronDebugToy {
                     &self.tetrahedron_rotation,
                     &projector,
                 );
-
-                let (left_rect, right_rect) = split_stereo_views(rect);
-                let left_painter = ui.painter().with_clip_rect(left_rect);
-                render_menu_label(&left_painter, left_rect);
-                let rot_label = if self.right_view_4d_rotation {
-                    "Rot:4D"
-                } else {
-                    "Rot:3D"
-                };
-                render_tap_zone_label(&left_painter, left_rect, Zone::SouthWest, rot_label);
-
-                if self.show_controls {
-                    let right_painter = ui.painter().with_clip_rect(right_rect);
-                    render_tap_zone_label(&right_painter, right_rect, Zone::Center, rot_label);
-                }
             }
         }
     }
@@ -514,6 +469,23 @@ impl Toy for TetrahedronDebugToy {
         _left_rect: egui::Rect,
         _right_rect: egui::Rect,
     ) {
+    }
+
+    fn render_toy_menu(&self, painter: &egui::Painter, rect: egui::Rect) {
+        let rot_label = if self.right_view_4d_rotation {
+            "Rot:4D"
+        } else {
+            "Rot:3D"
+        };
+        render_tap_zone_label(painter, rect, Zone::Center, rot_label);
+    }
+
+    fn set_stereo_settings(&mut self, settings: &crate::render::StereoSettings) {
+        self.stereo = settings.clone();
+    }
+
+    fn set_four_d_settings(&mut self, settings: &FourDSettings) {
+        self.four_d = settings.clone();
     }
 
     fn handle_tap(&mut self, analysis: &TapAnalysis) {
