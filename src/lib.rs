@@ -3,7 +3,6 @@
 pub mod app;
 pub mod camera;
 pub mod colors;
-pub mod geometry;
 pub mod input;
 pub mod polytopes;
 pub mod render;
