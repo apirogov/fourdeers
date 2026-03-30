@@ -1,7 +1,7 @@
 //! Available toys
 
-pub mod tesseract;
-pub mod tetrahedron_debug;
+pub mod debug_scratchpad;
+pub mod polytopes;
 
-pub use tesseract::TesseractToy;
-pub use tetrahedron_debug::TetrahedronDebugToy;
+pub use debug_scratchpad::DebugScratchpadToy;
+pub use polytopes::PolytopesToy;

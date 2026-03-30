@@ -9,7 +9,9 @@ use crate::colors::*;
 use crate::input::{TetraId, Zone};
 use crate::polytopes::Vertex4D;
 use crate::rotation4d::Rotation4D;
-use crate::tetrahedron::{get_tetrahedron_layout, TetrahedronGadget};
+use crate::tetrahedron::{
+    format_magnitude, get_tetrahedron_layout, magnitude_4d, TetrahedronGadget,
+};
 
 pub fn split_stereo_views(rect: egui::Rect) -> (egui::Rect, egui::Rect) {
     let left_rect = egui::Rect {
@@ -119,6 +121,13 @@ pub enum ProjectionMode {
     #[default]
     Perspective,
     Orthographic,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CompassFrameMode {
+    #[default]
+    World,
+    Camera,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -399,7 +408,7 @@ impl TesseractRenderContext {
             w_color_intensity: config.four_d.w_color_intensity,
             eye_separation: config.stereo.eye_separation,
             projection_distance: config.stereo.projection_distance,
-            projection_mode: config.stereo.projection_mode,
+            projection_mode: ProjectionMode::Perspective,
         }
     }
 
@@ -931,21 +940,24 @@ pub fn render_stereo_tetrahedron_overlay(
     ui: &mut egui::Ui,
     rect: egui::Rect,
     vector_4d: nalgebra::Vector4<f32>,
+    waypoint_title: &str,
+    frame_mode: CompassFrameMode,
     rotation: &UnitQuaternion<f32>,
     projector: &StereoProjector,
 ) {
     let (left_rect, right_rect) = split_stereo_views(rect);
+    let magnitude_label = format_magnitude(magnitude_4d(vector_4d));
     let gadget = TetrahedronGadget::from_4d_vector_with_quaternion(vector_4d, *rotation, 1.0)
-        .with_auto_magnitude_label()
-        .with_base_label("Compass");
+        .with_base_label(magnitude_label)
+        .with_tip_label(waypoint_title);
 
     let left_projector = projector.with_center(left_rect.center());
     let left_painter = ui.painter().with_clip_rect(left_rect);
-    render_tetrahedron_with_projector(&left_painter, &gadget, &left_projector, -1.0);
+    render_tetrahedron_with_projector(&left_painter, &gadget, &left_projector, -1.0, frame_mode);
 
     let right_projector = projector.with_center(right_rect.center());
     let right_painter = ui.painter().with_clip_rect(right_rect);
-    render_tetrahedron_with_projector(&right_painter, &gadget, &right_projector, 1.0);
+    render_tetrahedron_with_projector(&right_painter, &gadget, &right_projector, 1.0, frame_mode);
 }
 
 fn render_tetrahedron_with_projector(
@@ -953,6 +965,7 @@ fn render_tetrahedron_with_projector(
     gadget: &TetrahedronGadget,
     projector: &StereoProjector,
     eye_sign: f32,
+    frame_mode: CompassFrameMode,
 ) {
     let center = projector.center();
 
@@ -991,24 +1004,26 @@ fn render_tetrahedron_with_projector(
                 let font_id = egui::FontId::proportional(16.0);
                 let outline_color = outline_default();
 
+                let vertex_label = compass_vertex_label(frame_mode, i, component, &vertex.label);
+
                 painter.text(
                     p.screen_pos + egui::Vec2::new(0.5, 0.5),
                     egui::Align2::CENTER_CENTER,
-                    &vertex.label,
+                    vertex_label,
                     font_id.clone(),
                     outline_color,
                 );
                 painter.text(
                     p.screen_pos + egui::Vec2::new(-0.5, -0.5),
                     egui::Align2::CENTER_CENTER,
-                    &vertex.label,
+                    vertex_label,
                     font_id.clone(),
                     outline_color,
                 );
                 painter.text(
                     p.screen_pos,
                     egui::Align2::CENTER_CENTER,
-                    &vertex.label,
+                    vertex_label,
                     font_id,
                     egui_color,
                 );
@@ -1106,5 +1121,49 @@ fn render_tetrahedron_with_projector(
         } else if arrow_vec.length() > 1e-3 {
             painter.circle_filled(arrow_end, 4.0, arrow_primary());
         }
+    }
+}
+
+fn compass_vertex_label(
+    frame_mode: CompassFrameMode,
+    component_index: usize,
+    component_value: f32,
+    world_label: &str,
+) -> &str {
+    if matches!(frame_mode, CompassFrameMode::World) {
+        return world_label;
+    }
+
+    let positive = component_value >= 0.0;
+    match component_index {
+        0 => {
+            if positive {
+                "R"
+            } else {
+                "L"
+            }
+        }
+        1 => {
+            if positive {
+                "U"
+            } else {
+                "D"
+            }
+        }
+        2 => {
+            if positive {
+                "F"
+            } else {
+                "B"
+            }
+        }
+        3 => {
+            if positive {
+                "K"
+            } else {
+                "A"
+            }
+        }
+        _ => world_label,
     }
 }

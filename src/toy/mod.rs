@@ -11,6 +11,12 @@ pub mod registry;
 
 pub use manager::ToyManager;
 
+#[derive(Clone)]
+pub struct CompassWaypoint {
+    pub title: &'static str,
+    pub position: Vector4<f32>,
+}
+
 pub trait Toy {
     fn name(&self) -> &str;
     fn id(&self) -> &str;
@@ -27,9 +33,23 @@ pub trait Toy {
     fn handle_keyboard(&mut self, ctx: &egui::Context);
 
     fn get_visualization_rect(&self) -> Option<egui::Rect>;
+
     fn compass_vector(&self) -> Option<Vector4<f32>> {
         None
     }
+
+    fn compass_reference_position(&self) -> Option<Vector4<f32>> {
+        None
+    }
+
+    fn compass_world_to_camera_frame(&self, _world_vector: Vector4<f32>) -> Option<Vector4<f32>> {
+        None
+    }
+
+    fn compass_waypoints(&self) -> Vec<CompassWaypoint> {
+        Vec::new()
+    }
+
     fn zone_mode_for_view(&self, _is_left_view: bool) -> ZoneMode {
         ZoneMode::default()
     }

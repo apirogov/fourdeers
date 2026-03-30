@@ -210,12 +210,12 @@ mod tests {
         let n = vertices.len() as f32;
         let mut c = [0.0f32; 4];
         for v in vertices {
-            for i in 0..4 {
-                c[i] += v.position[i];
+            for (i, acc) in c.iter_mut().enumerate() {
+                *acc += v.position[i];
             }
         }
-        for i in 0..4 {
-            c[i] /= n;
+        for acc in &mut c {
+            *acc /= n;
         }
         c
     }

@@ -12,7 +12,7 @@ pub struct ToyManager {
 impl ToyManager {
     pub fn new() -> Self {
         let toys = super::registry::create_all_toys();
-        let active_toy_id = "tesseract".to_string();
+        let active_toy_id = "polytopes".to_string();
 
         Self {
             toys,

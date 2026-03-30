@@ -1,7 +1,7 @@
 //! Tesseract visualization toy
 
 use eframe::egui;
-use nalgebra::UnitQuaternion;
+use nalgebra::{UnitQuaternion, Vector4};
 use std::collections::HashMap;
 
 use crate::camera::{Camera, CameraAction};
@@ -13,9 +13,9 @@ use crate::render::{
     EyeRenderOptions, FourDSettings, ObjectRotationAngles, StereoSettings, TesseractRenderConfig,
     TesseractRenderContext,
 };
-use crate::toy::{DragState, Toy};
+use crate::toy::{CompassWaypoint, DragState, Toy};
 
-pub struct TesseractToy {
+pub struct PolytopesToy {
     pub camera: Camera,
     polytope_type: PolytopeType,
     rot_xy: f32,
@@ -34,13 +34,13 @@ pub struct TesseractToy {
     right_view_4d_rotation: bool,
 }
 
-impl Default for TesseractToy {
+impl Default for PolytopesToy {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl TesseractToy {
+impl PolytopesToy {
     pub fn new() -> Self {
         Self {
             camera: Camera::new(),
@@ -73,13 +73,7 @@ impl TesseractToy {
 
     fn zone_to_action(zone: Zone, is_left_view: bool) -> Option<CameraAction> {
         if is_left_view {
-            match zone {
-                Zone::North => Some(CameraAction::MoveUp),
-                Zone::South => Some(CameraAction::MoveDown),
-                Zone::West => Some(CameraAction::MoveLeft),
-                Zone::East => Some(CameraAction::MoveRight),
-                _ => None,
-            }
+            None
         } else {
             match zone {
                 Zone::North => Some(CameraAction::MoveUp),
@@ -96,13 +90,13 @@ impl TesseractToy {
     }
 }
 
-impl Toy for TesseractToy {
+impl Toy for PolytopesToy {
     fn name(&self) -> &str {
         "Polytopes"
     }
 
     fn id(&self) -> &str {
-        "tesseract"
+        "polytopes"
     }
 
     fn reset(&mut self) {
@@ -136,7 +130,7 @@ impl Toy for TesseractToy {
         ui.separator();
 
         ui.collapsing("Controls", |ui| {
-            ui.label("Arrows: Move | PgUp/Dn: Up/Down | ,/. : W-slice");
+            ui.label("Arrows Up/Down: Y | Arrows Left/Right: X | PgUp/Dn: Z | ,/. : W");
             ui.separator();
             ui.checkbox(&mut self.show_controls, "Show Mouse Controls");
         });
@@ -411,10 +405,10 @@ impl Toy for TesseractToy {
 
         ctx.input(|i| {
             if i.key_down(egui::Key::ArrowUp) {
-                self.apply_camera_action(CameraAction::MoveForward, move_speed);
+                self.apply_camera_action(CameraAction::MoveUp, move_speed);
             }
             if i.key_down(egui::Key::ArrowDown) {
-                self.apply_camera_action(CameraAction::MoveBackward, move_speed);
+                self.apply_camera_action(CameraAction::MoveDown, move_speed);
             }
             if i.key_down(egui::Key::ArrowLeft) {
                 self.apply_camera_action(CameraAction::MoveLeft, move_speed);
@@ -423,10 +417,10 @@ impl Toy for TesseractToy {
                 self.apply_camera_action(CameraAction::MoveRight, move_speed);
             }
             if i.key_down(egui::Key::PageUp) {
-                self.apply_camera_action(CameraAction::MoveUp, move_speed);
+                self.apply_camera_action(CameraAction::MoveForward, move_speed);
             }
             if i.key_down(egui::Key::PageDown) {
-                self.apply_camera_action(CameraAction::MoveDown, move_speed);
+                self.apply_camera_action(CameraAction::MoveBackward, move_speed);
             }
             if i.key_down(egui::Key::Period) {
                 self.apply_camera_action(CameraAction::MoveKata, move_speed);
@@ -441,8 +435,29 @@ impl Toy for TesseractToy {
         self.visualization_rect
     }
 
-    fn compass_vector(&self) -> Option<nalgebra::Vector4<f32>> {
+    fn compass_vector(&self) -> Option<Vector4<f32>> {
         Some(-self.camera.position)
+    }
+
+    fn compass_reference_position(&self) -> Option<Vector4<f32>> {
+        Some(self.camera.position)
+    }
+
+    fn compass_waypoints(&self) -> Vec<CompassWaypoint> {
+        vec![
+            CompassWaypoint {
+                title: "Origin",
+                position: Vector4::new(0.0, 0.0, 0.0, 0.0),
+            },
+            CompassWaypoint {
+                title: "TestPoint",
+                position: Vector4::new(1.0, 2.0, 3.0, 4.0),
+            },
+        ]
+    }
+
+    fn compass_world_to_camera_frame(&self, world_vector: Vector4<f32>) -> Option<Vector4<f32>> {
+        Some(self.camera.world_vector_to_camera_frame(world_vector))
     }
 
     fn zone_mode_for_view(&self, _is_left_view: bool) -> ZoneMode {

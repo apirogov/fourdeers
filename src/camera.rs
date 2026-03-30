@@ -270,6 +270,33 @@ impl Camera {
         )
     }
 
+    fn camera_world_axes(&self) -> (Vector4<f32>, Vector4<f32>, Vector4<f32>, Vector4<f32>) {
+        let right3 = self.right_vector();
+        let up3 = self.up_vector();
+        let forward3 = self.forward_vector();
+        let right = self.project_camera_3d_to_world_4d(right3);
+        let up = self.project_camera_3d_to_world_4d(up3);
+        let forward = self.project_camera_3d_to_world_4d(forward3);
+
+        let slice_rotation =
+            Rotation4D::new(UnitQuaternion::identity(), *self.rotation_4d.q_right());
+        let w_basis = slice_rotation.basis_w();
+        let w_axis = Vector4::new(w_basis[0], w_basis[1], w_basis[2], w_basis[3]);
+
+        (right, up, forward, w_axis)
+    }
+
+    /// Converts a world-space 4D direction into camera-frame components (R/U/F/K).
+    pub fn world_vector_to_camera_frame(&self, world_vector: Vector4<f32>) -> Vector4<f32> {
+        let (right, up, forward, w_axis) = self.camera_world_axes();
+        Vector4::new(
+            world_vector.dot(&right),
+            world_vector.dot(&up),
+            world_vector.dot(&forward),
+            world_vector.dot(&w_axis),
+        )
+    }
+
     /// Applies one camera movement action in the mathematically split frame model.
     ///
     /// - 3D actions: derive direction from `q_left`, project through `q_right` slice basis.
@@ -277,16 +304,7 @@ impl Camera {
     ///
     /// Do not collapse this to full `rotation_4d.basis_*` without updating camera semantics.
     pub fn apply_action(&mut self, action: CameraAction, speed: f32) {
-        let right3 = self.right_vector();
-        let up3 = self.up_vector();
-        let forward3 = self.forward_vector();
-        let right = self.project_camera_3d_to_world_4d(right3);
-        let up = self.project_camera_3d_to_world_4d(up3);
-        let forward = self.project_camera_3d_to_world_4d(forward3);
-        let slice_rotation =
-            Rotation4D::new(UnitQuaternion::identity(), *self.rotation_4d.q_right());
-        let w_basis = slice_rotation.basis_w();
-        let w_axis = Vector4::new(w_basis[0], w_basis[1], w_basis[2], w_basis[3]);
+        let (right, up, forward, w_axis) = self.camera_world_axes();
         match action {
             CameraAction::MoveForward => {
                 self.position += forward * speed;
@@ -565,6 +583,38 @@ mod tests {
 
         camera.move_along(right, 1.0);
         assert_approx_eq(camera.position.x - initial_x, 1.0, 1e-6);
+    }
+
+    #[test]
+    fn test_world_vector_to_camera_frame_identity() {
+        let camera = Camera {
+            position: Vector4::zeros(),
+            rotation_4d: Rotation4D::identity(),
+            ..Camera::new()
+        };
+
+        let v = Vector4::new(1.0, -2.0, 3.0, -4.0);
+        let local = camera.world_vector_to_camera_frame(v);
+        assert_approx_eq(local.x, 1.0, 1e-6);
+        assert_approx_eq(local.y, -2.0, 1e-6);
+        assert_approx_eq(local.z, 3.0, 1e-6);
+        assert_approx_eq(local.w, -4.0, 1e-6);
+    }
+
+    #[test]
+    fn test_world_vector_to_camera_frame_uses_camera_axes() {
+        let camera = Camera {
+            position: Vector4::zeros(),
+            rotation_4d: Rotation4D::from_6_plane_angles(0.31, -0.2, 0.18, 0.42, -0.27, 0.15),
+            ..Camera::new()
+        };
+
+        let right_world = camera.project_camera_3d_to_world_4d(camera.right_vector());
+        let local = camera.world_vector_to_camera_frame(right_world);
+        assert_approx_eq(local.x, 1.0, 1e-6);
+        assert_approx_eq(local.y, 0.0, 1e-6);
+        assert_approx_eq(local.z, 0.0, 1e-6);
+        assert_approx_eq(local.w, 0.0, 1e-6);
     }
 
     #[test]

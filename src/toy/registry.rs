@@ -7,29 +7,29 @@ use super::Toy;
 pub fn create_all_toys() -> HashMap<String, Box<dyn Toy>> {
     let mut toys = HashMap::new();
 
-    let tesseract = crate::toys::tesseract::TesseractToy::new();
+    let polytopes = crate::toys::polytopes::PolytopesToy::new();
     toys.insert(
-        tesseract.id().to_string(),
-        Box::new(tesseract) as Box<dyn Toy>,
+        polytopes.id().to_string(),
+        Box::new(polytopes) as Box<dyn Toy>,
     );
 
-    let tetrahedron_debug = crate::toys::tetrahedron_debug::TetrahedronDebugToy::new();
+    let debug_scratchpad = crate::toys::debug_scratchpad::DebugScratchpadToy::new();
     toys.insert(
-        tetrahedron_debug.id().to_string(),
-        Box::new(tetrahedron_debug) as Box<dyn Toy>,
+        debug_scratchpad.id().to_string(),
+        Box::new(debug_scratchpad) as Box<dyn Toy>,
     );
 
     toys
 }
 
 pub fn toy_ids() -> Vec<&'static str> {
-    vec!["tesseract", "tetrahedron_debug"]
+    vec!["polytopes", "debug_scratchpad"]
 }
 
 pub fn toy_name_by_id(id: &str) -> Option<&'static str> {
     match id {
-        "tesseract" => Some("4D Tesseract"),
-        "tetrahedron_debug" => Some("Tetrahedron Debug"),
+        "polytopes" => Some("Polytopes"),
+        "debug_scratchpad" => Some("DebugScratchpad"),
         _ => None,
     }
 }
