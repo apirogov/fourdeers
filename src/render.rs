@@ -488,20 +488,8 @@ impl TesseractRenderContext {
                 self.cos_zw,
             );
 
-            let p0_world = p0_object
-                - nalgebra::Vector4::new(
-                    self.camera.x,
-                    self.camera.y,
-                    self.camera.z,
-                    self.camera.w,
-                );
-            let p1_world = p1_object
-                - nalgebra::Vector4::new(
-                    self.camera.x,
-                    self.camera.y,
-                    self.camera.z,
-                    self.camera.w,
-                );
+            let p0_world = p0_object - self.camera.position;
+            let p1_world = p1_object - self.camera.position;
 
             let p0_4d = self.camera_4d_rotation_inverse.rotate_vector(p0_world);
             let p1_4d = self.camera_4d_rotation_inverse.rotate_vector(p1_world);
