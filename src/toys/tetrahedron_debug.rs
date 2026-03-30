@@ -73,12 +73,7 @@ impl TetrahedronDebugToy {
     }
 
     fn get_to_origin_vector(&self) -> Vector4<f32> {
-        Vector4::new(
-            -self.camera.x,
-            -self.camera.y,
-            -self.camera.z,
-            -self.camera.w,
-        )
+        -self.camera.position
     }
 
     fn apply_camera_action(&mut self, action: CameraAction, speed: f32) {
@@ -179,10 +174,8 @@ impl TetrahedronDebugToy {
                     cos_zw,
                 );
 
-                let p0_world = p0_object
-                    - Vector4::new(self.camera.x, self.camera.y, self.camera.z, self.camera.w);
-                let p1_world = p1_object
-                    - Vector4::new(self.camera.x, self.camera.y, self.camera.z, self.camera.w);
+                let p0_world = p0_object - self.camera.position;
+                let p1_world = p1_object - self.camera.position;
 
                 let p0_4d = camera_4d_rotation_inverse.rotate_vector(p0_world);
                 let p1_4d = camera_4d_rotation_inverse.rotate_vector(p1_world);
@@ -292,15 +285,15 @@ impl Toy for TetrahedronDebugToy {
 
             ui.horizontal(|ui| {
                 ui.label("X:");
-                ui.add(egui::Slider::new(&mut self.camera.x, -10.0..=10.0).text(""));
+                ui.add(egui::Slider::new(&mut self.camera.position.x, -10.0..=10.0).text(""));
             });
             ui.horizontal(|ui| {
                 ui.label("Y:");
-                ui.add(egui::Slider::new(&mut self.camera.y, -10.0..=10.0).text(""));
+                ui.add(egui::Slider::new(&mut self.camera.position.y, -10.0..=10.0).text(""));
             });
             ui.horizontal(|ui| {
                 ui.label("Z:");
-                ui.add(egui::Slider::new(&mut self.camera.z, -10.0..=10.0).text(""));
+                ui.add(egui::Slider::new(&mut self.camera.position.z, -10.0..=10.0).text(""));
             });
             ui.horizontal(|ui| {
                 ui.label("XY:");

@@ -145,23 +145,26 @@ impl Toy for TesseractToy {
         ui.collapsing("Camera", |ui| {
             ui.label(format!(
                 "Position: ({:.1}, {:.1}, {:.1}, {:.1})",
-                self.camera.x, self.camera.y, self.camera.z, self.camera.w
+                self.camera.position.x,
+                self.camera.position.y,
+                self.camera.position.z,
+                self.camera.position.w
             ));
 
             // X + Y
             ui.horizontal(|ui| {
                 ui.label("X:");
-                ui.add(egui::Slider::new(&mut self.camera.x, -10.0..=10.0).text(""));
+                ui.add(egui::Slider::new(&mut self.camera.position.x, -10.0..=10.0).text(""));
                 ui.label("Y:");
-                ui.add(egui::Slider::new(&mut self.camera.y, -10.0..=10.0).text(""));
+                ui.add(egui::Slider::new(&mut self.camera.position.y, -10.0..=10.0).text(""));
             });
 
             // Z + W
             ui.horizontal(|ui| {
                 ui.label("Z:");
-                ui.add(egui::Slider::new(&mut self.camera.z, -10.0..=10.0).text(""));
+                ui.add(egui::Slider::new(&mut self.camera.position.z, -10.0..=10.0).text(""));
                 ui.label("W:");
-                ui.add(egui::Slider::new(&mut self.camera.w, -3.0..=3.0).text(""));
+                ui.add(egui::Slider::new(&mut self.camera.position.w, -3.0..=3.0).text(""));
             });
 
             // Yaw(L) + Pitch(L)
