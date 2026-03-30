@@ -145,20 +145,20 @@ impl Camera {
 
     /// Set yaw only for q_left, preserving current pitch
     pub fn set_yaw_l(&mut self, yaw: f32) {
-        let pitch = self.pitch_l;
-        let yaw_rot = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), yaw);
-        let pitch_rot = UnitQuaternion::from_axis_angle(&Vector3::x_axis(), pitch);
-        self.rotation_4d = Rotation4D::new(yaw_rot * pitch_rot, *self.rotation_4d.q_right());
+        self.set_yaw_pitch_l_internal(yaw, self.pitch_l);
         self.yaw_l = yaw;
     }
 
     /// Set pitch only for q_left, preserving current yaw
     pub fn set_pitch_l(&mut self, pitch: f32) {
-        let yaw = self.yaw_l;
+        self.set_yaw_pitch_l_internal(self.yaw_l, pitch);
+        self.pitch_l = pitch;
+    }
+
+    fn set_yaw_pitch_l_internal(&mut self, yaw: f32, pitch: f32) {
         let yaw_rot = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), yaw);
         let pitch_rot = UnitQuaternion::from_axis_angle(&Vector3::x_axis(), pitch);
         self.rotation_4d = Rotation4D::new(yaw_rot * pitch_rot, *self.rotation_4d.q_right());
-        self.pitch_l = pitch;
     }
 
     /// Get yaw angle for q_right (4D rotation in XW plane)
@@ -211,37 +211,7 @@ impl Camera {
         };
         format_4d_vector(v)
     }
-}
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SliceDirection {
-    Forward,
-    Backward,
-    Left,
-    Right,
-    Up,
-    Down,
-    WPositive,
-    WNegative,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CameraAction {
-    MoveForward,
-    MoveBackward,
-    MoveLeft,
-    MoveRight,
-    MoveUp,
-    MoveDown,
-    IncreaseW,
-    DecreaseW,
-    MoveSliceForward,
-    MoveSliceBackward,
-    MoveKata,
-    MoveAna,
-}
-
-impl Camera {
     pub fn project_3d_to_4d(&self, v3: Vector3<f32>) -> Vector4<f32> {
         let basis_4d = self.rotation_4d.basis_vectors();
         Vector4::new(
@@ -278,12 +248,6 @@ impl Camera {
             }
             CameraAction::IncreaseW => self.position.w += speed,
             CameraAction::DecreaseW => self.position.w -= speed,
-            CameraAction::MoveSliceForward => {
-                self.position += self.project_3d_to_4d(forward) * speed;
-            }
-            CameraAction::MoveSliceBackward => {
-                self.position -= self.project_3d_to_4d(forward) * speed;
-            }
             CameraAction::MoveKata => {
                 let w_dir = self.rotation_4d.basis_w();
                 self.position += Vector4::new(w_dir[0], w_dir[1], w_dir[2], w_dir[3]) * speed;
@@ -294,6 +258,43 @@ impl Camera {
             }
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SliceDirection {
+    Forward,
+    Backward,
+    Left,
+    Right,
+    Up,
+    Down,
+    WPositive,
+    WNegative,
+}
+
+/// Camera movement actions for 4D navigation
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CameraAction {
+    /// Move forward in the direction the camera is facing
+    MoveForward,
+    /// Move backward (opposite to camera facing direction)
+    MoveBackward,
+    /// Move left (relative to camera)
+    MoveLeft,
+    /// Move right (relative to camera)
+    MoveRight,
+    /// Move up (relative to camera)
+    MoveUp,
+    /// Move down (relative to camera)
+    MoveDown,
+    /// Increase W coordinate (move toward ana)
+    IncreaseW,
+    /// Decrease W coordinate (move toward kata)
+    DecreaseW,
+    /// Move along positive W axis (kata direction)
+    MoveKata,
+    /// Move along negative W axis (ana direction)
+    MoveAna,
 }
 
 fn format_4d_vector(v: [f32; 4]) -> String {
@@ -328,11 +329,8 @@ fn format_4d_vector(v: [f32; 4]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::assert_approx_eq;
     use std::f32::consts::PI;
-
-    fn assert_approx_eq(a: f32, b: f32, epsilon: f32) {
-        assert!((a - b).abs() < epsilon, "Expected {:.6}, got {:.6}", b, a);
-    }
 
     #[test]
     fn test_camera_new() {

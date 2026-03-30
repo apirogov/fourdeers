@@ -32,10 +32,6 @@ impl Rotation4D {
         Self { q_left, q_right }
     }
 
-    pub fn from_left_right(q_left: UnitQuaternion<f32>, q_right: UnitQuaternion<f32>) -> Self {
-        Self { q_left, q_right }
-    }
-
     pub fn q_left(&self) -> &UnitQuaternion<f32> {
         &self.q_left
     }
@@ -68,6 +64,7 @@ impl Rotation4D {
         self.q_right = quaternion_from_yaw_pitch_4d(yaw, pitch);
     }
 
+    /// Returns the inverse rotation.
     pub fn inverse(&self) -> Self {
         Self {
             q_left: self.q_left.inverse(),
@@ -75,6 +72,8 @@ impl Rotation4D {
         }
     }
 
+    /// Returns inverse of q_right only, with identity for q_left.
+    /// Used for camera transformations.
     pub fn inverse_q_right_only(&self) -> Self {
         Self {
             q_left: UnitQuaternion::identity(),
@@ -82,6 +81,7 @@ impl Rotation4D {
         }
     }
 
+    /// Composes this rotation with another: other.then(self).
     pub fn then(&self, other: &Self) -> Self {
         Self {
             q_left: other.q_left * self.q_left,
@@ -177,43 +177,11 @@ impl Rotation4D {
         }
     }
 
-    pub fn tilt_slice_around_local_axis(
-        _forward: [f32; 4],
-        _right: [f32; 4],
-        _up: [f32; 4],
-        delta_x: f32,
-        delta_y: f32,
-    ) -> Self {
-        let tilt_zw = Self::from_plane_angle(RotationPlane::ZW, delta_x * 0.005);
-        let tilt_yw = Self::from_plane_angle(RotationPlane::YW, delta_y * 0.005);
-        tilt_zw.then(&tilt_yw)
-    }
-
-    pub fn to_3d_rotation(&self) -> UnitQuaternion<f32> {
-        let q_avg = self.q_left * self.q_right;
-        UnitQuaternion::from_quaternion(q_avg.into_inner())
-    }
-
     pub fn from_3d_rotation(q: &UnitQuaternion<f32>) -> Self {
         Self {
             q_left: *q,
             q_right: UnitQuaternion::identity(),
         }
-    }
-
-    pub fn as_3d_rotation_compatible(&self) -> UnitQuaternion<f32> {
-        let basis = self.basis_vectors();
-        let x = Vector3::new(basis[0][0], basis[0][1], basis[0][2]);
-        let y = Vector3::new(basis[1][0], basis[1][1], basis[1][2]);
-        let z = Vector3::new(basis[2][0], basis[2][1], basis[2][2]);
-
-        let mut mat = nalgebra::Matrix3::identity();
-        mat.set_column(0, &x);
-        mat.set_column(1, &y);
-        mat.set_column(2, &z);
-
-        let rotation = nalgebra::Rotation3::from_matrix(&mat);
-        UnitQuaternion::from_rotation_matrix(&rotation)
     }
 
     pub fn get_w_component_of_basis(&self) -> [f32; 4] {
@@ -223,10 +191,11 @@ impl Rotation4D {
 
     pub fn is_pure_3d(&self) -> bool {
         let w_components = self.get_w_component_of_basis();
-        w_components[0].abs() < 1e-6
-            && w_components[1].abs() < 1e-6
-            && w_components[2].abs() < 1e-6
-            && (w_components[3] - 1.0).abs() < 1e-6
+        let eps = 1e-6;
+        w_components[0].abs() < eps
+            && w_components[1].abs() < eps
+            && w_components[2].abs() < eps
+            && (w_components[3] - 1.0).abs() < eps
     }
 }
 
@@ -251,17 +220,8 @@ fn quat_to_4d(q: &nalgebra::Quaternion<f32>) -> [f32; 4] {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::{assert_approx_eq, assert_vec_approx_eq};
     use std::f32::consts::PI;
-
-    fn assert_approx_eq(a: f32, b: f32, epsilon: f32) {
-        assert!((a - b).abs() < epsilon, "Expected {:.6}, got {:.6}", b, a);
-    }
-
-    fn assert_vec_approx_eq(a: [f32; 4], b: [f32; 4], epsilon: f32) {
-        for i in 0..4 {
-            assert_approx_eq(a[i], b[i], epsilon);
-        }
-    }
 
     #[test]
     fn test_identity() {
@@ -518,11 +478,8 @@ pub fn quaternion_from_yaw_pitch_4d(yaw: f32, pitch: f32) -> UnitQuaternion<f32>
 #[cfg(test)]
 mod yaw_pitch_tests {
     use super::*;
+    use crate::test_utils::assert_approx_eq;
     use std::f32::consts::PI;
-
-    fn assert_approx_eq(a: f32, b: f32, epsilon: f32) {
-        assert!((a - b).abs() < epsilon, "Expected {:.6}, got {:.6}", b, a);
-    }
 
     #[test]
     fn test_quaternion_from_yaw_pitch_identity() {

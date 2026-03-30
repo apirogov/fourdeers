@@ -12,6 +12,9 @@ pub mod tetrahedron;
 pub mod toy;
 pub mod toys;
 
+#[cfg(test)]
+mod test_utils;
+
 #[cfg(target_arch = "wasm32")]
 mod wasm;
 

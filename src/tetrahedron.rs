@@ -511,10 +511,7 @@ pub fn format_magnitude(magnitude: f32) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn assert_approx_eq(a: f32, b: f32, epsilon: f32) {
-        assert!((a - b).abs() < epsilon, "Expected {:.6}, got {:.6}", b, a);
-    }
+    use crate::test_utils::assert_approx_eq;
 
     #[test]
     fn test_tetrahedron_vertices_count() {
