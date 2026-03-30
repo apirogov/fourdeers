@@ -4,6 +4,21 @@
 
 TODO
 
+## Math Model (Brief)
+
+- 4D rotations use paired unit quaternions `(q_left, q_right)` with action
+  `v' = q_left * v * q_right^{-1}`.
+- Camera controls intentionally split responsibilities:
+  - `q_left`: in-slice 3D look orientation
+  - `q_right`: 4D slice orientation (tilt + slice normal)
+- Movement semantics:
+  - `forward/backward/left/right/up/down` follow camera perspective in the current slice
+  - `kata/ana` move along the slice normal
+
+Detailed invariants and refactor guardrails are documented in:
+- `src/rotation4d.rs`
+- `src/camera.rs`
+
 ## Prerequisites
 
 ```bash

@@ -68,14 +68,6 @@ pub struct TetraId {
     pub zone: Zone,
 }
 
-pub fn analyze_tap_in_stereo_view(
-    visualization_rect: egui::Rect,
-    tap_pos: egui::Pos2,
-    zone_mode: ZoneMode,
-) -> Option<TapAnalysis> {
-    analyze_tap_in_stereo_view_with_modes(visualization_rect, tap_pos, zone_mode, zone_mode)
-}
-
 pub fn analyze_tap_in_stereo_view_with_modes(
     visualization_rect: egui::Rect,
     tap_pos: egui::Pos2,
@@ -201,31 +193,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_analyze_tap_in_stereo_view() {
-        let vis_rect = egui::Rect {
-            min: egui::pos2(0.0, 0.0),
-            max: egui::pos2(200.0, 100.0),
-        };
-
-        let analysis =
-            analyze_tap_in_stereo_view(vis_rect, egui::pos2(50.0, 10.0), ZoneMode::FourZones)
-                .unwrap();
-        assert!(analysis.is_left_view);
-        assert_eq!(analysis.zone, Zone::North);
-
-        let analysis =
-            analyze_tap_in_stereo_view(vis_rect, egui::pos2(150.0, 10.0), ZoneMode::FourZones)
-                .unwrap();
-        assert!(!analysis.is_left_view);
-        assert_eq!(analysis.zone, Zone::North);
-
-        assert!(
-            analyze_tap_in_stereo_view(vis_rect, egui::pos2(-10.0, 50.0), ZoneMode::FourZones)
-                .is_none()
-        );
-    }
-
-    #[test]
     fn test_analyze_tap_in_stereo_view_with_modes() {
         let vis_rect = egui::Rect {
             min: egui::pos2(0.0, 0.0),
@@ -253,6 +220,14 @@ mod tests {
         assert!(!right.is_left_view);
         assert_eq!(right.zone_mode, ZoneMode::FourZones);
         assert_eq!(right.zone, Zone::North);
+
+        let outside = analyze_tap_in_stereo_view_with_modes(
+            vis_rect,
+            egui::pos2(-10.0, 50.0),
+            ZoneMode::NineZones,
+            ZoneMode::FourZones,
+        );
+        assert!(outside.is_none());
     }
 
     #[test]

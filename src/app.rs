@@ -1,6 +1,7 @@
 //! Main application
 
 use eframe::egui;
+use nalgebra::{UnitQuaternion, Vector3, Vector4};
 
 use crate::colors::panel_fill;
 use crate::input::render_zone_debug_overlay;
@@ -9,7 +10,9 @@ use crate::input::{
     ZoneMode,
 };
 use crate::render::{
-    render_common_menu_half, split_stereo_views, FourDSettings, ProjectionMode, StereoSettings,
+    draw_background, draw_center_divider, render_common_menu_half,
+    render_stereo_tetrahedron_overlay, render_tap_zone_label, split_stereo_views, FourDSettings,
+    ProjectionMode, StereoProjector, StereoSettings,
 };
 use crate::toy::ToyManager;
 
@@ -30,6 +33,9 @@ pub struct FourDeersApp {
     is_drag_mode: bool,
     drag_view: Option<DragView>,
     last_drag_pos: Option<egui::Pos2>,
+    visualization_rect: Option<egui::Rect>,
+    compass_open: bool,
+    compass_rotation: UnitQuaternion<f32>,
 }
 
 impl FourDeersApp {
@@ -44,6 +50,9 @@ impl FourDeersApp {
             is_drag_mode: false,
             drag_view: None,
             last_drag_pos: None,
+            visualization_rect: None,
+            compass_open: false,
+            compass_rotation: UnitQuaternion::identity(),
         }
     }
 }
@@ -57,13 +66,37 @@ impl eframe::App for FourDeersApp {
         });
 
         self.process_pointer_events(ctx);
-        self.toy_manager.active_toy_mut().handle_keyboard(ctx);
+        if !self.compass_open {
+            self.toy_manager.active_toy_mut().handle_keyboard(ctx);
+        }
         self.render_ui(ctx);
         ctx.request_repaint();
     }
 }
 
 impl FourDeersApp {
+    fn render_compass_scene(&mut self, ui: &mut egui::Ui, rect: egui::Rect) {
+        draw_background(ui, rect);
+        draw_center_divider(ui, rect);
+
+        let scale = rect.height().min(rect.width()) * 0.25;
+        let projector = StereoProjector::new(
+            rect.center(),
+            scale,
+            self.settings.stereo.eye_separation,
+            self.settings.stereo.projection_distance,
+            self.settings.stereo.projection_mode,
+        );
+
+        let vector_4d = self
+            .toy_manager
+            .active_toy()
+            .compass_vector()
+            .unwrap_or_else(Vector4::zeros);
+
+        render_stereo_tetrahedron_overlay(ui, rect, vector_4d, &self.compass_rotation, &projector);
+    }
+
     fn process_pointer_events(&mut self, ctx: &egui::Context) {
         let mut tap_event = None;
 
@@ -117,9 +150,7 @@ impl FourDeersApp {
 
                         if drag_distance > drag_threshold {
                             self.is_drag_mode = true;
-                            if let Some(vis_rect) =
-                                self.toy_manager.active_toy().get_visualization_rect()
-                            {
+                            if let Some(vis_rect) = self.visualization_rect {
                                 let center_x = vis_rect.center().x;
                                 let drag_view = if mouse_down_pos.x < center_x {
                                     DragView::Left
@@ -127,9 +158,11 @@ impl FourDeersApp {
                                     DragView::Right
                                 };
                                 self.drag_view = Some(drag_view);
-                                self.toy_manager
-                                    .active_toy_mut()
-                                    .handle_drag_start(drag_view);
+                                if !self.compass_open {
+                                    self.toy_manager
+                                        .active_toy_mut()
+                                        .handle_drag_start(drag_view);
+                                }
                             }
                         }
                     }
@@ -148,16 +181,29 @@ impl FourDeersApp {
 
     fn process_drag(&mut self, pos: egui::Pos2) {
         if let Some(last_pos) = self.last_drag_pos {
-            let is_left_view = matches!(self.drag_view, Some(DragView::Left));
-            self.toy_manager
-                .active_toy_mut()
-                .handle_drag(is_left_view, last_pos, pos);
+            if self.compass_open {
+                let delta = pos - last_pos;
+                let yaw_rot = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), delta.x * 0.005);
+                let pitch_rot =
+                    UnitQuaternion::from_axis_angle(&Vector3::x_axis(), delta.y * 0.005);
+                let incremental = pitch_rot * yaw_rot;
+                self.compass_rotation = incremental * self.compass_rotation;
+            } else {
+                let is_left_view = matches!(self.drag_view, Some(DragView::Left));
+                self.toy_manager
+                    .active_toy_mut()
+                    .handle_drag(is_left_view, last_pos, pos);
+            }
         }
         self.last_drag_pos = Some(pos);
     }
 
     fn process_hold(&mut self, pos: egui::Pos2) {
-        let vis_rect = self.toy_manager.active_toy().get_visualization_rect();
+        if self.compass_open {
+            return;
+        }
+
+        let vis_rect = self.visualization_rect;
 
         if let Some(visualization_rect) = vis_rect {
             if visualization_rect.contains(pos) {
@@ -180,18 +226,29 @@ impl FourDeersApp {
         self.is_drag_mode = false;
         self.drag_view = None;
         self.last_drag_pos = None;
-        self.toy_manager.active_toy_mut().clear_interaction_state();
+        if !self.compass_open {
+            self.toy_manager.active_toy_mut().clear_interaction_state();
+        }
     }
 
     fn render_ui(&mut self, ctx: &egui::Context) {
-        let mut visualization_rect = None;
-
         eframe::egui::CentralPanel::default().show(ctx, |ui| {
             let rect = ui.available_rect_before_wrap();
-            visualization_rect = Some(rect);
+            self.visualization_rect = Some(rect);
             self.toy_manager
                 .active_toy_mut()
-                .render_scene(ui, rect, self.settings.show_debug);
+                .set_stereo_settings(&self.settings.stereo);
+            self.toy_manager
+                .active_toy_mut()
+                .set_four_d_settings(&self.settings.four_d);
+
+            if self.compass_open {
+                self.render_compass_scene(ui, rect);
+            } else {
+                self.toy_manager
+                    .active_toy_mut()
+                    .render_scene(ui, rect, self.settings.show_debug);
+            }
 
             let (left_rect, right_rect) = split_stereo_views(rect);
             let left_painter = ui.painter().with_clip_rect(left_rect);
@@ -207,24 +264,34 @@ impl FourDeersApp {
             };
 
             render_common_menu_half(&left_painter, left_menu_rect);
-            self.toy_manager
-                .active_toy()
-                .render_toy_menu(&right_painter, right_menu_rect);
+            let compass_label = if self.compass_open {
+                "Close"
+            } else {
+                "Compass"
+            };
+            render_tap_zone_label(&left_painter, left_rect, Zone::West, compass_label, None);
+
+            if !self.compass_open {
+                self.toy_manager
+                    .active_toy()
+                    .render_toy_menu(&right_painter, right_menu_rect);
+            }
 
             if self.settings.show_debug {
                 let options = ZoneDebugOptions::default();
-                let left_mode = self.toy_manager.active_toy().zone_mode_for_view(true);
-                let right_mode = self.toy_manager.active_toy().zone_mode_for_view(false);
+                let left_mode = if self.compass_open {
+                    ZoneMode::NineZones
+                } else {
+                    self.toy_manager.active_toy().zone_mode_for_view(true)
+                };
+                let right_mode = if self.compass_open {
+                    ZoneMode::NineZones
+                } else {
+                    self.toy_manager.active_toy().zone_mode_for_view(false)
+                };
                 render_zone_debug_overlay(&left_painter, left_rect, left_mode, &options);
                 render_zone_debug_overlay(&right_painter, right_rect, right_mode, &options);
             }
-
-            self.toy_manager
-                .active_toy_mut()
-                .set_stereo_settings(&self.settings.stereo);
-            self.toy_manager
-                .active_toy_mut()
-                .set_four_d_settings(&self.settings.four_d);
 
             if self.menu_open {
                 self.render_menu_overlay(ui, rect);
@@ -417,7 +484,7 @@ impl FourDeersApp {
     }
 
     fn handle_tap_zone(&mut self, pos: egui::Pos2) {
-        let vis_rect = self.toy_manager.active_toy().get_visualization_rect();
+        let vis_rect = self.visualization_rect;
 
         let Some(visualization_rect) = vis_rect else {
             return;
@@ -432,6 +499,17 @@ impl FourDeersApp {
             && get_zone_from_rect(left_rect, pos, ZoneMode::NineZones) == Some(Zone::NorthWest)
         {
             self.menu_open = !self.menu_open;
+            return;
+        }
+
+        if left_rect.contains(pos)
+            && get_zone_from_rect(left_rect, pos, ZoneMode::NineZones) == Some(Zone::West)
+        {
+            self.compass_open = !self.compass_open;
+            return;
+        }
+
+        if self.compass_open {
             return;
         }
 

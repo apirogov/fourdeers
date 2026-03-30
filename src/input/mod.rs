@@ -10,6 +10,6 @@ pub use zone_debug::{
     ZoneDebugOptions,
 };
 pub use zones::{
-    analyze_tap_in_stereo_view, analyze_tap_in_stereo_view_with_modes, get_zone_from_rect,
-    DragView, TapAnalysis, TetraId, Zone, ZoneMode,
+    analyze_tap_in_stereo_view_with_modes, get_zone_from_rect, DragView, TapAnalysis, TetraId,
+    Zone, ZoneMode,
 };

@@ -248,8 +248,6 @@ impl TetrahedronDebugToy {
             }
             None => {}
         }
-
-        self.drag_state.is_dragging = true;
     }
 
     fn handle_drag_stereo_tetra_mode(&mut self, from: egui::Pos2, to: egui::Pos2) {
@@ -258,7 +256,6 @@ impl TetrahedronDebugToy {
         let pitch_rot = UnitQuaternion::from_axis_angle(&Vector3::x_axis(), delta.y * 0.005);
         let incremental = pitch_rot * yaw_rot;
         self.tetrahedron_rotation = incremental * self.tetrahedron_rotation;
-        self.drag_state.is_dragging = true;
     }
 }
 
@@ -473,6 +470,7 @@ impl Toy for TetrahedronDebugToy {
                     rect.center(),
                     scale,
                     self.stereo.eye_separation,
+                    self.stereo.projection_distance,
                     self.stereo.projection_mode,
                 );
                 render_stereo_tetrahedron_overlay(
@@ -567,6 +565,10 @@ impl Toy for TetrahedronDebugToy {
 
     fn get_visualization_rect(&self) -> Option<egui::Rect> {
         self.visualization_rect
+    }
+
+    fn compass_vector(&self) -> Option<nalgebra::Vector4<f32>> {
+        Some(-self.camera.position)
     }
 
     fn zone_mode_for_view(&self, is_left_view: bool) -> ZoneMode {

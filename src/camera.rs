@@ -1,4 +1,34 @@
-//! Camera and view-related functionality
+//! Camera model and movement semantics for split 3D/4D control.
+//!
+//! # Architecture contract
+//!
+//! The camera stores one `Rotation4D` but uses it in two semantic parts:
+//!
+//! - `q_left`: orientation *inside* the current 3D slice (look direction, left/right/up frame)
+//! - `q_right`: orientation of the slice itself in 4D (slice tilt and slice normal)
+//!
+//! This split is intentional and must stay consistent with render code.
+//!
+//! # Why controls are implemented this way
+//!
+//! - 3D movement (`forward/backward/left/right/up/down`) should follow what the camera sees in the
+//!   current slice. So we compute camera-frame directions from `q_left` and then project those into
+//!   world 4D using the basis induced by `q_right` only.
+//! - 4D movement (`kata/ana`) should move along the slice normal, so it uses `basis_w` from a
+//!   rotation built as `(identity, q_right)`.
+//!
+//! If `kata/ana` are derived from the full `(q_left, q_right)` basis, horizontal 3D look changes
+//! can incorrectly introduce vertical drift.
+//!
+//! # Refactor guardrails
+//!
+//! - Keep `rotate` affecting `q_left` only.
+//! - Keep `rotate_4d` affecting `q_right` only.
+//! - Keep `apply_action` frame split exactly as described above.
+//! - If changed, run and verify camera tests around:
+//!   - `test_apply_action_moves_follow_3d_camera_frame_with_tilted_slice`
+//!   - `test_kata_ana_independent_of_q_left_yaw_pitch`
+//!   - `test_kata_ana_do_not_change_xyz_in_pure_3d_slice`
 
 use nalgebra::{UnitQuaternion, Vector3, Vector4};
 
@@ -106,7 +136,9 @@ impl Camera {
         self.pitch_l += delta_y * ROTATION_SENSITIVITY;
     }
 
-    /// Rotate 4D camera (4D mode - affects q_right)
+    /// Rotate 4D camera slice orientation (affects `q_right` only).
+    ///
+    /// This tilts the 3D slice in 4D. It should not change in-slice look frame (`q_left`).
     pub fn rotate_4d(&mut self, delta_x: f32, delta_y: f32) {
         // XW plane for horizontal (like XZ in 3D), YW plane for vertical (like YZ in 3D)
         // Match 3D pattern: yaw * old * pitch
@@ -222,39 +254,63 @@ impl Camera {
         )
     }
 
-    pub fn apply_action(&mut self, action: CameraAction, speed: f32) {
-        let forward = self.forward_vector();
-        let right = self.right_vector();
-        let up = self.up_vector();
+    /// Projects a camera-local 3D direction into world 4D using only `q_right` slice orientation.
+    ///
+    /// This is the key bridge between in-slice movement (`q_left`) and tilted-slice world motion
+    /// (`q_right`).
+    fn project_camera_3d_to_world_4d(&self, v3: Vector3<f32>) -> Vector4<f32> {
+        let slice_rotation =
+            Rotation4D::new(UnitQuaternion::identity(), *self.rotation_4d.q_right());
+        let basis = slice_rotation.basis_vectors();
+        Vector4::new(
+            v3.x * basis[0][0] + v3.y * basis[1][0] + v3.z * basis[2][0],
+            v3.x * basis[0][1] + v3.y * basis[1][1] + v3.z * basis[2][1],
+            v3.x * basis[0][2] + v3.y * basis[1][2] + v3.z * basis[2][2],
+            v3.x * basis[0][3] + v3.y * basis[1][3] + v3.z * basis[2][3],
+        )
+    }
 
+    /// Applies one camera movement action in the mathematically split frame model.
+    ///
+    /// - 3D actions: derive direction from `q_left`, project through `q_right` slice basis.
+    /// - Kata/Ana: move along slice normal from `(identity, q_right).basis_w()`.
+    ///
+    /// Do not collapse this to full `rotation_4d.basis_*` without updating camera semantics.
+    pub fn apply_action(&mut self, action: CameraAction, speed: f32) {
+        let right3 = self.right_vector();
+        let up3 = self.up_vector();
+        let forward3 = self.forward_vector();
+        let right = self.project_camera_3d_to_world_4d(right3);
+        let up = self.project_camera_3d_to_world_4d(up3);
+        let forward = self.project_camera_3d_to_world_4d(forward3);
+        let slice_rotation =
+            Rotation4D::new(UnitQuaternion::identity(), *self.rotation_4d.q_right());
+        let w_basis = slice_rotation.basis_w();
+        let w_axis = Vector4::new(w_basis[0], w_basis[1], w_basis[2], w_basis[3]);
         match action {
             CameraAction::MoveForward => {
-                self.position += self.project_3d_to_4d(forward) * speed;
+                self.position += forward * speed;
             }
             CameraAction::MoveBackward => {
-                self.position -= self.project_3d_to_4d(forward) * speed;
+                self.position -= forward * speed;
             }
             CameraAction::MoveLeft => {
-                self.position += self.project_3d_to_4d(-right) * speed;
+                self.position -= right * speed;
             }
             CameraAction::MoveRight => {
-                self.position += self.project_3d_to_4d(right) * speed;
+                self.position += right * speed;
             }
             CameraAction::MoveUp => {
-                self.position += self.project_3d_to_4d(up) * speed;
+                self.position += up * speed;
             }
             CameraAction::MoveDown => {
-                self.position += self.project_3d_to_4d(-up) * speed;
+                self.position -= up * speed;
             }
-            CameraAction::IncreaseW => self.position.w += speed,
-            CameraAction::DecreaseW => self.position.w -= speed,
             CameraAction::MoveKata => {
-                let w_dir = self.rotation_4d.basis_w();
-                self.position += Vector4::new(w_dir[0], w_dir[1], w_dir[2], w_dir[3]) * speed;
+                self.position += w_axis * speed;
             }
             CameraAction::MoveAna => {
-                let w_dir = self.rotation_4d.basis_w();
-                self.position -= Vector4::new(w_dir[0], w_dir[1], w_dir[2], w_dir[3]) * speed;
+                self.position -= w_axis * speed;
             }
         }
     }
@@ -287,13 +343,9 @@ pub enum CameraAction {
     MoveUp,
     /// Move down (relative to camera)
     MoveDown,
-    /// Increase W coordinate (move toward ana)
-    IncreaseW,
-    /// Decrease W coordinate (move toward kata)
-    DecreaseW,
-    /// Move along positive W axis (kata direction)
+    /// Move along slice-normal positive W direction (kata)
     MoveKata,
-    /// Move along negative W axis (ana direction)
+    /// Move along slice-normal negative W direction (ana)
     MoveAna,
 }
 
@@ -331,6 +383,10 @@ mod tests {
     use super::*;
     use crate::test_utils::assert_approx_eq;
     use std::f32::consts::PI;
+
+    fn vec4_from_arr(v: [f32; 4]) -> Vector4<f32> {
+        Vector4::new(v[0], v[1], v[2], v[3])
+    }
 
     #[test]
     fn test_camera_new() {
@@ -599,11 +655,192 @@ mod tests {
     }
 
     #[test]
-    fn test_apply_action_increase_w() {
-        let mut camera = Camera::new();
-        camera.apply_action(CameraAction::IncreaseW, 2.0);
+    fn test_apply_action_move_forward_uses_camera_basis() {
+        let yaw = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), PI / 2.0);
+        let mut camera = Camera {
+            position: Vector4::zeros(),
+            rotation_4d: Rotation4D::new(yaw, UnitQuaternion::identity()),
+            ..Camera::new()
+        };
 
-        assert_approx_eq(camera.position.w, 2.0, 1e-6);
+        camera.apply_action(CameraAction::MoveForward, 1.0);
+
+        assert_approx_eq(camera.position.x, 1.0, 1e-6);
+        assert_approx_eq(camera.position.y, 0.0, 1e-6);
+        assert_approx_eq(camera.position.z, 0.0, 1e-6);
+        assert_approx_eq(camera.position.w, 0.0, 1e-6);
+    }
+
+    #[test]
+    fn test_apply_action_moves_follow_3d_camera_frame_with_tilted_slice() {
+        let base_camera = Camera {
+            position: Vector4::new(0.3, -0.4, 1.1, -0.7),
+            rotation_4d: Rotation4D::from_6_plane_angles(0.37, -0.21, 0.44, 0.29, -0.18, 0.53),
+            ..Camera::new()
+        };
+
+        let right = base_camera.project_camera_3d_to_world_4d(base_camera.right_vector());
+        let up = base_camera.project_camera_3d_to_world_4d(base_camera.up_vector());
+        let forward = base_camera.project_camera_3d_to_world_4d(base_camera.forward_vector());
+        let step = 0.75;
+        let cases = [
+            (CameraAction::MoveRight, right),
+            (CameraAction::MoveLeft, -right),
+            (CameraAction::MoveUp, up),
+            (CameraAction::MoveDown, -up),
+            (CameraAction::MoveForward, forward),
+            (CameraAction::MoveBackward, -forward),
+        ];
+
+        for (action, expected_dir) in cases {
+            let mut camera = base_camera.clone();
+            let before = camera.position;
+            camera.apply_action(action, step);
+            let delta = camera.position - before;
+
+            assert_approx_eq(delta.x, expected_dir.x * step, 1e-6);
+            assert_approx_eq(delta.y, expected_dir.y * step, 1e-6);
+            assert_approx_eq(delta.z, expected_dir.z * step, 1e-6);
+            assert_approx_eq(delta.w, expected_dir.w * step, 1e-6);
+        }
+    }
+
+    #[test]
+    fn test_3d_moves_do_not_change_world_w_when_slice_not_tilted() {
+        let yaw = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), 0.7);
+        let pitch = UnitQuaternion::from_axis_angle(&Vector3::x_axis(), -0.3);
+        let base_camera = Camera {
+            position: Vector4::new(-0.2, 0.9, -1.3, 0.4),
+            rotation_4d: Rotation4D::new(yaw * pitch, UnitQuaternion::identity()),
+            ..Camera::new()
+        };
+
+        let actions = [
+            CameraAction::MoveRight,
+            CameraAction::MoveLeft,
+            CameraAction::MoveUp,
+            CameraAction::MoveDown,
+            CameraAction::MoveForward,
+            CameraAction::MoveBackward,
+        ];
+
+        for action in actions {
+            let mut camera = base_camera.clone();
+            let before = camera.position;
+            camera.apply_action(action, 1.0);
+            let delta = camera.position - before;
+            assert_approx_eq(delta.w, 0.0, 1e-6);
+        }
+    }
+
+    #[test]
+    fn test_3d_moves_can_change_world_w_when_slice_tilted() {
+        let mut camera = Camera {
+            position: Vector4::zeros(),
+            rotation_4d: Rotation4D::from_6_plane_angles(0.4, -0.2, 0.1, 0.6, 0.0, 0.0),
+            ..Camera::new()
+        };
+
+        let before = camera.position;
+        camera.apply_action(CameraAction::MoveForward, 1.0);
+        let delta = camera.position - before;
+        assert!(delta.w.abs() > 1e-6);
+    }
+
+    #[test]
+    fn test_kata_ana_move_along_slice_normal() {
+        let base_camera = Camera {
+            position: Vector4::new(0.1, -0.3, 0.7, -0.9),
+            rotation_4d: Rotation4D::from_6_plane_angles(-0.19, 0.33, 0.47, -0.55, 0.26, -0.31),
+            ..Camera::new()
+        };
+
+        let slice_rotation = Rotation4D::new(
+            UnitQuaternion::identity(),
+            *base_camera.rotation_4d.q_right(),
+        );
+        let w_axis = vec4_from_arr(slice_rotation.basis_w());
+
+        let mut kata = base_camera.clone();
+        let kata_before = kata.position;
+        kata.apply_action(CameraAction::MoveKata, 0.8);
+        let kata_delta = kata.position - kata_before;
+        assert_approx_eq(kata_delta.x, w_axis.x * 0.8, 1e-6);
+        assert_approx_eq(kata_delta.y, w_axis.y * 0.8, 1e-6);
+        assert_approx_eq(kata_delta.z, w_axis.z * 0.8, 1e-6);
+        assert_approx_eq(kata_delta.w, w_axis.w * 0.8, 1e-6);
+
+        let mut ana = base_camera.clone();
+        let ana_before = ana.position;
+        ana.apply_action(CameraAction::MoveAna, 0.8);
+        let ana_delta = ana.position - ana_before;
+        assert_approx_eq(ana_delta.x, -w_axis.x * 0.8, 1e-6);
+        assert_approx_eq(ana_delta.y, -w_axis.y * 0.8, 1e-6);
+        assert_approx_eq(ana_delta.z, -w_axis.z * 0.8, 1e-6);
+        assert_approx_eq(ana_delta.w, -w_axis.w * 0.8, 1e-6);
+    }
+
+    #[test]
+    fn test_kata_ana_independent_of_q_left_yaw_pitch() {
+        let q_right_tilt =
+            *Rotation4D::from_6_plane_angles(0.0, 0.0, 0.0, 0.41, -0.27, 0.18).q_right();
+
+        let mut camera_a = Camera {
+            position: Vector4::zeros(),
+            rotation_4d: Rotation4D::new(UnitQuaternion::identity(), q_right_tilt),
+            ..Camera::new()
+        };
+        let mut camera_b = Camera {
+            position: Vector4::zeros(),
+            rotation_4d: Rotation4D::new(
+                UnitQuaternion::from_axis_angle(&Vector3::y_axis(), 0.73)
+                    * UnitQuaternion::from_axis_angle(&Vector3::x_axis(), -0.38),
+                q_right_tilt,
+            ),
+            ..Camera::new()
+        };
+
+        let speed = 0.6;
+        let before_a = camera_a.position;
+        camera_a.apply_action(CameraAction::MoveKata, speed);
+        let delta_a = camera_a.position - before_a;
+
+        let before_b = camera_b.position;
+        camera_b.apply_action(CameraAction::MoveKata, speed);
+        let delta_b = camera_b.position - before_b;
+
+        assert_approx_eq(delta_a.x, delta_b.x, 1e-6);
+        assert_approx_eq(delta_a.y, delta_b.y, 1e-6);
+        assert_approx_eq(delta_a.z, delta_b.z, 1e-6);
+        assert_approx_eq(delta_a.w, delta_b.w, 1e-6);
+    }
+
+    #[test]
+    fn test_kata_ana_do_not_change_xyz_in_pure_3d_slice() {
+        let yaw = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), PI / 3.0);
+        let base_camera = Camera {
+            position: Vector4::new(0.2, -0.1, 0.4, 1.7),
+            rotation_4d: Rotation4D::new(yaw, UnitQuaternion::identity()),
+            ..Camera::new()
+        };
+
+        let mut kata = base_camera.clone();
+        let before_kata = kata.position;
+        kata.apply_action(CameraAction::MoveKata, 0.9);
+        let kata_delta = kata.position - before_kata;
+        assert_approx_eq(kata_delta.x, 0.0, 1e-6);
+        assert_approx_eq(kata_delta.y, 0.0, 1e-6);
+        assert_approx_eq(kata_delta.z, 0.0, 1e-6);
+        assert_approx_eq(kata_delta.w, 0.9, 1e-6);
+
+        let mut ana = base_camera.clone();
+        let before_ana = ana.position;
+        ana.apply_action(CameraAction::MoveAna, 0.9);
+        let ana_delta = ana.position - before_ana;
+        assert_approx_eq(ana_delta.x, 0.0, 1e-6);
+        assert_approx_eq(ana_delta.y, 0.0, 1e-6);
+        assert_approx_eq(ana_delta.z, 0.0, 1e-6);
+        assert_approx_eq(ana_delta.w, -0.9, 1e-6);
     }
 
     #[test]

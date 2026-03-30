@@ -9,8 +9,9 @@ use crate::colors::label_inactive;
 use crate::input::{DragView, TapAnalysis, TetraId, Zone, ZoneMode};
 use crate::polytopes::{create_polytope, PolytopeType};
 use crate::render::{
-    draw_background, draw_center_divider, render_tap_zone_label, split_stereo_views, FourDSettings,
-    StereoSettings, TesseractRenderContext,
+    draw_background, draw_center_divider, render_tap_zone_label, split_stereo_views,
+    EyeRenderOptions, FourDSettings, ObjectRotationAngles, StereoSettings, TesseractRenderConfig,
+    TesseractRenderContext,
 };
 use crate::toy::{DragState, Toy};
 
@@ -306,38 +307,41 @@ impl Toy for TesseractToy {
 
         let (vertices, indices) = create_polytope(self.polytope_type);
 
-        let ctx = TesseractRenderContext::with_stereo_settings(
-            vertices,
-            indices,
-            &self.camera,
-            self.rot_xy,
-            self.rot_xz,
-            self.rot_yz,
-            self.rot_xw,
-            self.rot_yw,
-            self.rot_zw,
-            self.four_d.w_thickness,
-            self.four_d.w_color_intensity,
-            &self.stereo,
-        );
+        let config = TesseractRenderConfig {
+            rotation_angles: ObjectRotationAngles {
+                xy: self.rot_xy,
+                xz: self.rot_xz,
+                yz: self.rot_yz,
+                xw: self.rot_xw,
+                yw: self.rot_yw,
+                zw: self.rot_zw,
+            },
+            four_d: self.four_d,
+            stereo: self.stereo,
+        };
+        let ctx = TesseractRenderContext::from_config(vertices, indices, &self.camera, config);
 
         ctx.render_eye_view(
             ui,
             left_rect,
-            -1.0,
-            true,
-            show_debug,
-            self.show_controls,
-            &self.tetrahedron_rotations,
+            EyeRenderOptions {
+                eye_sign: -1.0,
+                is_left_view: true,
+                show_debug,
+                show_controls: self.show_controls,
+                tetrahedron_rotations: &self.tetrahedron_rotations,
+            },
         );
         ctx.render_eye_view(
             ui,
             right_rect,
-            1.0,
-            false,
-            show_debug,
-            self.show_controls,
-            &self.tetrahedron_rotations,
+            EyeRenderOptions {
+                eye_sign: 1.0,
+                is_left_view: false,
+                show_debug,
+                show_controls: self.show_controls,
+                tetrahedron_rotations: &self.tetrahedron_rotations,
+            },
         );
     }
 
@@ -390,7 +394,6 @@ impl Toy for TesseractToy {
             }
             None => {}
         }
-        self.drag_state.is_dragging = true;
     }
 
     fn handle_hold(&mut self, analysis: &TapAnalysis) {
@@ -436,6 +439,10 @@ impl Toy for TesseractToy {
 
     fn get_visualization_rect(&self) -> Option<egui::Rect> {
         self.visualization_rect
+    }
+
+    fn compass_vector(&self) -> Option<nalgebra::Vector4<f32>> {
+        Some(-self.camera.position)
     }
 
     fn zone_mode_for_view(&self, _is_left_view: bool) -> ZoneMode {

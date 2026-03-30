@@ -1,10 +1,40 @@
-//! 4D rotation using dual quaternion representation
+//! 4D rotation primitives based on the `S^3 x S^3 -> SO(4)` representation.
 //!
-//! SO(4) rotations can be represented by a pair of unit quaternions (q_L, q_R).
-//! A 4D point v (represented as a quaternion) is rotated as:
-//!   v' = q_L * v * q_R^(-1)
+//! # Core model
 //!
-//! This is the double-cover of SO(4) by S^3 × S^3.
+//! We encode a 4D vector `[x, y, z, w]` as quaternion `v = w + x i + y j + z k` and rotate it as
+//! `v' = q_left * v * q_right^{-1}` where `q_left` and `q_right` are unit quaternions.
+//!
+//! This is the standard double-cover of `SO(4)` and is the foundation for all camera and object
+//! rotation logic in this project.
+//!
+//! # Composition law (critical invariant)
+//!
+//! If `R1(v) = L1 v R1^{-1}` and `R2(v) = L2 v R2^{-1}`, then
+//! `R2(R1(v)) = (L2 L1) v (R2 R1)^{-1}`.
+//!
+//! Therefore composition must be:
+//! - `q_left = other.q_left * self.q_left`
+//! - `q_right = other.q_right * self.q_right`
+//!
+//! Reversing either order silently breaks non-commuting 4D rotations.
+//!
+//! # Plane generators used here
+//!
+//! Simple rotation by angle `a` in one coordinate plane is created by `from_plane_angle`.
+//!
+//! - `XY / XZ / YZ`: `q_left = q_right = q(a)` (embedded 3D-style conjugation)
+//! - `XW / YW / ZW`: `q_left = q(a), q_right = q(a)^{-1}` (scalar-axis mixing)
+//!
+//! Sign choices in `plane_axis` are intentionally fixed to match current input conventions and
+//! tests. They should not be changed without updating the full rotation test suite.
+//!
+//! # Refactor safety notes
+//!
+//! - `from_3d_rotation` must use `q_left = q_right = q`.
+//! - `then` must use the composition order documented above.
+//! - `basis_vectors` returns basis of the *full* `(q_left, q_right)` transform, not a camera
+//!   split model. Camera code intentionally derives some axes from `q_right` only.
 
 use nalgebra::{UnitQuaternion, Vector3, Vector4};
 
@@ -81,7 +111,12 @@ impl Rotation4D {
         }
     }
 
-    /// Composes this rotation with another: other.then(self).
+    /// Returns composition `self` followed by `other`.
+    ///
+    /// With `v' = q_left * v * q_right^{-1}`, the correct group law is:
+    /// `L = other.L * self.L`, `R = other.R * self.R`.
+    ///
+    /// This order is subtle and easy to break during refactors.
     pub fn then(&self, other: &Self) -> Self {
         Self {
             q_left: other.q_left * self.q_left,
@@ -127,6 +162,9 @@ impl Rotation4D {
         self.rotate_point([0.0, 0.0, 0.0, 1.0])
     }
 
+    /// Builds a mathematically exact simple rotation in one coordinate plane.
+    ///
+    /// The plane mapping is fixed to satisfy the current right-handed sign conventions and tests.
     pub fn from_plane_angle(plane: RotationPlane, angle: f32) -> Self {
         let axis = plane_axis(plane);
         let unit_axis = nalgebra::Unit::new_normalize(axis);
@@ -144,8 +182,10 @@ impl Rotation4D {
         Self { q_left: q, q_right }
     }
 
-    /// Creates a rotation from 6 plane angles (XY, XZ, YZ, XW, YW, ZW)
-    /// applied in this exact order.
+    /// Creates a composite rotation from six plane angles in this exact order:
+    /// `XY -> XZ -> YZ -> XW -> YW -> ZW`.
+    ///
+    /// Order matters because SO(4) rotations do not generally commute.
     pub fn from_6_plane_angles(xy: f32, xz: f32, yz: f32, xw: f32, yw: f32, zw: f32) -> Self {
         let q_xy = Self::from_plane_angle(RotationPlane::XY, xy);
         let q_xz = Self::from_plane_angle(RotationPlane::XZ, xz);

@@ -1,6 +1,7 @@
 //! Toy trait and common types for multi-app system
 
 use eframe::egui;
+use nalgebra::Vector4;
 
 use crate::input::{DragView, TapAnalysis, ZoneMode};
 use crate::render::{FourDSettings, StereoSettings};
@@ -26,6 +27,9 @@ pub trait Toy {
     fn handle_keyboard(&mut self, ctx: &egui::Context);
 
     fn get_visualization_rect(&self) -> Option<egui::Rect>;
+    fn compass_vector(&self) -> Option<Vector4<f32>> {
+        None
+    }
     fn zone_mode_for_view(&self, _is_left_view: bool) -> ZoneMode {
         ZoneMode::default()
     }
@@ -39,10 +43,7 @@ pub trait Toy {
 
 #[derive(Default)]
 pub struct DragState {
-    pub is_dragging: bool,
-    pub is_drag_mode: bool,
     pub drag_view: Option<crate::input::DragView>,
-    pub last_mouse_pos: Option<egui::Pos2>,
 }
 
 impl DragState {
@@ -51,8 +52,6 @@ impl DragState {
     }
 
     pub fn clear(&mut self) {
-        self.is_dragging = false;
         self.drag_view = None;
-        self.last_mouse_pos = None;
     }
 }

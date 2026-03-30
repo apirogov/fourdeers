@@ -2,6 +2,7 @@
 
 use eframe::egui;
 use nalgebra::{UnitQuaternion, Vector3};
+use std::collections::HashMap;
 
 use crate::camera::Camera;
 use crate::colors::*;
@@ -205,19 +206,36 @@ pub struct ProjectedPoint {
 }
 
 impl StereoProjector {
-    pub fn new(center: egui::Pos2, scale: f32, eye_separation: f32, mode: ProjectionMode) -> Self {
+    pub fn new(
+        center: egui::Pos2,
+        scale: f32,
+        eye_separation: f32,
+        projection_distance: f32,
+        mode: ProjectionMode,
+    ) -> Self {
         Self {
             center,
             scale,
             eye_separation,
-            projection_distance: 3.0,
+            projection_distance,
             mode,
         }
     }
 
-    pub fn from_rect(rect: egui::Rect, eye_separation: f32, mode: ProjectionMode) -> Self {
+    pub fn from_rect(
+        rect: egui::Rect,
+        eye_separation: f32,
+        projection_distance: f32,
+        mode: ProjectionMode,
+    ) -> Self {
         let scale = rect.height().min(rect.width()) * 0.35;
-        Self::new(rect.center(), scale, eye_separation, mode)
+        Self::new(
+            rect.center(),
+            scale,
+            eye_separation,
+            projection_distance,
+            mode,
+        )
     }
 
     pub fn center(&self) -> egui::Pos2 {
@@ -313,28 +331,61 @@ pub struct TesseractRenderContext {
     pub projection_mode: ProjectionMode,
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ObjectRotationAngles {
+    pub xy: f32,
+    pub xz: f32,
+    pub yz: f32,
+    pub xw: f32,
+    pub yw: f32,
+    pub zw: f32,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct TesseractRenderConfig {
+    pub rotation_angles: ObjectRotationAngles,
+    pub four_d: FourDSettings,
+    pub stereo: StereoSettings,
+}
+
+pub struct EyeRenderOptions<'a> {
+    pub eye_sign: f32,
+    pub is_left_view: bool,
+    pub show_debug: bool,
+    pub show_controls: bool,
+    pub tetrahedron_rotations: &'a HashMap<TetraId, UnitQuaternion<f32>>,
+}
+
+struct TetraRenderSpec<'a> {
+    vector_4d: nalgebra::Vector4<f32>,
+    zone: Zone,
+    center_x: f32,
+    center_y: f32,
+    user_rotation: UnitQuaternion<f32>,
+    scale: f32,
+    show_captions: bool,
+    show_magnitudes: bool,
+    base_label: Option<&'a str>,
+}
+
 impl TesseractRenderContext {
-    pub fn new(
+    pub fn from_config(
         vertices: Vec<Vertex4D>,
         indices: Vec<u16>,
         camera: &Camera,
-        rot_xy: f32,
-        rot_xz: f32,
-        rot_yz: f32,
-        rot_xw: f32,
-        rot_yw: f32,
-        rot_zw: f32,
-        w_thickness: f32,
-        w_color_intensity: f32,
-        eye_separation: f32,
-        projection_distance: f32,
-        projection_mode: ProjectionMode,
+        config: TesseractRenderConfig,
     ) -> Self {
-        let object_rotation =
-            Rotation4D::from_6_plane_angles(rot_xy, rot_xz, rot_yz, rot_xw, rot_yw, rot_zw);
+        let object_rotation = Rotation4D::from_6_plane_angles(
+            config.rotation_angles.xy,
+            config.rotation_angles.xz,
+            config.rotation_angles.yz,
+            config.rotation_angles.xw,
+            config.rotation_angles.yw,
+            config.rotation_angles.zw,
+        );
 
         let inv_q_left = camera.rotation_4d.q_left().inverse();
-        let w_half = w_thickness * 0.5;
+        let w_half = config.four_d.w_thickness * 0.5;
         let camera_4d_rotation_inverse = camera.rotation_4d.inverse_q_right_only();
 
         Self {
@@ -345,74 +396,43 @@ impl TesseractRenderContext {
             w_half,
             camera_4d_rotation_inverse,
             camera: camera.clone(),
-            w_color_intensity,
-            eye_separation,
-            projection_distance,
-            projection_mode,
+            w_color_intensity: config.four_d.w_color_intensity,
+            eye_separation: config.stereo.eye_separation,
+            projection_distance: config.stereo.projection_distance,
+            projection_mode: config.stereo.projection_mode,
         }
-    }
-
-    pub fn with_stereo_settings(
-        vertices: Vec<Vertex4D>,
-        indices: Vec<u16>,
-        camera: &Camera,
-        rot_xy: f32,
-        rot_xz: f32,
-        rot_yz: f32,
-        rot_xw: f32,
-        rot_yw: f32,
-        rot_zw: f32,
-        w_thickness: f32,
-        w_color_intensity: f32,
-        stereo: &StereoSettings,
-    ) -> Self {
-        Self::new(
-            vertices,
-            indices,
-            camera,
-            rot_xy,
-            rot_xz,
-            rot_yz,
-            rot_xw,
-            rot_yw,
-            rot_zw,
-            w_thickness,
-            w_color_intensity,
-            stereo.eye_separation,
-            stereo.projection_distance,
-            stereo.projection_mode,
-        )
     }
 
     pub fn render_eye_view(
         &self,
         ui: &mut egui::Ui,
         view_rect: egui::Rect,
-        eye_sign: f32,
-        is_left_view: bool,
-        show_debug: bool,
-        show_controls: bool,
-        tetrahedron_rotations: &std::collections::HashMap<TetraId, UnitQuaternion<f32>>,
+        options: EyeRenderOptions<'_>,
     ) {
         let center = view_rect.center();
         let scale = view_rect.height().min(view_rect.width()) * 0.35;
 
-        let projector =
-            StereoProjector::new(center, scale, self.eye_separation, self.projection_mode);
+        let projector = StereoProjector::new(
+            center,
+            scale,
+            self.eye_separation,
+            self.projection_distance,
+            self.projection_mode,
+        );
 
         let painter = ui.painter().with_clip_rect(view_rect);
 
-        self.render_tesseract_edges(&painter, &projector, eye_sign);
-        if show_debug {
-            self.render_zone_labels(&painter, view_rect, is_left_view);
+        self.render_tesseract_edges(&painter, &projector, options.eye_sign);
+        if options.show_debug {
+            self.render_zone_labels(&painter, view_rect, options.is_left_view);
         }
 
-        if is_left_view || show_controls {
+        if options.is_left_view || options.show_controls {
             self.render_tetrahedron_gadget(
                 &painter,
                 view_rect,
-                is_left_view,
-                tetrahedron_rotations,
+                options.is_left_view,
+                options.tetrahedron_rotations,
             );
         }
     }
@@ -580,7 +600,7 @@ impl TesseractRenderContext {
         painter: &egui::Painter,
         view_rect: egui::Rect,
         is_left_view: bool,
-        tetrahedron_rotations: &std::collections::HashMap<TetraId, UnitQuaternion<f32>>,
+        tetrahedron_rotations: &HashMap<TetraId, UnitQuaternion<f32>>,
     ) {
         if is_left_view {
             return;
@@ -657,18 +677,18 @@ impl TesseractRenderContext {
                 Some(base_label)
             };
 
-            render_single_tetrahedron(
-                painter,
+            let spec = TetraRenderSpec {
                 vector_4d,
                 zone,
-                x,
-                y,
+                center_x: x,
+                center_y: y,
                 user_rotation,
-                layout.scale,
-                true,
-                false,
+                scale: layout.scale,
+                show_captions: true,
+                show_magnitudes: false,
                 base_label,
-            );
+            };
+            render_single_tetrahedron(painter, &spec);
         }
     }
 }
@@ -687,20 +707,10 @@ fn zone_to_direction_label(zone: Zone) -> &'static str {
     }
 }
 
-fn render_single_tetrahedron(
-    painter: &egui::Painter,
-    vector_4d: nalgebra::Vector4<f32>,
-    zone: Zone,
-    center_x: f32,
-    center_y: f32,
-    user_rotation: UnitQuaternion<f32>,
-    scale: f32,
-    show_captions: bool,
-    show_magnitudes: bool,
-    base_label: Option<&str>,
-) {
-    let gadget = TetrahedronGadget::for_zone(vector_4d, zone, user_rotation, scale);
-    let focal_length = scale * 3.0;
+fn render_single_tetrahedron(painter: &egui::Painter, spec: &TetraRenderSpec<'_>) {
+    let gadget =
+        TetrahedronGadget::for_zone(spec.vector_4d, spec.zone, spec.user_rotation, spec.scale);
+    let focal_length = spec.scale * 3.0;
 
     for edge in &gadget.edges {
         let v0_idx = edge.vertex_indices[0];
@@ -710,7 +720,7 @@ fn render_single_tetrahedron(
             let z_offset = focal_length + pos.z;
             if z_offset > 0.1 {
                 let s = focal_length / z_offset;
-                Some((center_x + pos.x * s, center_y - pos.y * s))
+                Some((spec.center_x + pos.x * s, spec.center_y - pos.y * s))
             } else {
                 None
             }
@@ -719,7 +729,7 @@ fn render_single_tetrahedron(
             let z_offset = focal_length + pos.z;
             if z_offset > 0.1 {
                 let s = focal_length / z_offset;
-                Some((center_x + pos.x * s, center_y - pos.y * s))
+                Some((spec.center_x + pos.x * s, spec.center_y - pos.y * s))
             } else {
                 None
             }
@@ -733,7 +743,7 @@ fn render_single_tetrahedron(
         }
     }
 
-    if show_captions || show_magnitudes {
+    if spec.show_captions || spec.show_magnitudes {
         let component_mags: [f32; 4] = gadget.component_values.map(|v| v.abs());
         let max_mag = component_mags.iter().cloned().fold(0.0f32, f32::max);
 
@@ -744,9 +754,10 @@ fn render_single_tetrahedron(
                 let z_offset = focal_length + pos.z;
                 if z_offset > 0.1 {
                     let s = focal_length / z_offset;
-                    let screen_pos = egui::Pos2::new(center_x + pos.x * s, center_y - pos.y * s);
+                    let screen_pos =
+                        egui::Pos2::new(spec.center_x + pos.x * s, spec.center_y - pos.y * s);
 
-                    if show_captions {
+                    if spec.show_captions {
                         let color = crate::tetrahedron::compute_component_color(component, max_mag);
                         let egui_color = color.to_egui_color();
                         let font_id = egui::FontId::proportional(14.0);
@@ -775,12 +786,14 @@ fn render_single_tetrahedron(
                         );
                     }
 
-                    if show_magnitudes {
+                    if spec.show_magnitudes {
                         if let Some(normal) = gadget.get_vertex_normal(i) {
                             let label_x = pos.x + normal.x * 20.0;
                             let label_y = pos.y + normal.y * 20.0;
-                            let label_pos =
-                                egui::Pos2::new(center_x + label_x * s, center_y - label_y * s);
+                            let label_pos = egui::Pos2::new(
+                                spec.center_x + label_x * s,
+                                spec.center_y - label_y * s,
+                            );
                             let value_text = crate::tetrahedron::format_component_value(component);
                             let font_id = egui::FontId::monospace(10.0);
                             let outline_color = outline_thin();
@@ -818,8 +831,8 @@ fn render_single_tetrahedron(
     let z_offset = focal_length + arrow.z;
     if z_offset > 0.1 {
         let s = focal_length / z_offset;
-        let center = egui::Pos2::new(center_x, center_y);
-        let arrow_end = egui::Pos2::new(center_x + arrow.x * s, center_y - arrow.y * s);
+        let center = egui::Pos2::new(spec.center_x, spec.center_y);
+        let arrow_end = egui::Pos2::new(spec.center_x + arrow.x * s, spec.center_y - arrow.y * s);
         let arrow_vec = arrow_end - center;
 
         if arrow_vec.length() > 1e-3 {
@@ -860,8 +873,8 @@ fn render_single_tetrahedron(
         }
     }
 
-    if let Some(label) = base_label {
-        let base_pos = egui::Pos2::new(center_x, center_y + 18.0);
+    if let Some(label) = spec.base_label {
+        let base_pos = egui::Pos2::new(spec.center_x, spec.center_y + 18.0);
         let font_id = egui::FontId::proportional(11.0);
         let outline_color = egui::Color32::from_rgba_unmultiplied(0, 0, 0, 180);
         let text_color = label_default();
