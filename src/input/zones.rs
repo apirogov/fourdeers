@@ -73,6 +73,15 @@ pub fn analyze_tap_in_stereo_view(
     tap_pos: egui::Pos2,
     zone_mode: ZoneMode,
 ) -> Option<TapAnalysis> {
+    analyze_tap_in_stereo_view_with_modes(visualization_rect, tap_pos, zone_mode, zone_mode)
+}
+
+pub fn analyze_tap_in_stereo_view_with_modes(
+    visualization_rect: egui::Rect,
+    tap_pos: egui::Pos2,
+    left_zone_mode: ZoneMode,
+    right_zone_mode: ZoneMode,
+) -> Option<TapAnalysis> {
     if !visualization_rect.contains(tap_pos) {
         return None;
     }
@@ -90,6 +99,12 @@ pub fn analyze_tap_in_stereo_view(
             min: egui::pos2(center_x, visualization_rect.min.y),
             max: visualization_rect.max,
         }
+    };
+
+    let zone_mode = if is_left_view {
+        left_zone_mode
+    } else {
+        right_zone_mode
     };
 
     let zone = get_zone_from_rect(view_rect, tap_pos, zone_mode)?;
@@ -208,6 +223,36 @@ mod tests {
             analyze_tap_in_stereo_view(vis_rect, egui::pos2(-10.0, 50.0), ZoneMode::FourZones)
                 .is_none()
         );
+    }
+
+    #[test]
+    fn test_analyze_tap_in_stereo_view_with_modes() {
+        let vis_rect = egui::Rect {
+            min: egui::pos2(0.0, 0.0),
+            max: egui::pos2(200.0, 100.0),
+        };
+
+        let left = analyze_tap_in_stereo_view_with_modes(
+            vis_rect,
+            egui::pos2(10.0, 10.0),
+            ZoneMode::NineZones,
+            ZoneMode::FourZones,
+        )
+        .expect("left analysis");
+        assert!(left.is_left_view);
+        assert_eq!(left.zone_mode, ZoneMode::NineZones);
+        assert_eq!(left.zone, Zone::NorthWest);
+
+        let right = analyze_tap_in_stereo_view_with_modes(
+            vis_rect,
+            egui::pos2(150.0, 10.0),
+            ZoneMode::NineZones,
+            ZoneMode::FourZones,
+        )
+        .expect("right analysis");
+        assert!(!right.is_left_view);
+        assert_eq!(right.zone_mode, ZoneMode::FourZones);
+        assert_eq!(right.zone, Zone::North);
     }
 
     #[test]

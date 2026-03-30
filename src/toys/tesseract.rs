@@ -360,15 +360,6 @@ impl Toy for TesseractToy {
         self.four_d = *settings;
     }
 
-    fn render_overlay(
-        &mut self,
-        _ui: &mut egui::Ui,
-        _left_rect: egui::Rect,
-        _right_rect: egui::Rect,
-    ) {
-        // Overlay rendering is handled in render_scene for now
-    }
-
     fn handle_tap(&mut self, analysis: &TapAnalysis) {
         // Toggle 4D rotation mode on right view center tap
         if !analysis.is_left_view && analysis.zone == Zone::Center {
@@ -447,19 +438,11 @@ impl Toy for TesseractToy {
         self.visualization_rect
     }
 
-    fn set_visualization_rect(&mut self, rect: egui::Rect) {
-        self.visualization_rect = Some(rect);
-    }
-
-    fn get_zone_mode(&self) -> ZoneMode {
+    fn zone_mode_for_view(&self, _is_left_view: bool) -> ZoneMode {
         self.zone_mode
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
+    fn clear_interaction_state(&mut self) {
+        self.drag_state.clear();
     }
 }

@@ -1,7 +1,6 @@
 //! Toy trait and common types for multi-app system
 
 use eframe::egui;
-use std::any::Any;
 
 use crate::input::{DragView, TapAnalysis, ZoneMode};
 use crate::render::{FourDSettings, StereoSettings};
@@ -11,7 +10,7 @@ pub mod registry;
 
 pub use manager::ToyManager;
 
-pub trait Toy: Any {
+pub trait Toy {
     fn name(&self) -> &str;
     fn id(&self) -> &str;
 
@@ -19,8 +18,6 @@ pub trait Toy: Any {
 
     fn render_sidebar(&mut self, ui: &mut egui::Ui);
     fn render_scene(&mut self, ui: &mut egui::Ui, rect: egui::Rect, show_debug: bool);
-    fn render_overlay(&mut self, ui: &mut egui::Ui, left_rect: egui::Rect, right_rect: egui::Rect);
-
     fn handle_tap(&mut self, analysis: &TapAnalysis);
     fn handle_drag(&mut self, is_left_view: bool, from: egui::Pos2, to: egui::Pos2);
     fn handle_hold(&mut self, analysis: &TapAnalysis);
@@ -29,18 +26,15 @@ pub trait Toy: Any {
     fn handle_keyboard(&mut self, ctx: &egui::Context);
 
     fn get_visualization_rect(&self) -> Option<egui::Rect>;
-    fn set_visualization_rect(&mut self, rect: egui::Rect);
-
-    fn get_zone_mode(&self) -> ZoneMode {
+    fn zone_mode_for_view(&self, _is_left_view: bool) -> ZoneMode {
         ZoneMode::default()
     }
+
+    fn clear_interaction_state(&mut self) {}
 
     fn render_toy_menu(&self, _painter: &egui::Painter, _rect: egui::Rect) {}
     fn set_stereo_settings(&mut self, _settings: &StereoSettings) {}
     fn set_four_d_settings(&mut self, _settings: &FourDSettings) {}
-
-    fn as_any(&self) -> &dyn Any;
-    fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 #[derive(Default)]

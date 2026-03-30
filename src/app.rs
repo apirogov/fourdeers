@@ -3,7 +3,11 @@
 use eframe::egui;
 
 use crate::colors::panel_fill;
-use crate::input::{analyze_tap_in_stereo_view, DragView, Zone};
+use crate::input::render_zone_debug_overlay;
+use crate::input::{
+    analyze_tap_in_stereo_view_with_modes, get_zone_from_rect, DragView, Zone, ZoneDebugOptions,
+    ZoneMode,
+};
 use crate::render::{
     render_common_menu_half, split_stereo_views, FourDSettings, ProjectionMode, StereoSettings,
 };
@@ -154,13 +158,18 @@ impl FourDeersApp {
 
     fn process_hold(&mut self, pos: egui::Pos2) {
         let vis_rect = self.toy_manager.active_toy().get_visualization_rect();
-        let zone_mode = self.toy_manager.active_toy().get_zone_mode();
 
         if let Some(visualization_rect) = vis_rect {
             if visualization_rect.contains(pos) {
-                if let Some(analysis) =
-                    analyze_tap_in_stereo_view(visualization_rect, pos, zone_mode)
-                {
+                let left_zone_mode = self.toy_manager.active_toy().zone_mode_for_view(true);
+                let right_zone_mode = self.toy_manager.active_toy().zone_mode_for_view(false);
+
+                if let Some(analysis) = analyze_tap_in_stereo_view_with_modes(
+                    visualization_rect,
+                    pos,
+                    left_zone_mode,
+                    right_zone_mode,
+                ) {
                     self.toy_manager.active_toy_mut().handle_hold(&analysis);
                 }
             }
@@ -171,24 +180,7 @@ impl FourDeersApp {
         self.is_drag_mode = false;
         self.drag_view = None;
         self.last_drag_pos = None;
-
-        if let Some(t) = self
-            .toy_manager
-            .active_toy_mut()
-            .as_any_mut()
-            .downcast_mut::<crate::toys::TesseractToy>()
-        {
-            t.drag_state.clear();
-        }
-
-        if let Some(t) = self
-            .toy_manager
-            .active_toy_mut()
-            .as_any_mut()
-            .downcast_mut::<crate::toys::tetrahedron_debug::TetrahedronDebugToy>()
-        {
-            t.drag_state.clear();
-        }
+        self.toy_manager.active_toy_mut().clear_interaction_state();
     }
 
     fn render_ui(&mut self, ctx: &egui::Context) {
@@ -218,6 +210,14 @@ impl FourDeersApp {
             self.toy_manager
                 .active_toy()
                 .render_toy_menu(&right_painter, right_menu_rect);
+
+            if self.settings.show_debug {
+                let options = ZoneDebugOptions::default();
+                let left_mode = self.toy_manager.active_toy().zone_mode_for_view(true);
+                let right_mode = self.toy_manager.active_toy().zone_mode_for_view(false);
+                render_zone_debug_overlay(&left_painter, left_rect, left_mode, &options);
+                render_zone_debug_overlay(&right_painter, right_rect, right_mode, &options);
+            }
 
             self.toy_manager
                 .active_toy_mut()
@@ -418,7 +418,6 @@ impl FourDeersApp {
 
     fn handle_tap_zone(&mut self, pos: egui::Pos2) {
         let vis_rect = self.toy_manager.active_toy().get_visualization_rect();
-        let zone_mode = self.toy_manager.active_toy().get_zone_mode();
 
         let Some(visualization_rect) = vis_rect else {
             return;
@@ -428,14 +427,25 @@ impl FourDeersApp {
             return;
         }
 
-        let Some(analysis) = analyze_tap_in_stereo_view(visualization_rect, pos, zone_mode) else {
-            return;
-        };
-
-        if analysis.is_left_view && analysis.zone == Zone::NorthWest {
+        let (left_rect, _) = split_stereo_views(visualization_rect);
+        if left_rect.contains(pos)
+            && get_zone_from_rect(left_rect, pos, ZoneMode::NineZones) == Some(Zone::NorthWest)
+        {
             self.menu_open = !self.menu_open;
             return;
         }
+
+        let left_zone_mode = self.toy_manager.active_toy().zone_mode_for_view(true);
+        let right_zone_mode = self.toy_manager.active_toy().zone_mode_for_view(false);
+
+        let Some(analysis) = analyze_tap_in_stereo_view_with_modes(
+            visualization_rect,
+            pos,
+            left_zone_mode,
+            right_zone_mode,
+        ) else {
+            return;
+        };
 
         self.toy_manager.active_toy_mut().handle_tap(&analysis);
     }

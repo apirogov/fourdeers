@@ -27,9 +27,10 @@ impl ToyManager {
             .expect("Active toy should always exist")
     }
 
-    pub fn active_toy_mut(&mut self) -> &mut Box<dyn Toy> {
+    pub fn active_toy_mut(&mut self) -> &mut dyn Toy {
         self.toys
             .get_mut(&self.active_toy_id)
+            .map(|t| t.as_mut())
             .expect("Active toy should always exist")
     }
 

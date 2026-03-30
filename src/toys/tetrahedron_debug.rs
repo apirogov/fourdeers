@@ -203,6 +203,63 @@ impl TetrahedronDebugToy {
             }
         }
     }
+
+    fn handle_tap_camera_mode(&mut self, analysis: &TapAnalysis) {
+        if analysis.is_left_view && analysis.zone == Zone::SouthWest {
+            self.right_view_4d_rotation = !self.right_view_4d_rotation;
+            return;
+        }
+
+        if !analysis.is_left_view && analysis.zone == Zone::Center {
+            self.right_view_4d_rotation = !self.right_view_4d_rotation;
+            return;
+        }
+
+        if let Some(action) = Self::zone_to_action(analysis.zone, analysis.is_left_view) {
+            self.apply_camera_action(action, 0.15);
+        }
+    }
+
+    fn handle_tap_stereo_tetra_mode(&mut self, analysis: &TapAnalysis) {
+        if analysis.is_left_view && analysis.zone == Zone::West {
+            self.view_mode = ViewMode::Camera;
+            return;
+        }
+        if !analysis.is_left_view && analysis.zone == Zone::East {
+            self.tetrahedron_rotation = UnitQuaternion::identity();
+        }
+    }
+
+    fn handle_drag_camera_mode(&mut self, from: egui::Pos2, to: egui::Pos2) {
+        let delta = to - from;
+
+        match self.drag_state.drag_view {
+            Some(DragView::Left) => {
+                self.camera.rotate(delta.x, delta.y);
+                self.reset_tetrahedron_rotations();
+            }
+            Some(DragView::Right) => {
+                if self.right_view_4d_rotation {
+                    self.camera.rotate_4d(delta.x, delta.y);
+                } else {
+                    self.camera.rotate(delta.x, delta.y);
+                }
+                self.reset_tetrahedron_rotations();
+            }
+            None => {}
+        }
+
+        self.drag_state.is_dragging = true;
+    }
+
+    fn handle_drag_stereo_tetra_mode(&mut self, from: egui::Pos2, to: egui::Pos2) {
+        let delta = to - from;
+        let yaw_rot = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), delta.x * 0.005);
+        let pitch_rot = UnitQuaternion::from_axis_angle(&Vector3::x_axis(), delta.y * 0.005);
+        let incremental = pitch_rot * yaw_rot;
+        self.tetrahedron_rotation = incremental * self.tetrahedron_rotation;
+        self.drag_state.is_dragging = true;
+    }
 }
 
 impl Toy for TetrahedronDebugToy {
@@ -429,14 +486,6 @@ impl Toy for TetrahedronDebugToy {
         }
     }
 
-    fn render_overlay(
-        &mut self,
-        _ui: &mut egui::Ui,
-        _left_rect: egui::Rect,
-        _right_rect: egui::Rect,
-    ) {
-    }
-
     fn render_toy_menu(&self, painter: &egui::Painter, rect: egui::Rect) {
         let rot_label = if self.right_view_4d_rotation {
             "Rot:4D"
@@ -456,71 +505,24 @@ impl Toy for TetrahedronDebugToy {
     }
 
     fn handle_tap(&mut self, analysis: &TapAnalysis) {
-        if self.view_mode == ViewMode::StereoTetrahedron {
-            if analysis.is_left_view && analysis.zone == Zone::West {
-                self.view_mode = ViewMode::Camera;
-                return;
-            }
-            if !analysis.is_left_view && analysis.zone == Zone::East {
-                self.tetrahedron_rotation = UnitQuaternion::identity();
-                return;
-            }
-            return;
-        }
-
-        if analysis.is_left_view && analysis.zone == Zone::SouthWest {
-            self.right_view_4d_rotation = !self.right_view_4d_rotation;
-            return;
-        }
-
-        if !analysis.is_left_view && analysis.zone == Zone::Center {
-            self.right_view_4d_rotation = !self.right_view_4d_rotation;
-            return;
-        }
-
-        if let Some(action) = Self::zone_to_action(analysis.zone, analysis.is_left_view) {
-            self.apply_camera_action(action, 0.15);
+        match self.view_mode {
+            ViewMode::Camera => self.handle_tap_camera_mode(analysis),
+            ViewMode::StereoTetrahedron => self.handle_tap_stereo_tetra_mode(analysis),
         }
     }
 
     fn handle_drag(&mut self, _is_left_view: bool, from: egui::Pos2, to: egui::Pos2) {
-        if self.view_mode == ViewMode::StereoTetrahedron {
-            let delta = to - from;
-            let yaw_rot = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), delta.x * 0.005);
-            let pitch_rot = UnitQuaternion::from_axis_angle(&Vector3::x_axis(), delta.y * 0.005);
-            let incremental = pitch_rot * yaw_rot;
-            self.tetrahedron_rotation = incremental * self.tetrahedron_rotation;
-            self.drag_state.is_dragging = true;
-            return;
+        match self.view_mode {
+            ViewMode::Camera => self.handle_drag_camera_mode(from, to),
+            ViewMode::StereoTetrahedron => self.handle_drag_stereo_tetra_mode(from, to),
         }
-
-        let delta = to - from;
-
-        match self.drag_state.drag_view {
-            Some(DragView::Left) => {
-                self.camera.rotate(delta.x, delta.y);
-                self.reset_tetrahedron_rotations();
-            }
-            Some(DragView::Right) => {
-                if self.right_view_4d_rotation {
-                    self.camera.rotate_4d(delta.x, delta.y);
-                } else {
-                    self.camera.rotate(delta.x, delta.y);
-                }
-                self.reset_tetrahedron_rotations();
-            }
-            None => {}
-        }
-        self.drag_state.is_dragging = true;
     }
 
     fn handle_hold(&mut self, analysis: &TapAnalysis) {
-        if self.view_mode == ViewMode::StereoTetrahedron {
-            return;
-        }
-
-        if let Some(action) = Self::zone_to_action(analysis.zone, analysis.is_left_view) {
-            self.apply_camera_action(action, 0.08);
+        if matches!(self.view_mode, ViewMode::Camera) {
+            if let Some(action) = Self::zone_to_action(analysis.zone, analysis.is_left_view) {
+                self.apply_camera_action(action, 0.08);
+            }
         }
     }
 
@@ -567,19 +569,20 @@ impl Toy for TetrahedronDebugToy {
         self.visualization_rect
     }
 
-    fn set_visualization_rect(&mut self, rect: egui::Rect) {
-        self.visualization_rect = Some(rect);
+    fn zone_mode_for_view(&self, is_left_view: bool) -> ZoneMode {
+        match self.view_mode {
+            ViewMode::Camera => ZoneMode::NineZones,
+            ViewMode::StereoTetrahedron => {
+                if is_left_view {
+                    ZoneMode::NineZones
+                } else {
+                    ZoneMode::FourZones
+                }
+            }
+        }
     }
 
-    fn get_zone_mode(&self) -> ZoneMode {
-        ZoneMode::NineZones
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
+    fn clear_interaction_state(&mut self) {
+        self.drag_state.clear();
     }
 }
