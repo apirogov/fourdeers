@@ -5,13 +5,13 @@ use nalgebra::{UnitQuaternion, Vector3, Vector4};
 use std::collections::HashMap;
 
 use crate::camera::{Camera, CameraAction};
-use crate::geometry::apply_so4_rotation;
 use crate::input::{DragView, TapAnalysis, TetraId, Zone, ZoneMode};
 use crate::polytopes::create_polytope;
 use crate::render::{
     draw_background, draw_center_divider, render_stereo_tetrahedron_overlay, render_tap_zone_label,
     split_stereo_views, w_to_color, FourDSettings, StereoProjector, StereoSettings,
 };
+use crate::rotation4d::Rotation4D;
 use crate::tetrahedron::magnitude_4d;
 use crate::toy::{DragState, Toy};
 
@@ -112,12 +112,14 @@ impl TetrahedronDebugToy {
 
         draw_center_divider(ui, rect);
 
-        let (sin_xy, cos_xy) = self.glome_rot_xy.sin_cos();
-        let (sin_xz, cos_xz) = self.glome_rot_xz.sin_cos();
-        let (sin_yz, cos_yz) = self.glome_rot_yz.sin_cos();
-        let (sin_xw, cos_xw) = self.glome_rot_xw.sin_cos();
-        let (sin_yw, cos_yw) = self.glome_rot_yw.sin_cos();
-        let (sin_zw, cos_zw) = self.glome_rot_zw.sin_cos();
+        let object_rotation = Rotation4D::from_6_plane_angles(
+            self.glome_rot_xy,
+            self.glome_rot_xz,
+            self.glome_rot_yz,
+            self.glome_rot_xw,
+            self.glome_rot_yw,
+            self.glome_rot_zw,
+        );
 
         let (vertices, indices) = create_polytope(crate::polytopes::PolytopeType::SixteenCell);
         let inv_q_left = self.camera.rotation_4d.q_left().inverse();
@@ -143,36 +145,8 @@ impl TetrahedronDebugToy {
                 let v0 = &vertices[chunk[0] as usize];
                 let v1 = &vertices[chunk[1] as usize];
 
-                let p0_object = apply_so4_rotation(
-                    v0.position,
-                    sin_xy,
-                    cos_xy,
-                    sin_xz,
-                    cos_xz,
-                    sin_yz,
-                    cos_yz,
-                    sin_xw,
-                    cos_xw,
-                    sin_yw,
-                    cos_yw,
-                    sin_zw,
-                    cos_zw,
-                );
-                let p1_object = apply_so4_rotation(
-                    v1.position,
-                    sin_xy,
-                    cos_xy,
-                    sin_xz,
-                    cos_xz,
-                    sin_yz,
-                    cos_yz,
-                    sin_xw,
-                    cos_xw,
-                    sin_yw,
-                    cos_yw,
-                    sin_zw,
-                    cos_zw,
-                );
+                let p0_object = object_rotation.rotate_vector(v0.position.into());
+                let p1_object = object_rotation.rotate_vector(v1.position.into());
 
                 let p0_world = p0_object - self.camera.position;
                 let p1_world = p1_object - self.camera.position;

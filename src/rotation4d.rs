@@ -85,7 +85,7 @@ impl Rotation4D {
     pub fn then(&self, other: &Self) -> Self {
         Self {
             q_left: other.q_left * self.q_left,
-            q_right: self.q_right * other.q_right,
+            q_right: other.q_right * self.q_right,
         }
     }
 
@@ -128,43 +128,37 @@ impl Rotation4D {
     }
 
     pub fn from_plane_angle(plane: RotationPlane, angle: f32) -> Self {
-        let (sin_a, cos_a) = angle.sin_cos();
+        let axis = plane_axis(plane);
+        let unit_axis = nalgebra::Unit::new_normalize(axis);
+        let q = UnitQuaternion::from_axis_angle(&unit_axis, angle);
 
-        let q = UnitQuaternion::from_quaternion(nalgebra::Quaternion::from_parts(
-            cos_a,
-            match plane {
-                RotationPlane::XY => Vector3::new(0.0, 0.0, sin_a),
-                RotationPlane::XZ => Vector3::new(0.0, sin_a, 0.0),
-                RotationPlane::YZ => Vector3::new(sin_a, 0.0, 0.0),
-                RotationPlane::XW => Vector3::new(-sin_a, 0.0, 0.0),
-                RotationPlane::YW => Vector3::new(0.0, -sin_a, 0.0),
-                RotationPlane::ZW => Vector3::new(0.0, 0.0, -sin_a),
-            },
-        ));
+        // For v' = q_left * v * q_right^{-1} and v = w + xi + yj + zk:
+        // - XY/XZ/YZ use q_left = q_right (3D-style conjugation, leaves w unchanged)
+        // - XW/YW/ZW use q_left = q, q_right = q^{-1} so v' = q * v * q (mixes scalar w with one axis)
+        let q_right = if plane_includes_w(plane) {
+            q.inverse()
+        } else {
+            q
+        };
 
-        match plane {
-            RotationPlane::XY | RotationPlane::XZ | RotationPlane::YZ => {
-                let half_angle = angle * 0.5;
-                let (sin_h, cos_h) = half_angle.sin_cos();
-                let q_half = UnitQuaternion::from_quaternion(nalgebra::Quaternion::from_parts(
-                    cos_h,
-                    match plane {
-                        RotationPlane::XY => Vector3::new(0.0, 0.0, sin_h),
-                        RotationPlane::XZ => Vector3::new(0.0, sin_h, 0.0),
-                        RotationPlane::YZ => Vector3::new(sin_h, 0.0, 0.0),
-                        _ => Vector3::zeros(),
-                    },
-                ));
-                Self {
-                    q_left: q_half,
-                    q_right: q_half,
-                }
-            }
-            RotationPlane::XW | RotationPlane::YW | RotationPlane::ZW => Self {
-                q_left: q,
-                q_right: UnitQuaternion::identity(),
-            },
-        }
+        Self { q_left: q, q_right }
+    }
+
+    /// Creates a rotation from 6 plane angles (XY, XZ, YZ, XW, YW, ZW)
+    /// applied in this exact order.
+    pub fn from_6_plane_angles(xy: f32, xz: f32, yz: f32, xw: f32, yw: f32, zw: f32) -> Self {
+        let q_xy = Self::from_plane_angle(RotationPlane::XY, xy);
+        let q_xz = Self::from_plane_angle(RotationPlane::XZ, xz);
+        let q_yz = Self::from_plane_angle(RotationPlane::YZ, yz);
+        let q_xw = Self::from_plane_angle(RotationPlane::XW, xw);
+        let q_yw = Self::from_plane_angle(RotationPlane::YW, yw);
+        let q_zw = Self::from_plane_angle(RotationPlane::ZW, zw);
+
+        q_xy.then(&q_xz)
+            .then(&q_yz)
+            .then(&q_xw)
+            .then(&q_yw)
+            .then(&q_zw)
     }
 
     pub fn from_axis_angle_3d(axis: Vector3<f32>, angle: f32) -> Self {
@@ -180,7 +174,7 @@ impl Rotation4D {
     pub fn from_3d_rotation(q: &UnitQuaternion<f32>) -> Self {
         Self {
             q_left: *q,
-            q_right: UnitQuaternion::identity(),
+            q_right: *q,
         }
     }
 
@@ -209,6 +203,24 @@ pub enum RotationPlane {
     ZW,
 }
 
+fn plane_axis(plane: RotationPlane) -> Vector3<f32> {
+    match plane {
+        RotationPlane::XY => Vector3::z_axis().into_inner(),
+        RotationPlane::XZ => Vector3::y_axis().into_inner(),
+        RotationPlane::YZ => Vector3::x_axis().into_inner(),
+        RotationPlane::XW => -Vector3::x_axis().into_inner(),
+        RotationPlane::YW => -Vector3::y_axis().into_inner(),
+        RotationPlane::ZW => -Vector3::z_axis().into_inner(),
+    }
+}
+
+fn plane_includes_w(plane: RotationPlane) -> bool {
+    matches!(
+        plane,
+        RotationPlane::XW | RotationPlane::YW | RotationPlane::ZW
+    )
+}
+
 fn quat_from_4d(p: [f32; 4]) -> nalgebra::Quaternion<f32> {
     nalgebra::Quaternion::new(p[3], p[0], p[1], p[2])
 }
@@ -222,6 +234,25 @@ mod tests {
     use super::*;
     use crate::test_utils::{assert_approx_eq, assert_vec_approx_eq};
     use std::f32::consts::PI;
+
+    fn assert_orthonormal_basis(basis: [[f32; 4]; 4], eps: f32) {
+        for axis in &basis {
+            let len = axis.iter().map(|x| x.powi(2)).sum::<f32>().sqrt();
+            assert_approx_eq(len, 1.0, eps);
+        }
+
+        for (i, axis_i) in basis.iter().enumerate() {
+            for axis_j in basis.iter().skip(i + 1) {
+                let dot: f32 = axis_i.iter().zip(axis_j.iter()).map(|(a, b)| a * b).sum();
+                assert_approx_eq(dot, 0.0, eps);
+            }
+        }
+    }
+
+    fn vector_angle(a: [f32; 4], b: [f32; 4]) -> f32 {
+        let dot: f32 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
+        dot.clamp(-1.0, 1.0).acos()
+    }
 
     #[test]
     fn test_identity() {
@@ -298,30 +329,11 @@ mod tests {
 
         let sqrt2_2 = (2.0_f32).sqrt() / 2.0;
 
-        // XW rotation by 45°:
-        // X axis should rotate into XW plane (have W component)
-        // W axis should rotate into XW plane (have X component)
-        assert_approx_eq(basis[0][0].abs(), sqrt2_2, 1e-5);
-        assert_approx_eq(basis[0][3].abs(), sqrt2_2, 1e-5);
-        assert_approx_eq(basis[3][0].abs(), sqrt2_2, 1e-5);
-        assert_approx_eq(basis[3][3].abs(), sqrt2_2, 1e-5);
-
-        // Verify orthonormality
-        for i in 0..4 {
-            let len: f32 = basis[i].iter().map(|x| x.powi(2)).sum();
-            assert_approx_eq(len, 1.0, 1e-5);
-        }
-
-        for i in 0..4 {
-            for j in (i + 1)..4 {
-                let dot: f32 = basis[i]
-                    .iter()
-                    .zip(basis[j].iter())
-                    .map(|(a, b)| a * b)
-                    .sum();
-                assert_approx_eq(dot, 0.0, 1e-5);
-            }
-        }
+        assert_approx_eq(basis[0][0], sqrt2_2, 1e-5);
+        assert_approx_eq(basis[0][3], sqrt2_2, 1e-5);
+        assert_approx_eq(basis[3][0], -sqrt2_2, 1e-5);
+        assert_approx_eq(basis[3][3], sqrt2_2, 1e-5);
+        assert_orthonormal_basis(basis, 1e-5);
     }
 
     #[test]
@@ -393,22 +405,7 @@ mod tests {
         let combined = rot_xy.then(&rot_xw);
 
         let basis = combined.basis_vectors();
-
-        for i in 0..4 {
-            let len = basis[i].iter().map(|x| x.powi(2)).sum::<f32>().sqrt();
-            assert_approx_eq(len, 1.0, 1e-6);
-        }
-
-        for i in 0..4 {
-            for j in (i + 1)..4 {
-                let dot: f32 = basis[i]
-                    .iter()
-                    .zip(basis[j].iter())
-                    .map(|(a, b)| a * b)
-                    .sum();
-                assert_approx_eq(dot, 0.0, 1e-6);
-            }
-        }
+        assert_orthonormal_basis(basis, 1e-6);
     }
 
     #[test]
@@ -419,21 +416,139 @@ mod tests {
         let combined = rot1.then(&rot2).then(&rot3);
 
         let basis = combined.basis_vectors();
+        assert_orthonormal_basis(basis, 1e-5);
+    }
 
-        for i in 0..4 {
-            let len = basis[i].iter().map(|x| x.powi(2)).sum::<f32>().sqrt();
-            assert_approx_eq(len, 1.0, 1e-5);
+    #[test]
+    fn test_embedded_3d_rotation_matches_nalgebra_quaternion() {
+        let axis = Vector3::new(1.0, -2.0, 3.0).normalize();
+        let angle = 0.71;
+        let q = UnitQuaternion::from_axis_angle(&nalgebra::Unit::new_normalize(axis), angle);
+        let rot4 = Rotation4D::from_3d_rotation(&q);
+
+        let points = [
+            [1.2, -0.3, 2.1, 0.0],
+            [-2.0, 4.0, 1.0, -3.7],
+            [0.0, 1.0, 0.0, 9.5],
+        ];
+
+        for p in points {
+            let expected_xyz = q.transform_vector(&Vector3::new(p[0], p[1], p[2]));
+            let actual = rot4.rotate_point(p);
+
+            assert_approx_eq(actual[0], expected_xyz.x, 1e-5);
+            assert_approx_eq(actual[1], expected_xyz.y, 1e-5);
+            assert_approx_eq(actual[2], expected_xyz.z, 1e-5);
+            assert_approx_eq(actual[3], p[3], 1e-5);
         }
+    }
 
-        for i in 0..4 {
-            for j in (i + 1)..4 {
-                let dot: f32 = basis[i]
-                    .iter()
-                    .zip(basis[j].iter())
-                    .map(|(a, b)| a * b)
-                    .sum();
-                assert_approx_eq(dot, 0.0, 1e-5);
-            }
+    #[test]
+    fn test_from_axis_angle_3d_matches_from_3d_rotation() {
+        let axis = Vector3::new(-0.4, 0.9, 0.2);
+        let angle = -0.37;
+        let q = UnitQuaternion::from_axis_angle(&nalgebra::Unit::new_normalize(axis), angle);
+
+        let a = Rotation4D::from_axis_angle_3d(axis, angle);
+        let b = Rotation4D::from_3d_rotation(&q);
+        let p = [0.7, -1.5, 2.25, 4.0];
+
+        assert_vec_approx_eq(a.rotate_point(p), b.rotate_point(p), 1e-5);
+    }
+
+    #[test]
+    fn test_simple_rotations_have_expected_signed_plane_actions() {
+        let angle = PI / 3.0;
+        let (sin_a, cos_a) = angle.sin_cos();
+
+        let xy = Rotation4D::from_plane_angle(RotationPlane::XY, angle);
+        assert_vec_approx_eq(
+            xy.rotate_point([1.0, 0.0, 0.0, 0.0]),
+            [cos_a, sin_a, 0.0, 0.0],
+            1e-5,
+        );
+        assert_vec_approx_eq(
+            xy.rotate_point([0.0, 1.0, 0.0, 0.0]),
+            [-sin_a, cos_a, 0.0, 0.0],
+            1e-5,
+        );
+
+        let xw = Rotation4D::from_plane_angle(RotationPlane::XW, angle);
+        assert_vec_approx_eq(
+            xw.rotate_point([1.0, 0.0, 0.0, 0.0]),
+            [cos_a, 0.0, 0.0, sin_a],
+            1e-5,
+        );
+        assert_vec_approx_eq(
+            xw.rotate_point([0.0, 0.0, 0.0, 1.0]),
+            [-sin_a, 0.0, 0.0, cos_a],
+            1e-5,
+        );
+
+        let zw = Rotation4D::from_plane_angle(RotationPlane::ZW, angle);
+        assert_vec_approx_eq(
+            zw.rotate_point([0.0, 0.0, 1.0, 0.0]),
+            [0.0, 0.0, cos_a, sin_a],
+            1e-5,
+        );
+        assert_vec_approx_eq(
+            zw.rotate_point([0.0, 0.0, 0.0, 1.0]),
+            [0.0, 0.0, -sin_a, cos_a],
+            1e-5,
+        );
+    }
+
+    #[test]
+    fn test_double_rotation_in_orthogonal_planes_has_independent_angles() {
+        let alpha = 0.42;
+        let beta = -0.77;
+        let rot = Rotation4D::from_plane_angle(RotationPlane::XY, alpha)
+            .then(&Rotation4D::from_plane_angle(RotationPlane::ZW, beta));
+
+        let ex = [1.0, 0.0, 0.0, 0.0];
+        let ez = [0.0, 0.0, 1.0, 0.0];
+
+        let ex_rot = rot.rotate_point(ex);
+        let ez_rot = rot.rotate_point(ez);
+
+        assert_approx_eq(vector_angle(ex, ex_rot), alpha.abs(), 1e-5);
+        assert_approx_eq(vector_angle(ez, ez_rot), beta.abs(), 1e-5);
+    }
+
+    #[test]
+    fn test_double_rotation_in_orthogonal_planes_commutes() {
+        let a = Rotation4D::from_plane_angle(RotationPlane::XY, 0.31);
+        let b = Rotation4D::from_plane_angle(RotationPlane::ZW, -0.58);
+        let p = [0.2, -1.1, 0.7, 2.3];
+
+        let ab = a.then(&b).rotate_point(p);
+        let ba = b.then(&a).rotate_point(p);
+        assert_vec_approx_eq(ab, ba, 1e-5);
+    }
+
+    #[test]
+    fn test_left_and_right_isoclinic_rotations_have_uniform_angle() {
+        let angle = 0.63;
+        let q = UnitQuaternion::from_axis_angle(
+            &nalgebra::Unit::new_normalize(Vector3::new(1.0, 2.0, -1.0)),
+            angle,
+        );
+
+        let left_iso = Rotation4D::new(q, UnitQuaternion::identity());
+        let right_iso = Rotation4D::new(UnitQuaternion::identity(), q);
+        let expected_rotation = angle.abs() * 0.5;
+        let basis = [
+            [1.0, 0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ];
+
+        for e in basis {
+            let left_rot = left_iso.rotate_point(e);
+            let right_rot = right_iso.rotate_point(e);
+            assert_approx_eq(vector_angle(e, left_rot), expected_rotation, 1e-5);
+            assert_approx_eq(vector_angle(e, right_rot), expected_rotation, 1e-5);
         }
     }
 }

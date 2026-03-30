@@ -5,8 +5,8 @@ use nalgebra::{UnitQuaternion, Vector3};
 
 use crate::camera::Camera;
 use crate::colors::*;
-use crate::geometry::{apply_so4_rotation, Vertex4D};
 use crate::input::{TetraId, Zone};
+use crate::polytopes::Vertex4D;
 use crate::rotation4d::Rotation4D;
 use crate::tetrahedron::{get_tetrahedron_layout, TetrahedronGadget};
 
@@ -302,18 +302,7 @@ impl StereoProjector {
 pub struct TesseractRenderContext {
     pub vertices: Vec<Vertex4D>,
     pub indices: Vec<u16>,
-    pub sin_xy: f32,
-    pub cos_xy: f32,
-    pub sin_xz: f32,
-    pub cos_xz: f32,
-    pub sin_yz: f32,
-    pub cos_yz: f32,
-    pub sin_xw: f32,
-    pub cos_xw: f32,
-    pub sin_yw: f32,
-    pub cos_yw: f32,
-    pub sin_zw: f32,
-    pub cos_zw: f32,
+    pub object_rotation: Rotation4D,
     pub inv_q_left: UnitQuaternion<f32>,
     pub w_half: f32,
     pub camera_4d_rotation_inverse: Rotation4D,
@@ -341,12 +330,8 @@ impl TesseractRenderContext {
         projection_distance: f32,
         projection_mode: ProjectionMode,
     ) -> Self {
-        let (sin_xy, cos_xy) = rot_xy.sin_cos();
-        let (sin_xz, cos_xz) = rot_xz.sin_cos();
-        let (sin_yz, cos_yz) = rot_yz.sin_cos();
-        let (sin_xw, cos_xw) = rot_xw.sin_cos();
-        let (sin_yw, cos_yw) = rot_yw.sin_cos();
-        let (sin_zw, cos_zw) = rot_zw.sin_cos();
+        let object_rotation =
+            Rotation4D::from_6_plane_angles(rot_xy, rot_xz, rot_yz, rot_xw, rot_yw, rot_zw);
 
         let inv_q_left = camera.rotation_4d.q_left().inverse();
         let w_half = w_thickness * 0.5;
@@ -355,18 +340,7 @@ impl TesseractRenderContext {
         Self {
             vertices,
             indices,
-            sin_xy,
-            cos_xy,
-            sin_xz,
-            cos_xz,
-            sin_yz,
-            cos_yz,
-            sin_xw,
-            cos_xw,
-            sin_yw,
-            cos_yw,
-            sin_zw,
-            cos_zw,
+            object_rotation,
             inv_q_left,
             w_half,
             camera_4d_rotation_inverse,
@@ -457,36 +431,8 @@ impl TesseractRenderContext {
             let v0 = &self.vertices[chunk[0] as usize];
             let v1 = &self.vertices[chunk[1] as usize];
 
-            let p0_object = apply_so4_rotation(
-                v0.position,
-                self.sin_xy,
-                self.cos_xy,
-                self.sin_xz,
-                self.cos_xz,
-                self.sin_yz,
-                self.cos_yz,
-                self.sin_xw,
-                self.cos_xw,
-                self.sin_yw,
-                self.cos_yw,
-                self.sin_zw,
-                self.cos_zw,
-            );
-            let p1_object = apply_so4_rotation(
-                v1.position,
-                self.sin_xy,
-                self.cos_xy,
-                self.sin_xz,
-                self.cos_xz,
-                self.sin_yz,
-                self.cos_yz,
-                self.sin_xw,
-                self.cos_xw,
-                self.sin_yw,
-                self.cos_yw,
-                self.sin_zw,
-                self.cos_zw,
-            );
+            let p0_object = self.object_rotation.rotate_vector(v0.position.into());
+            let p1_object = self.object_rotation.rotate_vector(v1.position.into());
 
             let p0_world = p0_object - self.camera.position;
             let p1_world = p1_object - self.camera.position;
