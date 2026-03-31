@@ -484,37 +484,42 @@ impl TesseractRenderContext {
         eye_sign: f32,
     ) {
         let stroke_width = 2.5;
-        for chunk in self.indices.chunks(2) {
-            if chunk.len() != 2 {
-                continue;
-            }
+        let shapes: Vec<egui::Shape> = self
+            .indices
+            .chunks(2)
+            .filter_map(|chunk| {
+                if chunk.len() != 2 {
+                    return None;
+                }
 
-            let t0 = &transformed[chunk[0] as usize];
-            let t1 = &transformed[chunk[1] as usize];
+                let t0 = &transformed[chunk[0] as usize];
+                let t1 = &transformed[chunk[1] as usize];
 
-            if !t0.in_slice && !t1.in_slice {
-                continue;
-            }
+                if !t0.in_slice && !t1.in_slice {
+                    return None;
+                }
 
-            let s0 = projector
-                .project_3d(t0.x, t0.y, t0.z, eye_sign)
-                .map(|p| p.screen_pos);
-            let s1 = projector
-                .project_3d(t1.x, t1.y, t1.z, eye_sign)
-                .map(|p| p.screen_pos);
+                let s0 = projector
+                    .project_3d(t0.x, t0.y, t0.z, eye_sign)
+                    .map(|p| p.screen_pos)?;
+                let s1 = projector
+                    .project_3d(t1.x, t1.y, t1.z, eye_sign)
+                    .map(|p| p.screen_pos)?;
 
-            let Some((s0, s1)) = s0.zip(s1) else {
-                continue;
-            };
+                let w_avg = (t0.w + t1.w) / 2.0;
+                let alpha = if t0.in_slice && t1.in_slice { 255 } else { 100 };
 
-            let w_avg = (t0.w + t1.w) / 2.0;
-            let alpha = if t0.in_slice && t1.in_slice { 255 } else { 100 };
+                let normalized_w = (w_avg / self.w_half).clamp(-1.0, 1.0);
+                let color = w_to_color(normalized_w, alpha, self.w_color_intensity);
 
-            let normalized_w = (w_avg / self.w_half).clamp(-1.0, 1.0);
-            let color = w_to_color(normalized_w, alpha, self.w_color_intensity);
+                Some(egui::Shape::line_segment(
+                    [s0, s1],
+                    egui::Stroke::new(stroke_width, color),
+                ))
+            })
+            .collect();
 
-            painter.line_segment([s0, s1], egui::Stroke::new(stroke_width, color));
-        }
+        painter.extend(shapes);
     }
 
     fn render_zone_labels(
