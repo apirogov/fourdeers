@@ -1167,3 +1167,253 @@ fn compass_vertex_label(
         _ => world_label,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_utils::assert_approx_eq;
+
+    fn cube_vertices(x: f32, y: f32, z: f32) -> Vec<(f32, f32, f32)> {
+        let size = 0.5;
+        let rx: f32 = 0.3;
+        let ry: f32 = 0.2;
+        let rz: f32 = 0.1;
+        let cos_x = rx.cos();
+        let sin_x = rx.sin();
+        let cos_y = ry.cos();
+        let sin_y = ry.sin();
+        let cos_z = rz.cos();
+        let sin_z = rz.sin();
+
+        let corners = [
+            (-1.0, -1.0, -1.0),
+            (1.0, -1.0, -1.0),
+            (1.0, 1.0, -1.0),
+            (-1.0, 1.0, -1.0),
+            (-1.0, -1.0, 1.0),
+            (1.0, -1.0, 1.0),
+            (1.0, 1.0, 1.0),
+            (-1.0, 1.0, 1.0),
+        ];
+
+        corners
+            .iter()
+            .map(|(cx, cy, cz)| {
+                let px = cx * size;
+                let py = cy * size;
+                let pz = cz * size;
+                let y1 = py * cos_x - pz * sin_x;
+                let z1 = py * sin_x + pz * cos_x;
+                let px1 = px * cos_y + z1 * sin_y;
+                let z2 = -px * sin_y + z1 * cos_y;
+                let px2 = px1 * cos_z - y1 * sin_z;
+                let py2 = px1 * sin_z + y1 * cos_z;
+                (x + px2, y + py2, z + z2)
+            })
+            .collect()
+    }
+
+    fn project_cube_for_eyes(
+        vertices: &[(f32, f32, f32)],
+        projector: &StereoProjector,
+    ) -> (Vec<Option<ProjectedPoint>>, Vec<Option<ProjectedPoint>>) {
+        let left: Vec<_> = vertices
+            .iter()
+            .map(|(x, y, z)| projector.project_3d(*x, *y, *z, -1.0))
+            .collect();
+        let right: Vec<_> = vertices
+            .iter()
+            .map(|(x, y, z)| projector.project_3d(*x, *y, *z, 1.0))
+            .collect();
+        (left, right)
+    }
+
+    #[test]
+    fn test_stereo_eyes_produce_different_x_coordinates() {
+        let center = egui::Pos2::new(100.0, 100.0);
+        let scale = 50.0;
+        let eye_separation = 0.1;
+        let projection_distance = 5.0;
+
+        let projector = StereoProjector::new(
+            center,
+            scale,
+            eye_separation,
+            projection_distance,
+            ProjectionMode::Perspective,
+        );
+
+        let vertices = cube_vertices(0.0, 0.0, -2.0);
+        let (left, right) = project_cube_for_eyes(&vertices, &projector);
+
+        for (i, (l, r)) in left.iter().zip(right.iter()).enumerate() {
+            let l = l.expect("left should project");
+            let r = r.expect("right should project");
+            assert!(
+                (l.screen_pos.x - r.screen_pos.x).abs() > 0.01,
+                "Vertex {}: left.x ({:.4}) should differ from right.x ({:.4})",
+                i,
+                l.screen_pos.x,
+                r.screen_pos.x
+            );
+        }
+    }
+
+    #[test]
+    fn test_stereo_eyes_have_same_y_coordinates() {
+        let center = egui::Pos2::new(100.0, 100.0);
+        let scale = 50.0;
+        let eye_separation = 0.1;
+        let projection_distance = 5.0;
+
+        let projector = StereoProjector::new(
+            center,
+            scale,
+            eye_separation,
+            projection_distance,
+            ProjectionMode::Perspective,
+        );
+
+        let vertices = cube_vertices(0.0, 0.0, -2.0);
+        let (left, right) = project_cube_for_eyes(&vertices, &projector);
+
+        for (l, r) in left.iter().zip(right.iter()) {
+            let l = l.expect("left should project");
+            let r = r.expect("right should project");
+            assert_approx_eq(l.screen_pos.y, r.screen_pos.y, 1e-6);
+        }
+    }
+
+    #[test]
+    fn test_parallax_increases_with_depth() {
+        let center = egui::Pos2::new(100.0, 100.0);
+        let scale = 50.0;
+        let eye_separation = 0.2;
+        let projection_distance = 5.0;
+
+        let projector = StereoProjector::new(
+            center,
+            scale,
+            eye_separation,
+            projection_distance,
+            ProjectionMode::Perspective,
+        );
+
+        let far_left = projector.project_3d(0.0, 0.0, -4.0, -1.0).unwrap();
+        let far_right = projector.project_3d(0.0, 0.0, -4.0, 1.0).unwrap();
+        let far_parallax = (far_left.screen_pos.x - far_right.screen_pos.x).abs();
+
+        let near_left = projector.project_3d(0.0, 0.0, -1.0, -1.0).unwrap();
+        let near_right = projector.project_3d(0.0, 0.0, -1.0, 1.0).unwrap();
+        let near_parallax = (near_left.screen_pos.x - near_right.screen_pos.x).abs();
+
+        assert!(
+            far_parallax > near_parallax,
+            "Far parallax ({:.4}) should be greater than near parallax ({:.4})",
+            far_parallax,
+            near_parallax
+        );
+    }
+
+    #[test]
+    fn test_orthographic_parallax_constant_across_depth() {
+        let center = egui::Pos2::new(100.0, 100.0);
+        let scale = 50.0;
+        let eye_separation = 0.2;
+        let projection_distance = 5.0;
+
+        let projector = StereoProjector::new(
+            center,
+            scale,
+            eye_separation,
+            projection_distance,
+            ProjectionMode::Orthographic,
+        );
+
+        let far_left = projector.project_3d(0.0, 0.0, -10.0, -1.0).unwrap();
+        let far_right = projector.project_3d(0.0, 0.0, -10.0, 1.0).unwrap();
+        let far_parallax = (far_left.screen_pos.x - far_right.screen_pos.x).abs();
+
+        let near_left = projector.project_3d(0.0, 0.0, -1.0, -1.0).unwrap();
+        let near_right = projector.project_3d(0.0, 0.0, -1.0, 1.0).unwrap();
+        let near_parallax = (near_left.screen_pos.x - near_right.screen_pos.x).abs();
+
+        assert_approx_eq(far_parallax, near_parallax, 1e-6);
+    }
+
+    #[test]
+    fn test_no_eye_has_no_parallax() {
+        let center = egui::Pos2::new(100.0, 100.0);
+        let scale = 50.0;
+        let eye_separation = 0.2;
+        let projection_distance = 5.0;
+
+        let projector = StereoProjector::new(
+            center,
+            scale,
+            eye_separation,
+            projection_distance,
+            ProjectionMode::Perspective,
+        );
+
+        let with_eye = projector.project_3d(0.5, 0.3, -2.0, 1.0).unwrap();
+        let no_eye = projector.project_3d_no_eye(0.5, 0.3, -2.0).unwrap();
+
+        assert!(
+            (with_eye.screen_pos.x - no_eye.screen_pos.x).abs() > 0.01,
+            "With-eye projection should differ from no-eye"
+        );
+    }
+
+    #[test]
+    fn test_behind_camera_returns_none() {
+        let center = egui::Pos2::new(100.0, 100.0);
+        let scale = 50.0;
+        let eye_separation = 0.1;
+        let projection_distance = 5.0;
+
+        let projector = StereoProjector::new(
+            center,
+            scale,
+            eye_separation,
+            projection_distance,
+            ProjectionMode::Perspective,
+        );
+
+        assert!(projector.project_3d(0.0, 0.0, -5.1, 1.0).is_none());
+    }
+
+    #[test]
+    fn test_left_eye_moves_left_right_eye_moves_right() {
+        let center = egui::Pos2::new(100.0, 100.0);
+        let scale = 50.0;
+        let eye_separation = 0.2;
+        let projection_distance = 5.0;
+
+        let projector = StereoProjector::new(
+            center,
+            scale,
+            eye_separation,
+            projection_distance,
+            ProjectionMode::Perspective,
+        );
+
+        let left = projector.project_3d(0.0, 0.0, -2.0, -1.0).unwrap();
+        let right = projector.project_3d(0.0, 0.0, -2.0, 1.0).unwrap();
+
+        let mono = projector.project_3d_no_eye(0.0, 0.0, -2.0).unwrap();
+
+        assert!(
+            left.screen_pos.x < mono.screen_pos.x,
+            "Left eye ({:.4}) should be left of mono ({:.4})",
+            left.screen_pos.x,
+            mono.screen_pos.x
+        );
+        assert!(
+            right.screen_pos.x > mono.screen_pos.x,
+            "Right eye ({:.4}) should be right of mono ({:.4})",
+            right.screen_pos.x,
+            mono.screen_pos.x
+        );
+    }
+}
