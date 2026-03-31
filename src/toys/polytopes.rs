@@ -314,10 +314,12 @@ impl Toy for PolytopesToy {
             stereo: self.stereo,
         };
         let ctx = TesseractRenderContext::from_config(vertices, indices, &self.camera, config);
+        let transformed = ctx.transform_vertices();
 
         ctx.render_eye_view(
             ui,
             left_rect,
+            &transformed,
             EyeRenderOptions {
                 eye_sign: -1.0,
                 is_left_view: true,
@@ -329,6 +331,7 @@ impl Toy for PolytopesToy {
         ctx.render_eye_view(
             ui,
             right_rect,
+            &transformed,
             EyeRenderOptions {
                 eye_sign: 1.0,
                 is_left_view: false,

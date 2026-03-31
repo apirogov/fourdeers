@@ -377,6 +377,14 @@ struct TetraRenderSpec<'a> {
     base_label: Option<&'a str>,
 }
 
+pub struct TransformedVertex {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+    pub w: f32,
+    pub in_slice: bool,
+}
+
 impl TesseractRenderContext {
     pub fn from_config(
         vertices: Vec<Vertex4D>,
@@ -412,10 +420,32 @@ impl TesseractRenderContext {
         }
     }
 
+    pub fn transform_vertices(&self) -> Vec<TransformedVertex> {
+        self.vertices
+            .iter()
+            .map(|v| {
+                let p_object = self.object_rotation.rotate_vector(v.position.into());
+                let p_world = p_object - self.camera.position;
+                let p_4d = self.camera_4d_rotation_inverse.rotate_vector(p_world);
+                let p_cam = self
+                    .inv_q_left
+                    .transform_vector(&Vector3::new(p_4d.x, p_4d.y, p_4d.z));
+                TransformedVertex {
+                    x: p_cam.x,
+                    y: p_cam.y,
+                    z: p_cam.z,
+                    w: p_4d.w,
+                    in_slice: p_4d.w >= -self.w_half && p_4d.w <= self.w_half,
+                }
+            })
+            .collect()
+    }
+
     pub fn render_eye_view(
         &self,
         ui: &mut egui::Ui,
         view_rect: egui::Rect,
+        transformed: &[TransformedVertex],
         options: EyeRenderOptions<'_>,
     ) {
         let center = view_rect.center();
@@ -431,7 +461,7 @@ impl TesseractRenderContext {
 
         let painter = ui.painter().with_clip_rect(view_rect);
 
-        self.render_tesseract_edges(&painter, &projector, options.eye_sign);
+        self.render_edges(&painter, &projector, transformed, options.eye_sign);
         if options.show_debug {
             self.render_zone_labels(&painter, view_rect, options.is_left_view);
         }
@@ -446,74 +476,45 @@ impl TesseractRenderContext {
         }
     }
 
-    fn render_tesseract_edges(
+    fn render_edges(
         &self,
         painter: &egui::Painter,
         projector: &StereoProjector,
+        transformed: &[TransformedVertex],
         eye_sign: f32,
     ) {
+        let stroke_width = 2.5;
         for chunk in self.indices.chunks(2) {
             if chunk.len() != 2 {
                 continue;
             }
 
-            let v0 = &self.vertices[chunk[0] as usize];
-            let v1 = &self.vertices[chunk[1] as usize];
+            let t0 = &transformed[chunk[0] as usize];
+            let t1 = &transformed[chunk[1] as usize];
 
-            let p0_object = self.object_rotation.rotate_vector(v0.position.into());
-            let p1_object = self.object_rotation.rotate_vector(v1.position.into());
-
-            let p0_world = p0_object - self.camera.position;
-            let p1_world = p1_object - self.camera.position;
-
-            let p0_4d = self.camera_4d_rotation_inverse.rotate_vector(p0_world);
-            let p1_4d = self.camera_4d_rotation_inverse.rotate_vector(p1_world);
-
-            let w0_in_slice = p0_4d.w >= -self.w_half && p0_4d.w <= self.w_half;
-            let w1_in_slice = p1_4d.w >= -self.w_half && p1_4d.w <= self.w_half;
-
-            if !w0_in_slice && !w1_in_slice {
+            if !t0.in_slice && !t1.in_slice {
                 continue;
             }
 
-            let (screen_p0, screen_p1) =
-                self.project_edge_points(p0_4d, p1_4d, projector, eye_sign);
+            let s0 = projector
+                .project_3d(t0.x, t0.y, t0.z, eye_sign)
+                .map(|p| p.screen_pos);
+            let s1 = projector
+                .project_3d(t1.x, t1.y, t1.z, eye_sign)
+                .map(|p| p.screen_pos);
 
-            let Some((s0, s1)) = screen_p0.zip(screen_p1) else {
+            let Some((s0, s1)) = s0.zip(s1) else {
                 continue;
             };
 
-            let w_avg = (p0_4d.w + p1_4d.w) / 2.0;
-            let alpha = if w0_in_slice && w1_in_slice { 255 } else { 100 };
+            let w_avg = (t0.w + t1.w) / 2.0;
+            let alpha = if t0.in_slice && t1.in_slice { 255 } else { 100 };
 
             let normalized_w = (w_avg / self.w_half).clamp(-1.0, 1.0);
             let color = w_to_color(normalized_w, alpha, self.w_color_intensity);
 
-            painter.line_segment([s0, s1], egui::Stroke::new(2.5, color));
+            painter.line_segment([s0, s1], egui::Stroke::new(stroke_width, color));
         }
-    }
-
-    fn project_edge_points(
-        &self,
-        p0_4d: nalgebra::Vector4<f32>,
-        p1_4d: nalgebra::Vector4<f32>,
-        projector: &StereoProjector,
-        eye_sign: f32,
-    ) -> (Option<egui::Pos2>, Option<egui::Pos2>) {
-        let p0_rel = Vector3::new(p0_4d.x, p0_4d.y, p0_4d.z);
-        let p1_rel = Vector3::new(p1_4d.x, p1_4d.y, p1_4d.z);
-
-        let p0_cam = self.inv_q_left.transform_vector(&p0_rel);
-        let p1_cam = self.inv_q_left.transform_vector(&p1_rel);
-
-        let s0 = projector
-            .project_3d(p0_cam.x, p0_cam.y, p0_cam.z, eye_sign)
-            .map(|p| p.screen_pos);
-        let s1 = projector
-            .project_3d(p1_cam.x, p1_cam.y, p1_cam.z, eye_sign)
-            .map(|p| p.screen_pos);
-
-        (s0, s1)
     }
 
     fn render_zone_labels(
