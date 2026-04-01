@@ -340,8 +340,8 @@ impl Toy for PolytopesToy {
             &self.camera,
             config,
         );
-        let transformed = ctx.transform_vertices();
 
+        let transformed = ctx.transform_vertices();
         ctx.render_eye_view(
             ui,
             left_rect,
@@ -354,6 +354,7 @@ impl Toy for PolytopesToy {
                 tetrahedron_rotations: &self.tetrahedron_rotations,
             },
         );
+
         ctx.render_eye_view(
             ui,
             right_rect,

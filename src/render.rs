@@ -276,27 +276,24 @@ impl StereoProjector {
     }
 
     pub fn project_3d(&self, x: f32, y: f32, z: f32, eye_sign: f32) -> Option<ProjectedPoint> {
-        let (scale_factor, parallax) = match self.mode {
+        let eye_offset = eye_sign * self.eye_separation * 0.5;
+        let x_shifted = x - eye_offset;
+
+        let scale_factor = match self.mode {
             ProjectionMode::Perspective => {
                 let z_offset = self.projection_distance + z;
                 if z_offset <= 0.1 {
                     return None;
                 }
-                let sf = self.projection_distance / z_offset;
-                let eye_offset = eye_sign * self.eye_separation * 0.5;
-                (sf, eye_offset * sf)
+                self.projection_distance / z_offset
             }
-            ProjectionMode::Orthographic => {
-                let eye_offset = eye_sign * self.eye_separation * 0.5;
-                let parallax = eye_offset;
-                (1.0, parallax)
-            }
+            ProjectionMode::Orthographic => 1.0,
         };
 
         let final_scale = self.scale * scale_factor;
         Some(ProjectedPoint {
             screen_pos: egui::Pos2::new(
-                self.center.x + x * final_scale + parallax,
+                self.center.x + x_shifted * final_scale,
                 self.center.y - y * final_scale,
             ),
             depth: z,
@@ -1443,7 +1440,7 @@ mod tests {
     }
 
     #[test]
-    fn test_left_eye_moves_left_right_eye_moves_right() {
+    fn test_left_eye_sees_right_right_eye_sees_left() {
         let center = egui::Pos2::new(100.0, 100.0);
         let scale = 50.0;
         let eye_separation = 0.2;
@@ -1463,14 +1460,14 @@ mod tests {
         let mono = projector.project_3d_no_eye(0.0, 0.0, -2.0).unwrap();
 
         assert!(
-            left.screen_pos.x < mono.screen_pos.x,
-            "Left eye ({:.4}) should be left of mono ({:.4})",
+            left.screen_pos.x > mono.screen_pos.x,
+            "Left eye ({:.4}) should be right of mono ({:.4}) — camera shifted left sees object shifted right",
             left.screen_pos.x,
             mono.screen_pos.x
         );
         assert!(
-            right.screen_pos.x > mono.screen_pos.x,
-            "Right eye ({:.4}) should be right of mono ({:.4})",
+            right.screen_pos.x < mono.screen_pos.x,
+            "Right eye ({:.4}) should be left of mono ({:.4}) — camera shifted right sees object shifted left",
             right.screen_pos.x,
             mono.screen_pos.x
         );
