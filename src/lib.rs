@@ -4,6 +4,7 @@ pub mod app;
 pub mod camera;
 pub mod colors;
 pub mod input;
+pub mod map;
 pub mod polytopes;
 pub mod render;
 pub mod rotation4d;

@@ -3,12 +3,14 @@
 use eframe::egui;
 use nalgebra::{UnitQuaternion, Vector3, Vector4};
 
+use crate::camera::CameraAction;
 use crate::colors::panel_fill;
 use crate::input::render_zone_debug_overlay;
 use crate::input::{
     analyze_tap_in_stereo_view_with_modes, get_zone_from_rect, DragView, Zone, ZoneDebugOptions,
     ZoneMode,
 };
+use crate::map::MapRenderer;
 use crate::render::{
     draw_background, draw_center_divider, render_common_menu_half, render_stereo_views,
     render_tap_zone_label, split_stereo_views, CompassFrameMode, FourDSettings, ProjectionMode,
@@ -46,6 +48,7 @@ pub struct FourDeersApp {
     compass_rotation: UnitQuaternion<f32>,
     compass_waypoint_index: usize,
     compass_frame_mode: CompassFrameMode,
+    map_renderer: MapRenderer,
 }
 
 impl FourDeersApp {
@@ -65,6 +68,7 @@ impl FourDeersApp {
             compass_rotation: UnitQuaternion::identity(),
             compass_waypoint_index: 0,
             compass_frame_mode: CompassFrameMode::World,
+            map_renderer: MapRenderer::new(),
         }
     }
 }
@@ -105,6 +109,8 @@ impl eframe::App for FourDeersApp {
         self.process_pointer_events(ctx);
         if self.active_view == ActiveView::Main {
             self.toy_manager.active_toy_mut().handle_keyboard(ctx);
+        } else if self.active_view == ActiveView::Map {
+            self.handle_map_keyboard(ctx);
         }
         self.render_ui(ctx);
         ctx.request_repaint();
@@ -204,29 +210,16 @@ impl FourDeersApp {
     }
 
     fn render_map_scene(&mut self, ui: &mut egui::Ui, rect: egui::Rect) {
-        draw_background(ui, rect);
-        draw_center_divider(ui, rect);
+        let scene_camera = self.toy_manager.active_toy().map_camera();
+        let waypoints = self.toy_manager.active_toy().map_waypoints();
 
-        let eye_sep = self.settings.stereo.eye_separation;
-        let proj_dist = self.settings.stereo.projection_distance;
-        render_stereo_views(
-            ui,
-            rect,
-            eye_sep,
-            proj_dist,
-            ProjectionMode::Orthographic,
-            |painter, _projector, view_rect| {
-                let center = view_rect.center();
-                let font_id = egui::FontId::proportional(16.0);
-                painter.text(
-                    center,
-                    egui::Align2::CENTER_CENTER,
-                    "4D Map",
-                    font_id,
-                    egui::Color32::from_rgb(120, 120, 140),
-                );
-            },
-        );
+        if let Some(camera) = scene_camera {
+            self.map_renderer
+                .render(ui, rect, camera, &waypoints, self.settings.stereo);
+        } else {
+            draw_background(ui, rect);
+            draw_center_divider(ui, rect);
+        }
     }
 
     fn process_pointer_events(&mut self, ctx: &egui::Context) {
@@ -323,7 +316,15 @@ impl FourDeersApp {
                     let incremental = pitch_rot * yaw_rot;
                     self.compass_rotation = incremental * self.compass_rotation;
                 }
-                ActiveView::Map => {}
+                ActiveView::Map => {
+                    let delta = pos - last_pos;
+                    let is_left_view = matches!(self.drag_view, Some(DragView::Left));
+                    if is_left_view {
+                        self.map_renderer.rotate_3d(delta.x, delta.y);
+                    } else {
+                        self.map_renderer.rotate_4d(delta.x, delta.y);
+                    }
+                }
                 ActiveView::Main => {
                     let is_left_view = matches!(self.drag_view, Some(DragView::Left));
                     self.toy_manager
@@ -437,6 +438,10 @@ impl FourDeersApp {
                 render_tap_zone_label(&left_painter, left_rect, Zone::South, frame_label, None);
                 render_tap_zone_label(&right_painter, right_rect, Zone::South, "Prev", None);
                 render_tap_zone_label(&right_painter, right_rect, Zone::SouthEast, "Next", None);
+            }
+
+            if self.active_view == ActiveView::Map {
+                render_tap_zone_label(&left_painter, left_rect, Zone::South, "Reset", None);
             }
 
             if self.active_view == ActiveView::Main {
@@ -629,6 +634,70 @@ impl FourDeersApp {
         }
     }
 
+    fn handle_map_keyboard(&mut self, ctx: &egui::Context) {
+        let move_speed = 0.05;
+        ctx.input(|i| {
+            if i.key_down(egui::Key::ArrowUp) {
+                self.map_renderer
+                    .apply_action(CameraAction::MoveUp, move_speed);
+            }
+            if i.key_down(egui::Key::ArrowDown) {
+                self.map_renderer
+                    .apply_action(CameraAction::MoveDown, move_speed);
+            }
+            if i.key_down(egui::Key::ArrowLeft) {
+                self.map_renderer
+                    .apply_action(CameraAction::MoveLeft, move_speed);
+            }
+            if i.key_down(egui::Key::ArrowRight) {
+                self.map_renderer
+                    .apply_action(CameraAction::MoveRight, move_speed);
+            }
+            if i.key_down(egui::Key::PageUp) {
+                self.map_renderer
+                    .apply_action(CameraAction::MoveForward, move_speed);
+            }
+            if i.key_down(egui::Key::PageDown) {
+                self.map_renderer
+                    .apply_action(CameraAction::MoveBackward, move_speed);
+            }
+            if i.key_down(egui::Key::Period) {
+                self.map_renderer
+                    .apply_action(CameraAction::MoveKata, move_speed);
+            }
+            if i.key_down(egui::Key::Comma) {
+                self.map_renderer
+                    .apply_action(CameraAction::MoveAna, move_speed);
+            }
+        });
+    }
+
+    fn reset_map_camera(&mut self) {
+        if let Some(camera) = self.toy_manager.active_toy().map_camera() {
+            let waypoints = self.toy_manager.active_toy().map_waypoints();
+            let bounds = crate::map::compute_bounds(camera, &waypoints);
+            self.map_renderer.reset_to_fit(camera, &bounds);
+        }
+    }
+
+    fn map_tap_action(&self, right_rect: egui::Rect, pos: egui::Pos2) -> Option<CameraAction> {
+        if !right_rect.contains(pos) {
+            return None;
+        }
+        let zone = get_zone_from_rect(right_rect, pos, ZoneMode::NineZones)?;
+        match zone {
+            Zone::North => Some(CameraAction::MoveUp),
+            Zone::South => Some(CameraAction::MoveDown),
+            Zone::West => Some(CameraAction::MoveLeft),
+            Zone::East => Some(CameraAction::MoveRight),
+            Zone::NorthEast => Some(CameraAction::MoveForward),
+            Zone::SouthWest => Some(CameraAction::MoveBackward),
+            Zone::NorthWest => Some(CameraAction::MoveKata),
+            Zone::SouthEast => Some(CameraAction::MoveAna),
+            _ => None,
+        }
+    }
+
     fn handle_tap_zone(&mut self, pos: egui::Pos2) {
         let vis_rect = self.visualization_rect;
 
@@ -689,6 +758,21 @@ impl FourDeersApp {
                     self.cycle_compass_waypoint(1);
                     return;
                 }
+            }
+            return;
+        }
+
+        if self.active_view == ActiveView::Map {
+            if left_rect.contains(pos)
+                && get_zone_from_rect(left_rect, pos, ZoneMode::NineZones) == Some(Zone::South)
+            {
+                self.reset_map_camera();
+                return;
+            }
+
+            let (_, right_rect) = split_stereo_views(visualization_rect);
+            if let Some(action) = self.map_tap_action(right_rect, pos) {
+                self.map_renderer.apply_action(action, 0.3);
             }
             return;
         }

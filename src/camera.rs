@@ -258,7 +258,7 @@ impl Camera {
     ///
     /// This is the key bridge between in-slice movement (`q_left`) and tilted-slice world motion
     /// (`q_right`).
-    fn project_camera_3d_to_world_4d(&self, v3: Vector3<f32>) -> Vector4<f32> {
+    pub fn project_camera_3d_to_world_4d(&self, v3: Vector3<f32>) -> Vector4<f32> {
         let slice_rotation =
             Rotation4D::new(UnitQuaternion::identity(), *self.rotation_4d.q_right());
         let basis = slice_rotation.basis_vectors();

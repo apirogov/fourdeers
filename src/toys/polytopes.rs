@@ -482,6 +482,10 @@ impl Toy for PolytopesToy {
         ]
     }
 
+    fn map_camera(&self) -> Option<&Camera> {
+        Some(&self.camera)
+    }
+
     fn compass_world_to_camera_frame(&self, world_vector: Vector4<f32>) -> Option<Vector4<f32>> {
         Some(self.camera.world_vector_to_camera_frame(world_vector))
     }

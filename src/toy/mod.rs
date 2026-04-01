@@ -3,6 +3,7 @@
 use eframe::egui;
 use nalgebra::Vector4;
 
+use crate::camera::Camera;
 use crate::input::{DragView, TapAnalysis, ZoneMode};
 use crate::render::{FourDSettings, StereoSettings};
 
@@ -48,6 +49,14 @@ pub trait Toy {
 
     fn compass_waypoints(&self) -> Vec<CompassWaypoint> {
         Vec::new()
+    }
+
+    fn map_camera(&self) -> Option<&Camera> {
+        None
+    }
+
+    fn map_waypoints(&self) -> Vec<CompassWaypoint> {
+        self.compass_waypoints()
     }
 
     fn zone_mode_for_view(&self, _is_left_view: bool) -> ZoneMode {
