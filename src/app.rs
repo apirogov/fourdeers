@@ -665,6 +665,13 @@ impl FourDeersApp {
         }
 
         if self.active_view == ActiveView::Compass {
+            if left_rect.contains(pos)
+                && get_zone_from_rect(left_rect, pos, ZoneMode::NineZones) == Some(Zone::South)
+            {
+                self.toggle_compass_frame_mode();
+                return;
+            }
+
             let (_, right_rect) = split_stereo_views(visualization_rect);
             if right_rect.contains(pos) {
                 let zone = get_zone_from_rect(right_rect, pos, ZoneMode::NineZones);
