@@ -409,19 +409,25 @@ impl FourDeersApp {
             };
 
             render_common_menu_half(&left_painter, left_menu_rect);
-            let compass_label = if self.active_view == ActiveView::Compass {
-                "Close"
-            } else {
-                "Compass"
-            };
-            render_tap_zone_label(&left_painter, left_rect, Zone::West, compass_label, None);
-
             let map_label = if self.active_view == ActiveView::Map {
                 "Close"
             } else {
                 "Map"
             };
-            render_tap_zone_label(&left_painter, left_rect, Zone::SouthWest, map_label, None);
+            render_tap_zone_label(&left_painter, left_rect, Zone::West, map_label, None);
+
+            let compass_label = if self.active_view == ActiveView::Compass {
+                "Close"
+            } else {
+                "Compass"
+            };
+            render_tap_zone_label(
+                &left_painter,
+                left_rect,
+                Zone::SouthWest,
+                compass_label,
+                None,
+            );
 
             if self.active_view == ActiveView::Compass {
                 let frame_label = match self.compass_frame_mode {
@@ -645,10 +651,10 @@ impl FourDeersApp {
         if left_rect.contains(pos)
             && get_zone_from_rect(left_rect, pos, ZoneMode::NineZones) == Some(Zone::West)
         {
-            self.active_view = if self.active_view == ActiveView::Compass {
+            self.active_view = if self.active_view == ActiveView::Map {
                 ActiveView::Main
             } else {
-                ActiveView::Compass
+                ActiveView::Map
             };
             return;
         }
@@ -656,10 +662,10 @@ impl FourDeersApp {
         if left_rect.contains(pos)
             && get_zone_from_rect(left_rect, pos, ZoneMode::NineZones) == Some(Zone::SouthWest)
         {
-            self.active_view = if self.active_view == ActiveView::Map {
+            self.active_view = if self.active_view == ActiveView::Compass {
                 ActiveView::Main
             } else {
-                ActiveView::Map
+                ActiveView::Compass
             };
             return;
         }
