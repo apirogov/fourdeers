@@ -353,13 +353,15 @@ impl Toy for PolytopesToy {
         );
 
         if show_debug {
-            let right_painter = ui.painter().with_clip_rect(split_stereo_views(rect).1);
-            ctx.render_zone_labels(&right_painter, rect);
+            let right_rect = split_stereo_views(rect).1;
+            let right_painter = ui.painter().with_clip_rect(right_rect);
+            ctx.render_zone_labels(&right_painter, right_rect);
         }
 
         if self.show_controls {
-            let right_painter = ui.painter().with_clip_rect(split_stereo_views(rect).1);
-            ctx.render_tetrahedron_gadget(&right_painter, rect, &self.tetrahedron_rotations);
+            let right_rect = split_stereo_views(rect).1;
+            let right_painter = ui.painter().with_clip_rect(right_rect);
+            ctx.render_tetrahedron_gadget(&right_painter, right_rect, &self.tetrahedron_rotations);
         }
     }
 
