@@ -1023,8 +1023,6 @@ fn render_tetrahedron_with_projector(
     eye_sign: f32,
     frame_mode: CompassFrameMode,
 ) {
-    let center = projector.center();
-
     for edge in &gadget.edges {
         let v0_idx = edge.vertex_indices[0];
         let v1_idx = edge.vertex_indices[1];
@@ -1115,12 +1113,18 @@ fn render_tetrahedron_with_projector(
     }
 
     let arrow = gadget.arrow_position();
-    if let Some(arrow_p) = projector.project_3d(arrow.x, arrow.y, arrow.z, eye_sign) {
+    let arrow_p = projector.project_3d(arrow.x, arrow.y, arrow.z, eye_sign);
+    let origin_p = projector.project_3d(0.0, 0.0, 0.0, eye_sign);
+    if let (Some(arrow_p), Some(origin_p)) = (arrow_p, origin_p) {
         let arrow_end = arrow_p.screen_pos;
-        let arrow_vec = arrow_end - center;
+        let arrow_start = origin_p.screen_pos;
+        let arrow_vec = arrow_end - arrow_start;
 
         if arrow_vec.length() > 1e-3 {
-            painter.line_segment([center, arrow_end], egui::Stroke::new(3.0, arrow_primary()));
+            painter.line_segment(
+                [arrow_start, arrow_end],
+                egui::Stroke::new(3.0, arrow_primary()),
+            );
 
             let arrow_head_size = gadget.arrow_head_size() * 20.0;
             if arrow_vec.length() > arrow_head_size {
@@ -1140,10 +1144,10 @@ fn render_tetrahedron_with_projector(
             }
         }
 
-        painter.circle_filled(center, 3.0, arrow_glow());
+        painter.circle_filled(arrow_start, 3.0, arrow_glow());
 
         if let Some(ref label) = gadget.base_label {
-            let base_pos = center + egui::Vec2::new(0.0, 18.0);
+            let base_pos = arrow_start + egui::Vec2::new(0.0, 18.0);
             let font_id = egui::FontId::proportional(11.0);
             let outline_color = outline_default();
             let text_color = label_default();
