@@ -16,6 +16,14 @@ use crate::render::{
 };
 use crate::toy::{CompassWaypoint, ToyManager};
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+enum ActiveView {
+    #[default]
+    Main,
+    Compass,
+    Map,
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct CommonSettings {
     pub show_debug: bool,
@@ -34,7 +42,7 @@ pub struct FourDeersApp {
     drag_view: Option<DragView>,
     last_drag_pos: Option<egui::Pos2>,
     visualization_rect: Option<egui::Rect>,
-    compass_open: bool,
+    active_view: ActiveView,
     compass_rotation: UnitQuaternion<f32>,
     compass_waypoint_index: usize,
     compass_frame_mode: CompassFrameMode,
@@ -53,7 +61,7 @@ impl FourDeersApp {
             drag_view: None,
             last_drag_pos: None,
             visualization_rect: None,
-            compass_open: false,
+            active_view: ActiveView::default(),
             compass_rotation: UnitQuaternion::identity(),
             compass_waypoint_index: 0,
             compass_frame_mode: CompassFrameMode::World,
@@ -68,9 +76,20 @@ impl eframe::App for FourDeersApp {
                 self.menu_open = !self.menu_open;
             }
             if i.key_pressed(egui::Key::C) {
-                self.compass_open = !self.compass_open;
+                self.active_view = if self.active_view == ActiveView::Compass {
+                    ActiveView::Main
+                } else {
+                    ActiveView::Compass
+                };
             }
-            if self.compass_open {
+            if i.key_pressed(egui::Key::G) {
+                self.active_view = if self.active_view == ActiveView::Map {
+                    ActiveView::Main
+                } else {
+                    ActiveView::Map
+                };
+            }
+            if self.active_view == ActiveView::Compass {
                 if i.key_pressed(egui::Key::ArrowLeft) {
                     self.cycle_compass_waypoint(-1);
                 }
@@ -84,7 +103,7 @@ impl eframe::App for FourDeersApp {
         });
 
         self.process_pointer_events(ctx);
-        if !self.compass_open {
+        if self.active_view == ActiveView::Main {
             self.toy_manager.active_toy_mut().handle_keyboard(ctx);
         }
         self.render_ui(ctx);
@@ -184,6 +203,32 @@ impl FourDeersApp {
         );
     }
 
+    fn render_map_scene(&mut self, ui: &mut egui::Ui, rect: egui::Rect) {
+        draw_background(ui, rect);
+        draw_center_divider(ui, rect);
+
+        let eye_sep = self.settings.stereo.eye_separation;
+        let proj_dist = self.settings.stereo.projection_distance;
+        render_stereo_views(
+            ui,
+            rect,
+            eye_sep,
+            proj_dist,
+            ProjectionMode::Orthographic,
+            |painter, _projector, view_rect| {
+                let center = view_rect.center();
+                let font_id = egui::FontId::proportional(16.0);
+                painter.text(
+                    center,
+                    egui::Align2::CENTER_CENTER,
+                    "4D Map",
+                    font_id,
+                    egui::Color32::from_rgb(120, 120, 140),
+                );
+            },
+        );
+    }
+
     fn process_pointer_events(&mut self, ctx: &egui::Context) {
         let mut tap_event = None;
 
@@ -245,7 +290,7 @@ impl FourDeersApp {
                                     DragView::Right
                                 };
                                 self.drag_view = Some(drag_view);
-                                if !self.compass_open {
+                                if self.active_view == ActiveView::Main {
                                     self.toy_manager
                                         .active_toy_mut()
                                         .handle_drag_start(drag_view);
@@ -268,25 +313,30 @@ impl FourDeersApp {
 
     fn process_drag(&mut self, pos: egui::Pos2) {
         if let Some(last_pos) = self.last_drag_pos {
-            if self.compass_open {
-                let delta = pos - last_pos;
-                let yaw_rot = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), delta.x * 0.005);
-                let pitch_rot =
-                    UnitQuaternion::from_axis_angle(&Vector3::x_axis(), delta.y * 0.005);
-                let incremental = pitch_rot * yaw_rot;
-                self.compass_rotation = incremental * self.compass_rotation;
-            } else {
-                let is_left_view = matches!(self.drag_view, Some(DragView::Left));
-                self.toy_manager
-                    .active_toy_mut()
-                    .handle_drag(is_left_view, last_pos, pos);
+            match self.active_view {
+                ActiveView::Compass => {
+                    let delta = pos - last_pos;
+                    let yaw_rot =
+                        UnitQuaternion::from_axis_angle(&Vector3::y_axis(), delta.x * 0.005);
+                    let pitch_rot =
+                        UnitQuaternion::from_axis_angle(&Vector3::x_axis(), delta.y * 0.005);
+                    let incremental = pitch_rot * yaw_rot;
+                    self.compass_rotation = incremental * self.compass_rotation;
+                }
+                ActiveView::Map => {}
+                ActiveView::Main => {
+                    let is_left_view = matches!(self.drag_view, Some(DragView::Left));
+                    self.toy_manager
+                        .active_toy_mut()
+                        .handle_drag(is_left_view, last_pos, pos);
+                }
             }
         }
         self.last_drag_pos = Some(pos);
     }
 
     fn process_hold(&mut self, pos: egui::Pos2) {
-        if self.compass_open {
+        if self.active_view != ActiveView::Main {
             return;
         }
 
@@ -313,7 +363,7 @@ impl FourDeersApp {
         self.is_drag_mode = false;
         self.drag_view = None;
         self.last_drag_pos = None;
-        if !self.compass_open {
+        if self.active_view == ActiveView::Main {
             self.toy_manager.active_toy_mut().clear_interaction_state();
         }
     }
@@ -329,12 +379,20 @@ impl FourDeersApp {
                 .active_toy_mut()
                 .set_four_d_settings(&self.settings.four_d);
 
-            if self.compass_open {
-                self.render_compass_scene(ui, rect);
-            } else {
-                self.toy_manager
-                    .active_toy_mut()
-                    .render_scene(ui, rect, self.settings.show_debug);
+            match self.active_view {
+                ActiveView::Main => {
+                    self.toy_manager.active_toy_mut().render_scene(
+                        ui,
+                        rect,
+                        self.settings.show_debug,
+                    );
+                }
+                ActiveView::Compass => {
+                    self.render_compass_scene(ui, rect);
+                }
+                ActiveView::Map => {
+                    self.render_map_scene(ui, rect);
+                }
             }
 
             let (left_rect, right_rect) = split_stereo_views(rect);
@@ -351,24 +409,31 @@ impl FourDeersApp {
             };
 
             render_common_menu_half(&left_painter, left_menu_rect);
-            let compass_label = if self.compass_open {
+            let compass_label = if self.active_view == ActiveView::Compass {
                 "Close"
             } else {
                 "Compass"
             };
             render_tap_zone_label(&left_painter, left_rect, Zone::West, compass_label, None);
 
-            if self.compass_open {
+            let map_label = if self.active_view == ActiveView::Map {
+                "Close"
+            } else {
+                "Map"
+            };
+            render_tap_zone_label(&left_painter, left_rect, Zone::SouthWest, map_label, None);
+
+            if self.active_view == ActiveView::Compass {
                 let frame_label = match self.compass_frame_mode {
                     CompassFrameMode::World => "Frame: World",
                     CompassFrameMode::Camera => "Frame: Camera",
                 };
-                render_tap_zone_label(&left_painter, left_rect, Zone::SouthWest, frame_label, None);
+                render_tap_zone_label(&left_painter, left_rect, Zone::South, frame_label, None);
                 render_tap_zone_label(&right_painter, right_rect, Zone::South, "Prev", None);
                 render_tap_zone_label(&right_painter, right_rect, Zone::SouthEast, "Next", None);
             }
 
-            if !self.compass_open {
+            if self.active_view == ActiveView::Main {
                 self.toy_manager
                     .active_toy()
                     .render_toy_menu(&right_painter, right_menu_rect);
@@ -376,12 +441,12 @@ impl FourDeersApp {
 
             if self.settings.show_debug {
                 let options = ZoneDebugOptions::default();
-                let left_mode = if self.compass_open {
+                let left_mode = if self.active_view != ActiveView::Main {
                     ZoneMode::NineZones
                 } else {
                     self.toy_manager.active_toy().zone_mode_for_view(true)
                 };
-                let right_mode = if self.compass_open {
+                let right_mode = if self.active_view != ActiveView::Main {
                     ZoneMode::NineZones
                 } else {
                     self.toy_manager.active_toy().zone_mode_for_view(false)
@@ -580,18 +645,26 @@ impl FourDeersApp {
         if left_rect.contains(pos)
             && get_zone_from_rect(left_rect, pos, ZoneMode::NineZones) == Some(Zone::West)
         {
-            self.compass_open = !self.compass_open;
+            self.active_view = if self.active_view == ActiveView::Compass {
+                ActiveView::Main
+            } else {
+                ActiveView::Compass
+            };
             return;
         }
 
-        if self.compass_open {
-            if left_rect.contains(pos)
-                && get_zone_from_rect(left_rect, pos, ZoneMode::NineZones) == Some(Zone::SouthWest)
-            {
-                self.toggle_compass_frame_mode();
-                return;
-            }
+        if left_rect.contains(pos)
+            && get_zone_from_rect(left_rect, pos, ZoneMode::NineZones) == Some(Zone::SouthWest)
+        {
+            self.active_view = if self.active_view == ActiveView::Map {
+                ActiveView::Main
+            } else {
+                ActiveView::Map
+            };
+            return;
+        }
 
+        if self.active_view == ActiveView::Compass {
             let (_, right_rect) = split_stereo_views(visualization_rect);
             if right_rect.contains(pos) {
                 let zone = get_zone_from_rect(right_rect, pos, ZoneMode::NineZones);
@@ -604,6 +677,10 @@ impl FourDeersApp {
                     return;
                 }
             }
+            return;
+        }
+
+        if self.active_view != ActiveView::Main {
             return;
         }
 
