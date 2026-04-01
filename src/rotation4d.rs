@@ -36,7 +36,7 @@
 //! - `basis_vectors` returns basis of the *full* `(q_left, q_right)` transform, not a camera
 //!   split model. Camera code intentionally derives some axes from `q_right` only.
 
-use nalgebra::{UnitQuaternion, Vector3, Vector4};
+use nalgebra::{Matrix4, UnitQuaternion, Vector3, Vector4};
 
 #[derive(Clone, Debug)]
 pub struct Rotation4D {
@@ -144,6 +144,16 @@ impl Rotation4D {
             self.rotate_point([0.0, 0.0, 1.0, 0.0]),
             self.rotate_point([0.0, 0.0, 0.0, 1.0]),
         ]
+    }
+
+    pub fn to_matrix(&self) -> Matrix4<f32> {
+        let b = self.basis_vectors();
+        Matrix4::from_columns(&[
+            Vector4::new(b[0][0], b[0][1], b[0][2], b[0][3]),
+            Vector4::new(b[1][0], b[1][1], b[1][2], b[1][3]),
+            Vector4::new(b[2][0], b[2][1], b[2][2], b[2][3]),
+            Vector4::new(b[3][0], b[3][1], b[3][2], b[3][3]),
+        ])
     }
 
     pub fn basis_x(&self) -> [f32; 4] {

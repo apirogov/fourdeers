@@ -1,7 +1,7 @@
 //! Rendering utilities for stereo 3D visualization
 
 use eframe::egui;
-use nalgebra::{UnitQuaternion, Vector3};
+use nalgebra::UnitQuaternion;
 use std::collections::HashMap;
 
 use crate::camera::Camera;
@@ -329,10 +329,10 @@ impl StereoProjector {
 pub struct TesseractRenderContext<'a> {
     pub vertices: &'a [Vertex4D],
     pub indices: &'a [u16],
-    pub object_rotation: Rotation4D,
-    pub inv_q_left: UnitQuaternion<f32>,
+    mat_4d: nalgebra::Matrix4<f32>,
+    offset_4d: nalgebra::Vector4<f32>,
+    mat_3d: nalgebra::Matrix4<f32>,
     pub w_half: f32,
-    pub camera_4d_rotation_inverse: Rotation4D,
     pub camera: Camera,
     pub w_color_intensity: f32,
     pub eye_separation: f32,
@@ -405,13 +405,37 @@ impl<'a> TesseractRenderContext<'a> {
         let w_half = config.four_d.w_thickness * 0.5;
         let camera_4d_rotation_inverse = camera.rotation_4d.inverse_q_right_only();
 
+        let combined_4d = object_rotation.then(&camera_4d_rotation_inverse);
+        let mat_4d = combined_4d.to_matrix();
+        let offset_4d = camera_4d_rotation_inverse.rotate_vector(camera.position);
+
+        let cam_3d = inv_q_left.to_rotation_matrix();
+        let mat_3d = nalgebra::Matrix4::new(
+            cam_3d[(0, 0)],
+            cam_3d[(0, 1)],
+            cam_3d[(0, 2)],
+            0.0,
+            cam_3d[(1, 0)],
+            cam_3d[(1, 1)],
+            cam_3d[(1, 2)],
+            0.0,
+            cam_3d[(2, 0)],
+            cam_3d[(2, 1)],
+            cam_3d[(2, 2)],
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+        );
+
         Self {
             vertices,
             indices,
-            object_rotation,
-            inv_q_left,
+            mat_4d,
+            offset_4d,
+            mat_3d,
             w_half,
-            camera_4d_rotation_inverse,
             camera: camera.clone(),
             w_color_intensity: config.four_d.w_color_intensity,
             eye_separation: config.stereo.eye_separation,
@@ -424,16 +448,18 @@ impl<'a> TesseractRenderContext<'a> {
         self.vertices
             .iter()
             .map(|v| {
-                let p_object = self.object_rotation.rotate_vector(v.position.into());
-                let p_world = p_object - self.camera.position;
-                let p_4d = self.camera_4d_rotation_inverse.rotate_vector(p_world);
-                let p_cam = self
-                    .inv_q_left
-                    .transform_vector(&Vector3::new(p_4d.x, p_4d.y, p_4d.z));
+                let v4 = nalgebra::Vector4::new(
+                    v.position[0],
+                    v.position[1],
+                    v.position[2],
+                    v.position[3],
+                );
+                let p_4d = self.mat_4d * v4 - self.offset_4d;
+                let result = self.mat_3d * p_4d;
                 TransformedVertex {
-                    x: p_cam.x,
-                    y: p_cam.y,
-                    z: p_cam.z,
+                    x: result.x,
+                    y: result.y,
+                    z: result.z,
                     w: p_4d.w,
                     in_slice: p_4d.w >= -self.w_half && p_4d.w <= self.w_half,
                 }
@@ -1448,5 +1474,66 @@ mod tests {
             right.screen_pos.x,
             mono.screen_pos.x
         );
+    }
+
+    #[test]
+    fn test_render_transform_matches_quaternion_pipeline() {
+        use crate::camera::Camera;
+        use crate::polytopes::Vertex4D;
+        use nalgebra::Vector3;
+
+        for (rot4d_x, rot4d_y, rot3d_x, rot3d_y) in [
+            (0.0f32, 0.0f32, 0.0f32, 0.0f32),
+            (50.0, 30.0, 0.0, 0.0),
+            (0.0, 0.0, 20.0, -10.0),
+            (50.0, 30.0, 20.0, -10.0),
+            (-40.0, 70.0, 15.0, 25.0),
+        ] {
+            let mut camera = Camera::new();
+            camera.rotate_4d(rot4d_x, rot4d_y);
+            camera.rotate(rot3d_x, rot3d_y);
+
+            let test_verts: Vec<Vertex4D> = vec![
+                Vertex4D::new(1.0, 0.0, 0.0, 0.0),
+                Vertex4D::new(0.0, 1.0, 0.0, 0.0),
+                Vertex4D::new(0.0, 0.0, 1.0, 0.0),
+                Vertex4D::new(0.0, 0.0, 0.0, 1.0),
+                Vertex4D::new(1.0, 2.0, -3.0, 4.0),
+                Vertex4D::new(-1.0, -2.0, 3.0, -4.0),
+            ];
+            let indices: Vec<u16> = vec![];
+
+            let config = TesseractRenderConfig {
+                rotation_angles: ObjectRotationAngles::default(),
+                four_d: FourDSettings::default(),
+                stereo: StereoSettings::default(),
+            };
+
+            let ctx = TesseractRenderContext::from_config(&test_verts, &indices, &camera, config);
+            let transformed = ctx.transform_vertices();
+
+            let qr_inv = camera.rotation_4d.inverse_q_right_only();
+            let inv_q_left = camera.rotation_4d.q_left().inverse();
+
+            for (i, v) in test_verts.iter().enumerate() {
+                let v4 = nalgebra::Vector4::new(
+                    v.position[0],
+                    v.position[1],
+                    v.position[2],
+                    v.position[3],
+                );
+                let p_4d = qr_inv.rotate_vector(v4 - camera.position);
+
+                let p3 = Vector3::new(p_4d.x, p_4d.y, p_4d.z);
+                let expected_xyz = inv_q_left.transform_vector(&p3);
+                let expected_w = p_4d.w;
+
+                let t = &transformed[i];
+                assert_approx_eq(t.x, expected_xyz.x, 1e-4);
+                assert_approx_eq(t.y, expected_xyz.y, 1e-4);
+                assert_approx_eq(t.z, expected_xyz.z, 1e-4);
+                assert_approx_eq(t.w, expected_w, 1e-4);
+            }
+        }
     }
 }
