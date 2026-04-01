@@ -18,6 +18,8 @@ use crate::toy::{CompassWaypoint, DragState, Toy};
 pub struct PolytopesToy {
     pub camera: Camera,
     polytope_type: PolytopeType,
+    cached_vertices: Vec<crate::polytopes::Vertex4D>,
+    cached_indices: Vec<u16>,
     rot_xy: f32,
     rot_xz: f32,
     rot_yz: f32,
@@ -42,9 +44,13 @@ impl Default for PolytopesToy {
 
 impl PolytopesToy {
     pub fn new() -> Self {
+        let polytope_type = PolytopeType::EightCell;
+        let (cached_vertices, cached_indices) = create_polytope(polytope_type);
         Self {
             camera: Camera::new(),
-            polytope_type: PolytopeType::EightCell,
+            polytope_type,
+            cached_vertices,
+            cached_indices,
             rot_xy: 0.0,
             rot_xz: 0.0,
             rot_yz: 0.0,
@@ -64,6 +70,12 @@ impl PolytopesToy {
 
     fn reset_tetrahedron_rotations(&mut self) {
         self.tetrahedron_rotations.clear();
+    }
+
+    fn ensure_polytope_cached(&mut self) {
+        let (vertices, indices) = create_polytope(self.polytope_type);
+        self.cached_vertices = vertices;
+        self.cached_indices = indices;
     }
 
     fn apply_camera_action(&mut self, action: CameraAction, speed: f32) {
@@ -113,6 +125,7 @@ impl Toy for PolytopesToy {
     fn render_sidebar(&mut self, ui: &mut egui::Ui) {
         ui.label("4D Polytope Visualization");
 
+        let prev_type = self.polytope_type;
         egui::ComboBox::from_label("")
             .selected_text(self.polytope_type.name())
             .show_ui(ui, |ui| {
@@ -120,6 +133,16 @@ impl Toy for PolytopesToy {
                     ui.selectable_value(&mut self.polytope_type, poly_type, poly_type.name());
                 }
             });
+        if self.polytope_type != prev_type {
+            self.ensure_polytope_cached();
+            self.camera.reset();
+            self.rot_xy = 0.0;
+            self.rot_xz = 0.0;
+            self.rot_yz = 0.0;
+            self.rot_xw = 0.0;
+            self.rot_yw = 0.0;
+            self.rot_zw = 0.0;
+        }
 
         ui.label(format!(
             "{} vertices, {} edges",
@@ -299,8 +322,6 @@ impl Toy for PolytopesToy {
 
         draw_center_divider(ui, rect);
 
-        let (vertices, indices) = create_polytope(self.polytope_type);
-
         let config = TesseractRenderConfig {
             rotation_angles: ObjectRotationAngles {
                 xy: self.rot_xy,
@@ -313,7 +334,12 @@ impl Toy for PolytopesToy {
             four_d: self.four_d,
             stereo: self.stereo,
         };
-        let ctx = TesseractRenderContext::from_config(vertices, indices, &self.camera, config);
+        let ctx = TesseractRenderContext::from_config(
+            &self.cached_vertices,
+            &self.cached_indices,
+            &self.camera,
+            config,
+        );
         let transformed = ctx.transform_vertices();
 
         ctx.render_eye_view(

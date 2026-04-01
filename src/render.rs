@@ -326,9 +326,9 @@ impl StereoProjector {
     }
 }
 
-pub struct TesseractRenderContext {
-    pub vertices: Vec<Vertex4D>,
-    pub indices: Vec<u16>,
+pub struct TesseractRenderContext<'a> {
+    pub vertices: &'a [Vertex4D],
+    pub indices: &'a [u16],
     pub object_rotation: Rotation4D,
     pub inv_q_left: UnitQuaternion<f32>,
     pub w_half: f32,
@@ -385,10 +385,10 @@ pub struct TransformedVertex {
     pub in_slice: bool,
 }
 
-impl TesseractRenderContext {
+impl<'a> TesseractRenderContext<'a> {
     pub fn from_config(
-        vertices: Vec<Vertex4D>,
-        indices: Vec<u16>,
+        vertices: &'a [Vertex4D],
+        indices: &'a [u16],
         camera: &Camera,
         config: TesseractRenderConfig,
     ) -> Self {
@@ -461,7 +461,13 @@ impl TesseractRenderContext {
 
         let painter = ui.painter().with_clip_rect(view_rect);
 
-        self.render_edges(&painter, &projector, transformed, options.eye_sign);
+        self.render_edges(
+            &painter,
+            &projector,
+            transformed,
+            options.eye_sign,
+            view_rect,
+        );
         if options.show_debug {
             self.render_zone_labels(&painter, view_rect, options.is_left_view);
         }
@@ -482,8 +488,16 @@ impl TesseractRenderContext {
         projector: &StereoProjector,
         transformed: &[TransformedVertex],
         eye_sign: f32,
+        clip_rect: egui::Rect,
     ) {
         let stroke_width = 2.5;
+        let near_plane = self.projection_distance;
+        let margin = 50.0;
+        let x_min = clip_rect.min.x - margin;
+        let x_max = clip_rect.max.x + margin;
+        let y_min = clip_rect.min.y - margin;
+        let y_max = clip_rect.max.y + margin;
+
         let shapes: Vec<egui::Shape> = self
             .indices
             .chunks(2)
@@ -499,12 +513,25 @@ impl TesseractRenderContext {
                     return None;
                 }
 
+                if t0.z <= -near_plane && t1.z <= -near_plane {
+                    return None;
+                }
+
                 let s0 = projector
                     .project_3d(t0.x, t0.y, t0.z, eye_sign)
                     .map(|p| p.screen_pos)?;
                 let s1 = projector
                     .project_3d(t1.x, t1.y, t1.z, eye_sign)
                     .map(|p| p.screen_pos)?;
+
+                let seg_x_min = s0.x.min(s1.x);
+                let seg_x_max = s0.x.max(s1.x);
+                let seg_y_min = s0.y.min(s1.y);
+                let seg_y_max = s0.y.max(s1.y);
+                if seg_x_max < x_min || seg_x_min > x_max || seg_y_max < y_min || seg_y_min > y_max
+                {
+                    return None;
+                }
 
                 let w_avg = (t0.w + t1.w) / 2.0;
                 let alpha = if t0.in_slice && t1.in_slice { 255 } else { 100 };
