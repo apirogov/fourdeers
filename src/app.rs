@@ -10,9 +10,9 @@ use crate::input::{
     ZoneMode,
 };
 use crate::render::{
-    draw_background, draw_center_divider, render_common_menu_half,
-    render_stereo_tetrahedron_overlay, render_tap_zone_label, split_stereo_views, CompassFrameMode,
-    FourDSettings, ProjectionMode, StereoProjector, StereoSettings,
+    draw_background, draw_center_divider, render_common_menu_half, render_stereo_views,
+    render_tap_zone_label, split_stereo_views, CompassFrameMode, FourDSettings, ProjectionMode,
+    StereoSettings,
 };
 use crate::toy::{CompassWaypoint, ToyManager};
 
@@ -126,15 +126,6 @@ impl FourDeersApp {
         draw_background(ui, rect);
         draw_center_divider(ui, rect);
 
-        let scale = rect.height().min(rect.width()) * 0.25;
-        let projector = StereoProjector::new(
-            rect.center(),
-            scale,
-            self.settings.stereo.eye_separation,
-            self.settings.stereo.projection_distance,
-            ProjectionMode::Orthographic,
-        );
-
         let (mut vector_4d, waypoint_title) =
             if let Some(waypoint) = self.current_compass_waypoint() {
                 let reference = self
@@ -163,14 +154,33 @@ impl FourDeersApp {
             }
         }
 
-        render_stereo_tetrahedron_overlay(
+        use crate::tetrahedron::{format_magnitude, magnitude_4d, TetrahedronGadget};
+        let magnitude_label = format_magnitude(magnitude_4d(vector_4d));
+        let gadget = TetrahedronGadget::from_4d_vector_with_quaternion(
+            vector_4d,
+            self.compass_rotation,
+            1.0,
+        )
+        .with_base_label(magnitude_label)
+        .with_tip_label(waypoint_title);
+
+        let eye_sep = self.settings.stereo.eye_separation;
+        let proj_dist = self.settings.stereo.projection_distance;
+        render_stereo_views(
             ui,
             rect,
-            vector_4d,
-            waypoint_title,
-            self.compass_frame_mode,
-            &self.compass_rotation,
-            &projector,
+            eye_sep,
+            proj_dist,
+            ProjectionMode::Orthographic,
+            |painter, projector, _view_rect| {
+                use crate::render::render_tetrahedron_with_projector;
+                render_tetrahedron_with_projector(
+                    painter,
+                    &gadget,
+                    projector,
+                    self.compass_frame_mode,
+                );
+            },
         );
     }
 

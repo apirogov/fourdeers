@@ -9,9 +9,7 @@ use crate::colors::*;
 use crate::input::{TetraId, Zone};
 use crate::polytopes::Vertex4D;
 use crate::rotation4d::Rotation4D;
-use crate::tetrahedron::{
-    format_magnitude, get_tetrahedron_layout, magnitude_4d, TetrahedronGadget,
-};
+use crate::tetrahedron::{get_tetrahedron_layout, TetrahedronGadget};
 
 pub fn split_stereo_views(rect: egui::Rect) -> (egui::Rect, egui::Rect) {
     let left_rect = egui::Rect {
@@ -23,6 +21,40 @@ pub fn split_stereo_views(rect: egui::Rect) -> (egui::Rect, egui::Rect) {
         max: rect.max,
     };
     (left_rect, right_rect)
+}
+
+pub fn render_stereo_views(
+    ui: &mut egui::Ui,
+    rect: egui::Rect,
+    eye_separation: f32,
+    projection_distance: f32,
+    mode: ProjectionMode,
+    render_fn: impl Fn(&egui::Painter, &StereoProjector, egui::Rect),
+) {
+    let (left_rect, right_rect) = split_stereo_views(rect);
+    let scale = rect.height().min(rect.width() * 0.5) * 0.35;
+
+    let left_projector = StereoProjector::for_eye(
+        left_rect.center(),
+        scale,
+        eye_separation,
+        projection_distance,
+        mode,
+        -1.0,
+    );
+    let left_painter = ui.painter().with_clip_rect(left_rect);
+    render_fn(&left_painter, &left_projector, left_rect);
+
+    let right_projector = StereoProjector::for_eye(
+        right_rect.center(),
+        scale,
+        eye_separation,
+        projection_distance,
+        mode,
+        1.0,
+    );
+    let right_painter = ui.painter().with_clip_rect(right_rect);
+    render_fn(&right_painter, &right_projector, right_rect);
 }
 
 pub fn draw_background(ui: &mut egui::Ui, rect: egui::Rect) {
@@ -203,7 +235,7 @@ pub fn w_to_color(normalized_w: f32, alpha: u8, intensity: f32) -> egui::Color32
 pub struct StereoProjector {
     center: egui::Pos2,
     scale: f32,
-    eye_separation: f32,
+    eye_offset: f32,
     projection_distance: f32,
     mode: ProjectionMode,
 }
@@ -218,33 +250,33 @@ impl StereoProjector {
     pub fn new(
         center: egui::Pos2,
         scale: f32,
-        eye_separation: f32,
         projection_distance: f32,
         mode: ProjectionMode,
     ) -> Self {
         Self {
             center,
             scale,
-            eye_separation,
+            eye_offset: 0.0,
             projection_distance,
             mode,
         }
     }
 
-    pub fn from_rect(
-        rect: egui::Rect,
+    pub fn for_eye(
+        center: egui::Pos2,
+        scale: f32,
         eye_separation: f32,
         projection_distance: f32,
         mode: ProjectionMode,
+        eye_sign: f32,
     ) -> Self {
-        let scale = rect.height().min(rect.width()) * 0.35;
-        Self::new(
-            rect.center(),
+        Self {
+            center,
             scale,
-            eye_separation,
+            eye_offset: eye_sign * eye_separation * 0.5,
             projection_distance,
             mode,
-        )
+        }
     }
 
     pub fn center(&self) -> egui::Pos2 {
@@ -259,7 +291,7 @@ impl StereoProjector {
         Self {
             center,
             scale: self.scale,
-            eye_separation: self.eye_separation,
+            eye_offset: self.eye_offset,
             projection_distance: self.projection_distance,
             mode: self.mode,
         }
@@ -269,15 +301,14 @@ impl StereoProjector {
         Self {
             center: self.center,
             scale,
-            eye_separation: self.eye_separation,
+            eye_offset: self.eye_offset,
             projection_distance: self.projection_distance,
             mode: self.mode,
         }
     }
 
-    pub fn project_3d(&self, x: f32, y: f32, z: f32, eye_sign: f32) -> Option<ProjectedPoint> {
-        let eye_offset = eye_sign * self.eye_separation * 0.5;
-        let x_shifted = x - eye_offset;
+    pub fn project_3d(&self, x: f32, y: f32, z: f32) -> Option<ProjectedPoint> {
+        let x_shifted = x - self.eye_offset;
 
         let scale_factor = match self.mode {
             ProjectionMode::Perspective => {
@@ -299,28 +330,6 @@ impl StereoProjector {
             depth: z,
         })
     }
-
-    pub fn project_3d_no_eye(&self, x: f32, y: f32, z: f32) -> Option<ProjectedPoint> {
-        let scale_factor = match self.mode {
-            ProjectionMode::Perspective => {
-                let z_offset = self.projection_distance + z;
-                if z_offset <= 0.1 {
-                    return None;
-                }
-                self.projection_distance / z_offset
-            }
-            ProjectionMode::Orthographic => 1.0,
-        };
-
-        let final_scale = self.scale * scale_factor;
-        Some(ProjectedPoint {
-            screen_pos: egui::Pos2::new(
-                self.center.x + x * final_scale,
-                self.center.y - y * final_scale,
-            ),
-            depth: z,
-        })
-    }
 }
 
 pub struct TesseractRenderContext<'a> {
@@ -332,9 +341,7 @@ pub struct TesseractRenderContext<'a> {
     pub w_half: f32,
     pub camera: Camera,
     pub w_color_intensity: f32,
-    pub eye_separation: f32,
     pub projection_distance: f32,
-    pub projection_mode: ProjectionMode,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -352,14 +359,6 @@ pub struct TesseractRenderConfig {
     pub rotation_angles: ObjectRotationAngles,
     pub four_d: FourDSettings,
     pub stereo: StereoSettings,
-}
-
-pub struct EyeRenderOptions<'a> {
-    pub eye_sign: f32,
-    pub is_left_view: bool,
-    pub show_debug: bool,
-    pub show_controls: bool,
-    pub tetrahedron_rotations: &'a HashMap<TetraId, UnitQuaternion<f32>>,
 }
 
 struct TetraRenderSpec<'a> {
@@ -435,9 +434,7 @@ impl<'a> TesseractRenderContext<'a> {
             w_half,
             camera: camera.clone(),
             w_color_intensity: config.four_d.w_color_intensity,
-            eye_separation: config.stereo.eye_separation,
             projection_distance: config.stereo.projection_distance,
-            projection_mode: ProjectionMode::Perspective,
         }
     }
 
@@ -464,53 +461,11 @@ impl<'a> TesseractRenderContext<'a> {
             .collect()
     }
 
-    pub fn render_eye_view(
-        &self,
-        ui: &mut egui::Ui,
-        view_rect: egui::Rect,
-        transformed: &[TransformedVertex],
-        options: EyeRenderOptions<'_>,
-    ) {
-        let center = view_rect.center();
-        let scale = view_rect.height().min(view_rect.width()) * 0.35;
-
-        let projector = StereoProjector::new(
-            center,
-            scale,
-            self.eye_separation,
-            self.projection_distance,
-            self.projection_mode,
-        );
-
-        let painter = ui.painter().with_clip_rect(view_rect);
-
-        self.render_edges(
-            &painter,
-            &projector,
-            transformed,
-            options.eye_sign,
-            view_rect,
-        );
-        if options.show_debug {
-            self.render_zone_labels(&painter, view_rect, options.is_left_view);
-        }
-
-        if options.is_left_view || options.show_controls {
-            self.render_tetrahedron_gadget(
-                &painter,
-                view_rect,
-                options.is_left_view,
-                options.tetrahedron_rotations,
-            );
-        }
-    }
-
-    fn render_edges(
+    pub fn render_edges(
         &self,
         painter: &egui::Painter,
         projector: &StereoProjector,
         transformed: &[TransformedVertex],
-        eye_sign: f32,
         clip_rect: egui::Rect,
     ) {
         let stroke_width = 2.5;
@@ -541,10 +496,10 @@ impl<'a> TesseractRenderContext<'a> {
                 }
 
                 let s0 = projector
-                    .project_3d(t0.x, t0.y, t0.z, eye_sign)
+                    .project_3d(t0.x, t0.y, t0.z)
                     .map(|p| p.screen_pos)?;
                 let s1 = projector
-                    .project_3d(t1.x, t1.y, t1.z, eye_sign)
+                    .project_3d(t1.x, t1.y, t1.z)
                     .map(|p| p.screen_pos)?;
 
                 let seg_x_min = s0.x.min(s1.x);
@@ -572,16 +527,7 @@ impl<'a> TesseractRenderContext<'a> {
         painter.extend(shapes);
     }
 
-    fn render_zone_labels(
-        &self,
-        painter: &egui::Painter,
-        view_rect: egui::Rect,
-        is_left_view: bool,
-    ) {
-        if is_left_view {
-            return;
-        }
-
+    pub fn render_zone_labels(&self, painter: &egui::Painter, view_rect: egui::Rect) {
         let basis = self.camera.rotation_4d.basis_vectors();
         let layout = get_tetrahedron_layout(view_rect);
         let offset = layout.edge_offset;
@@ -660,17 +606,12 @@ impl<'a> TesseractRenderContext<'a> {
         }
     }
 
-    fn render_tetrahedron_gadget(
+    pub fn render_tetrahedron_gadget(
         &self,
         painter: &egui::Painter,
         view_rect: egui::Rect,
-        is_left_view: bool,
         tetrahedron_rotations: &HashMap<TetraId, UnitQuaternion<f32>>,
     ) {
-        if is_left_view {
-            return;
-        }
-
         let basis = self.camera.rotation_4d.basis_vectors();
         let layout = get_tetrahedron_layout(view_rect);
         let offset = layout.edge_offset;
@@ -729,7 +670,10 @@ impl<'a> TesseractRenderContext<'a> {
         ];
 
         for (vector_4d, zone, x, y) in tetrahedra {
-            let tetra_id = TetraId { is_left_view, zone };
+            let tetra_id = TetraId {
+                is_left_view: false,
+                zone,
+            };
             let user_rotation = tetrahedron_rotations
                 .get(&tetra_id)
                 .copied()
@@ -991,36 +935,10 @@ fn format_4d_vector_compact(v: [f32; 4]) -> String {
     }
 }
 
-/// Render a tetrahedron as a floating overlay (not in 3D scene) with stereo effect
-pub fn render_stereo_tetrahedron_overlay(
-    ui: &mut egui::Ui,
-    rect: egui::Rect,
-    vector_4d: nalgebra::Vector4<f32>,
-    waypoint_title: &str,
-    frame_mode: CompassFrameMode,
-    rotation: &UnitQuaternion<f32>,
-    projector: &StereoProjector,
-) {
-    let (left_rect, right_rect) = split_stereo_views(rect);
-    let magnitude_label = format_magnitude(magnitude_4d(vector_4d));
-    let gadget = TetrahedronGadget::from_4d_vector_with_quaternion(vector_4d, *rotation, 1.0)
-        .with_base_label(magnitude_label)
-        .with_tip_label(waypoint_title);
-
-    let left_projector = projector.with_center(left_rect.center());
-    let left_painter = ui.painter().with_clip_rect(left_rect);
-    render_tetrahedron_with_projector(&left_painter, &gadget, &left_projector, -1.0, frame_mode);
-
-    let right_projector = projector.with_center(right_rect.center());
-    let right_painter = ui.painter().with_clip_rect(right_rect);
-    render_tetrahedron_with_projector(&right_painter, &gadget, &right_projector, 1.0, frame_mode);
-}
-
-fn render_tetrahedron_with_projector(
+pub fn render_tetrahedron_with_projector(
     painter: &egui::Painter,
     gadget: &TetrahedronGadget,
     projector: &StereoProjector,
-    eye_sign: f32,
     frame_mode: CompassFrameMode,
 ) {
     for edge in &gadget.edges {
@@ -1029,10 +947,10 @@ fn render_tetrahedron_with_projector(
 
         let p0 = gadget
             .get_vertex_3d(v0_idx)
-            .and_then(|pos| projector.project_3d(pos.x, pos.y, pos.z, eye_sign));
+            .and_then(|pos| projector.project_3d(pos.x, pos.y, pos.z));
         let p1 = gadget
             .get_vertex_3d(v1_idx)
-            .and_then(|pos| projector.project_3d(pos.x, pos.y, pos.z, eye_sign));
+            .and_then(|pos| projector.project_3d(pos.x, pos.y, pos.z));
 
         if let (Some(p0), Some(p1)) = (p0, p1) {
             painter.line_segment(
@@ -1054,7 +972,7 @@ fn render_tetrahedron_with_projector(
             let label_offset = 0.15;
             let label_x = pos.x + normal.x * label_offset;
             let label_y = pos.y + normal.y * label_offset;
-            if let Some(p) = projector.project_3d(label_x, label_y, pos.z, eye_sign) {
+            if let Some(p) = projector.project_3d(label_x, label_y, pos.z) {
                 let font_id = egui::FontId::proportional(16.0);
                 let outline_color = outline_default();
 
@@ -1088,7 +1006,7 @@ fn render_tetrahedron_with_projector(
             let label_offset = 0.35;
             let label_x = pos.x + normal.x * label_offset;
             let label_y = pos.y + normal.y * label_offset;
-            if let Some(label_p) = projector.project_3d(label_x, label_y, pos.z, eye_sign) {
+            if let Some(label_p) = projector.project_3d(label_x, label_y, pos.z) {
                 let value_text = crate::tetrahedron::format_component_value(component);
                 let font_id = egui::FontId::monospace(11.0);
                 let outline_color = outline_thin();
@@ -1113,8 +1031,8 @@ fn render_tetrahedron_with_projector(
     }
 
     let arrow = gadget.arrow_position();
-    let arrow_p = projector.project_3d(arrow.x, arrow.y, arrow.z, eye_sign);
-    let origin_p = projector.project_3d(0.0, 0.0, 0.0, eye_sign);
+    let arrow_p = projector.project_3d(arrow.x, arrow.y, arrow.z);
+    let origin_p = projector.project_3d(0.0, 0.0, 0.0);
     if let (Some(arrow_p), Some(origin_p)) = (arrow_p, origin_p) {
         let arrow_end = arrow_p.screen_pos;
         let arrow_start = origin_p.screen_pos;
@@ -1273,17 +1191,55 @@ mod tests {
             .collect()
     }
 
+    fn make_eye_projector(
+        center: egui::Pos2,
+        scale: f32,
+        eye_separation: f32,
+        projection_distance: f32,
+        mode: ProjectionMode,
+        eye_sign: f32,
+    ) -> StereoProjector {
+        StereoProjector::for_eye(
+            center,
+            scale,
+            eye_separation,
+            projection_distance,
+            mode,
+            eye_sign,
+        )
+    }
+
     fn project_cube_for_eyes(
         vertices: &[(f32, f32, f32)],
-        projector: &StereoProjector,
+        center: egui::Pos2,
+        scale: f32,
+        eye_separation: f32,
+        projection_distance: f32,
+        mode: ProjectionMode,
     ) -> (Vec<Option<ProjectedPoint>>, Vec<Option<ProjectedPoint>>) {
+        let left_proj = make_eye_projector(
+            center,
+            scale,
+            eye_separation,
+            projection_distance,
+            mode,
+            -1.0,
+        );
+        let right_proj = make_eye_projector(
+            center,
+            scale,
+            eye_separation,
+            projection_distance,
+            mode,
+            1.0,
+        );
         let left: Vec<_> = vertices
             .iter()
-            .map(|(x, y, z)| projector.project_3d(*x, *y, *z, -1.0))
+            .map(|(x, y, z)| left_proj.project_3d(*x, *y, *z))
             .collect();
         let right: Vec<_> = vertices
             .iter()
-            .map(|(x, y, z)| projector.project_3d(*x, *y, *z, 1.0))
+            .map(|(x, y, z)| right_proj.project_3d(*x, *y, *z))
             .collect();
         (left, right)
     }
@@ -1295,16 +1251,15 @@ mod tests {
         let eye_separation = 0.1;
         let projection_distance = 5.0;
 
-        let projector = StereoProjector::new(
+        let vertices = cube_vertices(0.0, 0.0, -2.0);
+        let (left, right) = project_cube_for_eyes(
+            &vertices,
             center,
             scale,
             eye_separation,
             projection_distance,
             ProjectionMode::Perspective,
         );
-
-        let vertices = cube_vertices(0.0, 0.0, -2.0);
-        let (left, right) = project_cube_for_eyes(&vertices, &projector);
 
         for (i, (l, r)) in left.iter().zip(right.iter()).enumerate() {
             let l = l.expect("left should project");
@@ -1326,16 +1281,15 @@ mod tests {
         let eye_separation = 0.1;
         let projection_distance = 5.0;
 
-        let projector = StereoProjector::new(
+        let vertices = cube_vertices(0.0, 0.0, -2.0);
+        let (left, right) = project_cube_for_eyes(
+            &vertices,
             center,
             scale,
             eye_separation,
             projection_distance,
             ProjectionMode::Perspective,
         );
-
-        let vertices = cube_vertices(0.0, 0.0, -2.0);
-        let (left, right) = project_cube_for_eyes(&vertices, &projector);
 
         for (l, r) in left.iter().zip(right.iter()) {
             let l = l.expect("left should project");
@@ -1351,20 +1305,29 @@ mod tests {
         let eye_separation = 0.2;
         let projection_distance = 5.0;
 
-        let projector = StereoProjector::new(
+        let left_proj = make_eye_projector(
             center,
             scale,
             eye_separation,
             projection_distance,
             ProjectionMode::Perspective,
+            -1.0,
+        );
+        let right_proj = make_eye_projector(
+            center,
+            scale,
+            eye_separation,
+            projection_distance,
+            ProjectionMode::Perspective,
+            1.0,
         );
 
-        let far_left = projector.project_3d(0.0, 0.0, -4.0, -1.0).unwrap();
-        let far_right = projector.project_3d(0.0, 0.0, -4.0, 1.0).unwrap();
+        let far_left = left_proj.project_3d(0.0, 0.0, -4.0).unwrap();
+        let far_right = right_proj.project_3d(0.0, 0.0, -4.0).unwrap();
         let far_parallax = (far_left.screen_pos.x - far_right.screen_pos.x).abs();
 
-        let near_left = projector.project_3d(0.0, 0.0, -1.0, -1.0).unwrap();
-        let near_right = projector.project_3d(0.0, 0.0, -1.0, 1.0).unwrap();
+        let near_left = left_proj.project_3d(0.0, 0.0, -1.0).unwrap();
+        let near_right = right_proj.project_3d(0.0, 0.0, -1.0).unwrap();
         let near_parallax = (near_left.screen_pos.x - near_right.screen_pos.x).abs();
 
         assert!(
@@ -1382,20 +1345,29 @@ mod tests {
         let eye_separation = 0.2;
         let projection_distance = 5.0;
 
-        let projector = StereoProjector::new(
+        let left_proj = make_eye_projector(
             center,
             scale,
             eye_separation,
             projection_distance,
             ProjectionMode::Orthographic,
+            -1.0,
+        );
+        let right_proj = make_eye_projector(
+            center,
+            scale,
+            eye_separation,
+            projection_distance,
+            ProjectionMode::Orthographic,
+            1.0,
         );
 
-        let far_left = projector.project_3d(0.0, 0.0, -10.0, -1.0).unwrap();
-        let far_right = projector.project_3d(0.0, 0.0, -10.0, 1.0).unwrap();
+        let far_left = left_proj.project_3d(0.0, 0.0, -10.0).unwrap();
+        let far_right = right_proj.project_3d(0.0, 0.0, -10.0).unwrap();
         let far_parallax = (far_left.screen_pos.x - far_right.screen_pos.x).abs();
 
-        let near_left = projector.project_3d(0.0, 0.0, -1.0, -1.0).unwrap();
-        let near_right = projector.project_3d(0.0, 0.0, -1.0, 1.0).unwrap();
+        let near_left = left_proj.project_3d(0.0, 0.0, -1.0).unwrap();
+        let near_right = right_proj.project_3d(0.0, 0.0, -1.0).unwrap();
         let near_parallax = (near_left.screen_pos.x - near_right.screen_pos.x).abs();
 
         assert_approx_eq(far_parallax, near_parallax, 1e-6);
@@ -1408,16 +1380,23 @@ mod tests {
         let eye_separation = 0.2;
         let projection_distance = 5.0;
 
-        let projector = StereoProjector::new(
+        let mono = StereoProjector::new(
+            center,
+            scale,
+            projection_distance,
+            ProjectionMode::Perspective,
+        );
+        let eye = make_eye_projector(
             center,
             scale,
             eye_separation,
             projection_distance,
             ProjectionMode::Perspective,
+            1.0,
         );
 
-        let with_eye = projector.project_3d(0.5, 0.3, -2.0, 1.0).unwrap();
-        let no_eye = projector.project_3d_no_eye(0.5, 0.3, -2.0).unwrap();
+        let with_eye = eye.project_3d(0.5, 0.3, -2.0).unwrap();
+        let no_eye = mono.project_3d(0.5, 0.3, -2.0).unwrap();
 
         assert!(
             (with_eye.screen_pos.x - no_eye.screen_pos.x).abs() > 0.01,
@@ -1429,18 +1408,15 @@ mod tests {
     fn test_behind_camera_returns_none() {
         let center = egui::Pos2::new(100.0, 100.0);
         let scale = 50.0;
-        let eye_separation = 0.1;
         let projection_distance = 5.0;
 
         let projector = StereoProjector::new(
             center,
             scale,
-            eye_separation,
             projection_distance,
             ProjectionMode::Perspective,
         );
-
-        assert!(projector.project_3d(0.0, 0.0, -5.1, 1.0).is_none());
+        assert!(projector.project_3d(0.0, 0.0, -5.1).is_none());
     }
 
     #[test]
@@ -1450,30 +1426,44 @@ mod tests {
         let eye_separation = 0.2;
         let projection_distance = 5.0;
 
-        let projector = StereoProjector::new(
+        let mono = StereoProjector::new(
+            center,
+            scale,
+            projection_distance,
+            ProjectionMode::Perspective,
+        );
+        let left_proj = make_eye_projector(
             center,
             scale,
             eye_separation,
             projection_distance,
             ProjectionMode::Perspective,
+            -1.0,
+        );
+        let right_proj = make_eye_projector(
+            center,
+            scale,
+            eye_separation,
+            projection_distance,
+            ProjectionMode::Perspective,
+            1.0,
         );
 
-        let left = projector.project_3d(0.0, 0.0, -2.0, -1.0).unwrap();
-        let right = projector.project_3d(0.0, 0.0, -2.0, 1.0).unwrap();
-
-        let mono = projector.project_3d_no_eye(0.0, 0.0, -2.0).unwrap();
+        let left = left_proj.project_3d(0.0, 0.0, -2.0).unwrap();
+        let right = right_proj.project_3d(0.0, 0.0, -2.0).unwrap();
+        let mono_p = mono.project_3d(0.0, 0.0, -2.0).unwrap();
 
         assert!(
-            left.screen_pos.x > mono.screen_pos.x,
+            left.screen_pos.x > mono_p.screen_pos.x,
             "Left eye ({:.4}) should be right of mono ({:.4}) — camera shifted left sees object shifted right",
             left.screen_pos.x,
-            mono.screen_pos.x
+            mono_p.screen_pos.x
         );
         assert!(
-            right.screen_pos.x < mono.screen_pos.x,
+            right.screen_pos.x < mono_p.screen_pos.x,
             "Right eye ({:.4}) should be left of mono ({:.4}) — camera shifted right sees object shifted left",
             right.screen_pos.x,
-            mono.screen_pos.x
+            mono_p.screen_pos.x
         );
     }
 

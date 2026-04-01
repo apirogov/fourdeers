@@ -9,8 +9,8 @@ use crate::colors::label_inactive;
 use crate::input::{DragView, TapAnalysis, TetraId, Zone, ZoneMode};
 use crate::polytopes::{create_polytope, PolytopeType};
 use crate::render::{
-    draw_background, draw_center_divider, render_tap_zone_label, split_stereo_views,
-    EyeRenderOptions, FourDSettings, ObjectRotationAngles, StereoSettings, TesseractRenderConfig,
+    draw_background, draw_center_divider, render_stereo_views, render_tap_zone_label,
+    split_stereo_views, FourDSettings, ObjectRotationAngles, StereoSettings, TesseractRenderConfig,
     TesseractRenderContext,
 };
 use crate::toy::{CompassWaypoint, DragState, Toy};
@@ -317,7 +317,6 @@ impl Toy for PolytopesToy {
     fn render_scene(&mut self, ui: &mut egui::Ui, rect: egui::Rect, show_debug: bool) {
         draw_background(ui, rect);
 
-        let (left_rect, right_rect) = split_stereo_views(rect);
         self.visualization_rect = Some(rect);
 
         draw_center_divider(ui, rect);
@@ -342,31 +341,26 @@ impl Toy for PolytopesToy {
         );
 
         let transformed = ctx.transform_vertices();
-        ctx.render_eye_view(
+        render_stereo_views(
             ui,
-            left_rect,
-            &transformed,
-            EyeRenderOptions {
-                eye_sign: -1.0,
-                is_left_view: true,
-                show_debug,
-                show_controls: self.show_controls,
-                tetrahedron_rotations: &self.tetrahedron_rotations,
+            rect,
+            self.stereo.eye_separation,
+            self.stereo.projection_distance,
+            self.stereo.projection_mode,
+            |painter, projector, view_rect| {
+                ctx.render_edges(painter, projector, &transformed, view_rect);
             },
         );
 
-        ctx.render_eye_view(
-            ui,
-            right_rect,
-            &transformed,
-            EyeRenderOptions {
-                eye_sign: 1.0,
-                is_left_view: false,
-                show_debug,
-                show_controls: self.show_controls,
-                tetrahedron_rotations: &self.tetrahedron_rotations,
-            },
-        );
+        if show_debug {
+            let right_painter = ui.painter().with_clip_rect(split_stereo_views(rect).1);
+            ctx.render_zone_labels(&right_painter, rect);
+        }
+
+        if self.show_controls {
+            let right_painter = ui.painter().with_clip_rect(split_stereo_views(rect).1);
+            ctx.render_tetrahedron_gadget(&right_painter, rect, &self.tetrahedron_rotations);
+        }
     }
 
     fn render_toy_menu(&self, painter: &egui::Painter, rect: egui::Rect) {
