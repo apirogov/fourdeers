@@ -49,6 +49,7 @@ pub struct FourDeersApp {
     compass_waypoint_index: usize,
     compass_frame_mode: CompassFrameMode,
     map_renderer: MapRenderer,
+    map_frame_mode: CompassFrameMode,
 }
 
 impl FourDeersApp {
@@ -69,6 +70,7 @@ impl FourDeersApp {
             compass_waypoint_index: 0,
             compass_frame_mode: CompassFrameMode::World,
             map_renderer: MapRenderer::new(),
+            map_frame_mode: CompassFrameMode::World,
         }
     }
 }
@@ -103,6 +105,9 @@ impl eframe::App for FourDeersApp {
                 if i.key_pressed(egui::Key::F) {
                     self.toggle_compass_frame_mode();
                 }
+            }
+            if self.active_view == ActiveView::Map && i.key_pressed(egui::Key::F) {
+                self.toggle_map_frame_mode();
             }
         });
 
@@ -142,6 +147,13 @@ impl FourDeersApp {
 
     fn toggle_compass_frame_mode(&mut self) {
         self.compass_frame_mode = match self.compass_frame_mode {
+            CompassFrameMode::World => CompassFrameMode::Camera,
+            CompassFrameMode::Camera => CompassFrameMode::World,
+        };
+    }
+
+    fn toggle_map_frame_mode(&mut self) {
+        self.map_frame_mode = match self.map_frame_mode {
             CompassFrameMode::World => CompassFrameMode::Camera,
             CompassFrameMode::Camera => CompassFrameMode::World,
         };
@@ -214,8 +226,14 @@ impl FourDeersApp {
         let waypoints = self.toy_manager.active_toy().map_waypoints();
 
         if let Some(camera) = scene_camera {
-            self.map_renderer
-                .render(ui, rect, camera, &waypoints, self.settings.stereo);
+            self.map_renderer.render(
+                ui,
+                rect,
+                camera,
+                &waypoints,
+                self.settings.stereo,
+                self.map_frame_mode,
+            );
         } else {
             draw_background(ui, rect);
             draw_center_divider(ui, rect);
@@ -337,6 +355,19 @@ impl FourDeersApp {
     }
 
     fn process_hold(&mut self, pos: egui::Pos2) {
+        if self.active_view == ActiveView::Map {
+            let vis_rect = self.visualization_rect;
+            if let Some(visualization_rect) = vis_rect {
+                if visualization_rect.contains(pos) {
+                    let (_, right_rect) = split_stereo_views(visualization_rect);
+                    if let Some(action) = self.map_tap_action(right_rect, pos) {
+                        self.map_renderer.apply_action(action, 0.08);
+                    }
+                }
+            }
+            return;
+        }
+
         if self.active_view != ActiveView::Main {
             return;
         }
@@ -441,7 +472,12 @@ impl FourDeersApp {
             }
 
             if self.active_view == ActiveView::Map {
-                render_tap_zone_label(&left_painter, left_rect, Zone::South, "Reset", None);
+                let frame_label = match self.map_frame_mode {
+                    CompassFrameMode::World => "Frame: World",
+                    CompassFrameMode::Camera => "Frame: Camera",
+                };
+                render_tap_zone_label(&left_painter, left_rect, Zone::South, frame_label, None);
+                render_tap_zone_label(&right_painter, right_rect, Zone::SouthEast, "Reset", None);
             }
 
             if self.active_view == ActiveView::Main {
@@ -693,7 +729,7 @@ impl FourDeersApp {
             Zone::NorthEast => Some(CameraAction::MoveForward),
             Zone::SouthWest => Some(CameraAction::MoveBackward),
             Zone::NorthWest => Some(CameraAction::MoveKata),
-            Zone::SouthEast => Some(CameraAction::MoveAna),
+            Zone::SouthEast => None,
             _ => None,
         }
     }
@@ -766,11 +802,17 @@ impl FourDeersApp {
             if left_rect.contains(pos)
                 && get_zone_from_rect(left_rect, pos, ZoneMode::NineZones) == Some(Zone::South)
             {
-                self.reset_map_camera();
+                self.toggle_map_frame_mode();
                 return;
             }
 
             let (_, right_rect) = split_stereo_views(visualization_rect);
+            if right_rect.contains(pos)
+                && get_zone_from_rect(right_rect, pos, ZoneMode::NineZones) == Some(Zone::SouthEast)
+            {
+                self.reset_map_camera();
+                return;
+            }
             if let Some(action) = self.map_tap_action(right_rect, pos) {
                 self.map_renderer.apply_action(action, 0.3);
             }

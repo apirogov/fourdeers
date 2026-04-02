@@ -1102,7 +1102,7 @@ pub fn render_tetrahedron_with_projector(
     }
 }
 
-fn compass_vertex_label(
+pub fn compass_vertex_label(
     frame_mode: CompassFrameMode,
     component_index: usize,
     component_value: f32,
