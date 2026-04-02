@@ -50,6 +50,7 @@ pub struct FourDeersApp {
     compass_frame_mode: CompassFrameMode,
     map_renderer: MapRenderer,
     map_frame_mode: CompassFrameMode,
+    map_rotation_3d: bool,
 }
 
 impl FourDeersApp {
@@ -71,6 +72,7 @@ impl FourDeersApp {
             compass_frame_mode: CompassFrameMode::World,
             map_renderer: MapRenderer::new(),
             map_frame_mode: CompassFrameMode::World,
+            map_rotation_3d: true,
         }
     }
 }
@@ -335,12 +337,13 @@ impl FourDeersApp {
                     self.compass_rotation = incremental * self.compass_rotation;
                 }
                 ActiveView::Map => {
-                    let delta = pos - last_pos;
-                    let is_left_view = matches!(self.drag_view, Some(DragView::Left));
-                    if is_left_view {
-                        self.map_renderer.rotate_3d(delta.x, delta.y);
-                    } else {
-                        self.map_renderer.rotate_4d(delta.x, delta.y);
+                    if matches!(self.drag_view, Some(DragView::Right)) {
+                        let delta = pos - last_pos;
+                        if self.map_rotation_3d {
+                            self.map_renderer.rotate_3d(delta.x, delta.y);
+                        } else {
+                            self.map_renderer.rotate_4d(delta.x, delta.y);
+                        }
                     }
                 }
                 ActiveView::Main => {
@@ -477,6 +480,19 @@ impl FourDeersApp {
                     CompassFrameMode::Camera => "Frame: Camera",
                 };
                 render_tap_zone_label(&left_painter, left_rect, Zone::South, frame_label, None);
+
+                let rot_label = if self.map_rotation_3d {
+                    "Rot:3D"
+                } else {
+                    "Rot:4D"
+                };
+                render_tap_zone_label(
+                    &right_painter,
+                    right_rect,
+                    Zone::NorthEast,
+                    rot_label,
+                    Some(crate::colors::label_inactive()),
+                );
                 render_tap_zone_label(&right_painter, right_rect, Zone::SouthEast, "Reset", None);
             }
 
@@ -807,11 +823,16 @@ impl FourDeersApp {
             }
 
             let (_, right_rect) = split_stereo_views(visualization_rect);
-            if right_rect.contains(pos)
-                && get_zone_from_rect(right_rect, pos, ZoneMode::NineZones) == Some(Zone::SouthEast)
-            {
-                self.reset_map_camera();
-                return;
+            if right_rect.contains(pos) {
+                let zone = get_zone_from_rect(right_rect, pos, ZoneMode::NineZones);
+                if zone == Some(Zone::Center) {
+                    self.map_rotation_3d = !self.map_rotation_3d;
+                    return;
+                }
+                if zone == Some(Zone::SouthEast) {
+                    self.reset_map_camera();
+                    return;
+                }
             }
             if let Some(action) = self.map_tap_action(right_rect, pos) {
                 self.map_renderer.apply_action(action, 0.3);
