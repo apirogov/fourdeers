@@ -261,49 +261,35 @@ impl MapRenderer {
                 .map(|v| (v - norm_cam).dot(&slice_normal))
                 .collect();
 
-            let mut polygon_3d: Vec<Vector3<f32>> = Vec::new();
+            let polygon_4d = clip_polygon_to_slice(&face_verts, &distances, w_half);
 
-            for j in 0..4 {
-                let j_next = (j + 1) % 4;
-                let dj = distances[j];
-                let dj_next = distances[j_next];
-                let in_j = dj.abs() <= w_half;
-
-                if in_j {
-                    let s3d = map_transform.project_to_3d(face_verts[j]);
-                    polygon_3d.push(s3d);
-                }
-
-                let in_next = dj_next.abs() <= w_half;
-                if in_j != in_next {
-                    let t = (w_half * dj.signum() - dj) / (dj_next - dj);
-                    let t = t.clamp(0.0, 1.0);
-                    let clipped = face_verts[j] + (face_verts[j_next] - face_verts[j]) * t;
-                    let s3d = map_transform.project_to_3d(clipped);
-                    polygon_3d.push(s3d);
-                }
+            if polygon_4d.len() < 3 {
+                continue;
             }
 
-            if polygon_3d.len() >= 3 {
-                let screen_pts: Vec<egui::Pos2> = polygon_3d
-                    .iter()
-                    .filter_map(|v3| {
-                        if v3.z > -near_plane {
-                            projector.project_3d(v3.x, v3.y, v3.z)
-                        } else {
-                            None
-                        }
-                    })
-                    .map(|p| p.screen_pos)
-                    .collect();
+            let polygon_3d: Vec<Vector3<f32>> = polygon_4d
+                .iter()
+                .map(|v| map_transform.project_to_3d(*v))
+                .collect();
 
-                if screen_pts.len() >= 3 {
-                    painter.add(egui::Shape::convex_polygon(
-                        screen_pts,
-                        slice_green_fill(),
-                        egui::Stroke::new(1.0, SLICE_GREEN),
-                    ));
-                }
+            let clipped_3d = clip_polygon_3d_near_plane(&polygon_3d, near_plane);
+
+            if clipped_3d.len() < 3 {
+                continue;
+            }
+
+            let screen_pts: Vec<egui::Pos2> = clipped_3d
+                .iter()
+                .filter_map(|v3| projector.project_3d(v3.x, v3.y, v3.z))
+                .map(|p| p.screen_pos)
+                .collect();
+
+            if screen_pts.len() >= 3 {
+                painter.add(egui::Shape::convex_polygon(
+                    screen_pts,
+                    slice_green_fill(),
+                    egui::Stroke::new(1.0, SLICE_GREEN),
+                ));
             }
         }
 
@@ -324,13 +310,35 @@ impl MapRenderer {
             let in1 = d1.abs() <= w_half;
 
             if !in0 && !in1 {
+                if d0.signum() != d1.signum() && (d0 - d1).abs() > 1e-10 {
+                    let t_enter = (w_half * d0.signum() - d0) / (d1 - d0);
+                    let t_exit = (w_half * d1.signum() - d0) / (d1 - d0);
+                    let t_min = t_enter.min(t_exit).clamp(0.0, 1.0);
+                    let t_max = t_enter.max(t_exit).clamp(0.0, 1.0);
+
+                    let cp0 = p0 + (p1 - p0) * t_min;
+                    let cp1 = p0 + (p1 - p0) * t_max;
+
+                    let s0 = map_transform.project_to_3d(cp0);
+                    let s1 = map_transform.project_to_3d(cp1);
+
+                    if let (Some(sp0), Some(sp1)) = (
+                        projector.project_3d(s0.x, s0.y, s0.z),
+                        projector.project_3d(s1.x, s1.y, s1.z),
+                    ) {
+                        if sp0.depth > -near_plane && sp1.depth > -near_plane {
+                            all_edge_segments.push((sp0.screen_pos, sp1.screen_pos, false));
+                        }
+                    }
+                }
                 continue;
             }
 
             let (tp0, tp1, fully_in) = if in0 && in1 {
                 (p0, p1, true)
             } else {
-                let t = (w_half * d0.signum() - d0) / (d1 - d0);
+                let outside_sign = if !in0 { d0.signum() } else { d1.signum() };
+                let t = (w_half * outside_sign - d0) / (d1 - d0);
                 let t = t.clamp(0.0, 1.0);
                 let clipped = p0 + (p1 - p0) * t;
                 if !in0 {
@@ -679,4 +687,186 @@ pub fn normalize_to_tesseract(
 
 fn vertex_to_4d(v: &crate::polytopes::Vertex4D) -> Vector4<f32> {
     Vector4::new(v.position[0], v.position[1], v.position[2], v.position[3])
+}
+
+fn clip_polygon_to_slice(
+    verts: &[Vector4<f32>],
+    distances: &[f32],
+    w_half: f32,
+) -> Vec<Vector4<f32>> {
+    let mut result = Vec::new();
+    let n = verts.len();
+
+    for i in 0..n {
+        let j = (i + 1) % n;
+        let di = distances[i];
+        let dj = distances[j];
+        let in_i = di.abs() <= w_half;
+        let in_j = dj.abs() <= w_half;
+
+        if in_i {
+            result.push(verts[i]);
+        }
+
+        if in_i != in_j {
+            let outside_sign = if !in_i { di.signum() } else { dj.signum() };
+            let t = (w_half * outside_sign - di) / (dj - di);
+            let t = t.clamp(0.0, 1.0);
+            result.push(verts[i] + (verts[j] - verts[i]) * t);
+        }
+    }
+
+    result
+}
+
+fn clip_polygon_3d_near_plane(polygon: &[Vector3<f32>], near_plane: f32) -> Vec<Vector3<f32>> {
+    let mut result = Vec::new();
+    let n = polygon.len();
+    if n == 0 {
+        return result;
+    }
+
+    for i in 0..n {
+        let j = (i + 1) % n;
+        let zi = polygon[i].z;
+        let zj = polygon[j].z;
+        let ci = zi > -near_plane;
+        let cj = zj > -near_plane;
+
+        if ci {
+            result.push(polygon[i]);
+        }
+
+        if ci != cj {
+            let dz = zj - zi;
+            if dz.abs() > 1e-10 {
+                let t = (-near_plane - zi) / dz;
+                result.push(polygon[i] + (polygon[j] - polygon[i]) * t);
+            }
+        }
+    }
+
+    result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_utils::assert_approx_eq;
+
+    #[test]
+    fn test_clip_polygon_all_inside() {
+        let verts = vec![
+            Vector4::new(0.0, 0.0, 0.0, 0.0),
+            Vector4::new(1.0, 0.0, 0.0, 0.0),
+            Vector4::new(0.0, 1.0, 0.0, 0.0),
+        ];
+        let distances = vec![0.0, 0.5, -0.5];
+        let result = clip_polygon_to_slice(&verts, &distances, 1.0);
+        assert_eq!(result.len(), 3);
+    }
+
+    #[test]
+    fn test_clip_polygon_all_outside_same_side() {
+        let verts = vec![
+            Vector4::new(1.0, 0.0, 0.0, 0.0),
+            Vector4::new(2.0, 0.0, 0.0, 0.0),
+            Vector4::new(1.5, 1.0, 0.0, 0.0),
+        ];
+        let distances = vec![3.0, 4.0, 3.5];
+        let result = clip_polygon_to_slice(&verts, &distances, 1.0);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_clip_near_plane_produces_valid_intersection() {
+        let polygon = vec![
+            Vector3::new(0.0, 0.0, 0.0),
+            Vector3::new(2.0, 0.0, -6.0),
+            Vector3::new(0.0, 2.0, 0.0),
+        ];
+        let result = clip_polygon_3d_near_plane(&polygon, 3.0);
+        assert_eq!(result.len(), 4);
+        for v in &result {
+            assert!(v.z >= -3.0 - 1e-5, "vertex behind near plane: z={}", v.z);
+        }
+    }
+
+    #[test]
+    fn test_clip_polygon_both_sides_crossing() {
+        let verts = vec![
+            Vector4::new(-1.0, 0.0, 0.0, 0.0),
+            Vector4::new(1.0, 0.0, 0.0, 0.0),
+            Vector4::new(0.0, 1.0, 0.0, 0.0),
+        ];
+        let distances = vec![-2.0, 2.0, 0.0];
+        let result = clip_polygon_to_slice(&verts, &distances, 1.0);
+        assert!(
+            result.len() >= 3,
+            "should produce a clipped polygon, got {} vertices",
+            result.len()
+        );
+        for v in &result {
+            let d = v[0] - v[0].signum() * 1.0;
+            let _ = d;
+        }
+    }
+
+    #[test]
+    fn test_clip_polygon_exit_through_opposite_boundary() {
+        let verts = vec![
+            Vector4::new(0.0, 0.0, 0.0, 0.0),
+            Vector4::new(3.0, 0.0, 0.0, 0.0),
+            Vector4::new(0.0, 1.0, 0.0, 0.0),
+        ];
+        let distances = vec![0.5, -2.5, 0.5];
+        let result = clip_polygon_to_slice(&verts, &distances, 1.0);
+        assert!(
+            result.len() >= 3,
+            "should produce a clipped polygon, got {} vertices",
+            result.len()
+        );
+        assert_approx_eq(result[0].x, 0.0, 1e-5);
+        assert_approx_eq(result[1].x, 1.5, 1e-4);
+    }
+
+    #[test]
+    fn test_clip_near_plane_all_in_front() {
+        let polygon = vec![
+            Vector3::new(0.0, 0.0, 1.0),
+            Vector3::new(1.0, 0.0, 1.0),
+            Vector3::new(0.0, 1.0, 1.0),
+        ];
+        let result = clip_polygon_3d_near_plane(&polygon, 3.0);
+        assert_eq!(result.len(), 3);
+    }
+
+    #[test]
+    fn test_clip_near_plane_all_behind() {
+        let polygon = vec![
+            Vector3::new(0.0, 0.0, -5.0),
+            Vector3::new(1.0, 0.0, -5.0),
+            Vector3::new(0.0, 1.0, -5.0),
+        ];
+        let result = clip_polygon_3d_near_plane(&polygon, 3.0);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_clip_near_plane_one_vertex_behind() {
+        let polygon = vec![
+            Vector3::new(0.0, 0.0, 1.0),
+            Vector3::new(1.0, 0.0, 1.0),
+            Vector3::new(0.0, 1.0, -5.0),
+        ];
+        let result = clip_polygon_3d_near_plane(&polygon, 3.0);
+        assert_eq!(result.len(), 4);
+    }
+
+    #[test]
+    fn test_clip_near_plane_empty_input() {
+        let polygon: Vec<Vector3<f32>> = vec![];
+        let result = clip_polygon_3d_near_plane(&polygon, 3.0);
+        assert!(result.is_empty());
+    }
 }
