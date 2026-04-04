@@ -271,7 +271,7 @@ impl MapRenderer {
             let Some(ax) = edge_axis(&self.tesseract_vertices, i0, i1) else {
                 continue;
             };
-            let mid = (s0.screen_pos + s1.screen_pos.to_vec2()) * 0.5 + egui::Vec2::new(2.0, -3.0);
+            let mid = (s0.screen_pos + s1.screen_pos.to_vec2()) * 0.5 + egui::Vec2::new(4.0, -6.0);
             let ch = AXIS_CHARS[ax];
             painter.text(
                 mid,

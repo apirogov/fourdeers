@@ -493,6 +493,13 @@ impl FourDeersApp {
                     labels_label,
                     None,
                 );
+                render_tap_zone_label(
+                    &left_painter,
+                    left_rect,
+                    Zone::SouthEast,
+                    "Reset",
+                    Some(crate::colors::label_inactive()),
+                );
 
                 let rot_label = if self.map_rotation_3d {
                     "Rot:3D"
@@ -506,7 +513,7 @@ impl FourDeersApp {
                     rot_label,
                     Some(crate::colors::label_inactive()),
                 );
-                render_tap_zone_label(&right_painter, right_rect, Zone::SouthEast, "Reset", None);
+                render_tap_zone_label(&right_painter, right_rect, Zone::SouthEast, "Ana", None);
             }
 
             if self.active_view == ActiveView::Main {
@@ -758,7 +765,7 @@ impl FourDeersApp {
             Zone::NorthEast => Some(CameraAction::MoveForward),
             Zone::SouthWest => Some(CameraAction::MoveBackward),
             Zone::NorthWest => Some(CameraAction::MoveKata),
-            Zone::SouthEast => None,
+            Zone::SouthEast => Some(CameraAction::MoveAna),
             _ => None,
         }
     }
@@ -842,15 +849,18 @@ impl FourDeersApp {
                 return;
             }
 
+            if left_rect.contains(pos)
+                && get_zone_from_rect(left_rect, pos, ZoneMode::NineZones) == Some(Zone::SouthEast)
+            {
+                self.reset_map_camera();
+                return;
+            }
+
             let (_, right_rect) = split_stereo_views(visualization_rect);
             if right_rect.contains(pos) {
                 let zone = get_zone_from_rect(right_rect, pos, ZoneMode::NineZones);
                 if zone == Some(Zone::Center) {
                     self.map_rotation_3d = !self.map_rotation_3d;
-                    return;
-                }
-                if zone == Some(Zone::SouthEast) {
-                    self.reset_map_camera();
                     return;
                 }
             }
