@@ -8,6 +8,8 @@
 //!
 //! The map has its own Camera allowing independent 3D/4D navigation.
 
+#![allow(clippy::excessive_precision)]
+
 use eframe::egui;
 use nalgebra::{UnitQuaternion, Vector3, Vector4};
 
@@ -26,6 +28,18 @@ use crate::toy::CompassWaypoint;
 const BOUNDS_PADDING_FACTOR: f32 = 0.2;
 const SLICE_GREEN: egui::Color32 = egui::Color32::from_rgb(80, 200, 80);
 const MAP_CAMERA_BACK_OFFSET: f32 = 4.0;
+const NEAR_MARGIN: f32 = 0.5;
+#[cfg(test)]
+const TESSERACT_EDGE_COUNT: usize = 32;
+
+#[cfg(test)]
+const TESSERACT_CROSS_SECTION_VERTEX_COUNT: usize = 8;
+
+#[cfg(test)]
+const TESSERACT_CROSS_SECTION_EDGE_COUNT: usize = 12;
+
+#[cfg(test)]
+const TESSERACT_IN_BAND_EDGE_COUNT: usize = 40;
 
 fn slice_green_fill() -> egui::Color32 {
     egui::Color32::from_rgba_unmultiplied(60, 180, 60, 40)
@@ -34,34 +48,6 @@ fn slice_green_fill() -> egui::Color32 {
 fn slice_green_dim() -> egui::Color32 {
     egui::Color32::from_rgba_unmultiplied(80, 200, 80, 120)
 }
-
-const TESSERACT_FACES: [[u16; 4]; 24] = [
-    [0, 2, 6, 4],
-    [1, 3, 7, 5],
-    [0, 1, 5, 4],
-    [2, 3, 7, 6],
-    [0, 1, 3, 2],
-    [4, 5, 7, 6],
-    [8, 10, 14, 12],
-    [9, 11, 15, 13],
-    [8, 9, 13, 12],
-    [10, 11, 15, 14],
-    [8, 9, 11, 10],
-    [12, 13, 15, 14],
-    [0, 2, 10, 8],
-    [1, 3, 11, 9],
-    [0, 1, 9, 8],
-    [2, 3, 11, 10],
-    [4, 6, 14, 12],
-    [5, 7, 15, 13],
-    [4, 5, 13, 12],
-    [6, 7, 15, 14],
-    [0, 4, 12, 8],
-    [1, 5, 13, 9],
-    [2, 6, 14, 10],
-    [3, 7, 15, 11],
-];
-
 pub struct MapRenderer {
     camera: Camera,
     tesseract_vertices: Vec<crate::polytopes::Vertex4D>,
@@ -70,13 +56,11 @@ pub struct MapRenderer {
     w_color_intensity: f32,
     projection_distance: f32,
 }
-
 impl Default for MapRenderer {
     fn default() -> Self {
         Self::new()
     }
 }
-
 impl MapRenderer {
     pub fn new() -> Self {
         let (vertices, indices) = create_polytope(PolytopeType::EightCell);
@@ -89,39 +73,30 @@ impl MapRenderer {
             projection_distance: 3.0,
         }
     }
-
     pub fn camera(&self) -> &Camera {
         &self.camera
     }
-
     pub fn apply_action(&mut self, action: crate::camera::CameraAction, speed: f32) {
         self.camera.apply_action(action, speed);
     }
-
     pub fn rotate_3d(&mut self, delta_x: f32, delta_y: f32) {
         self.camera.rotate(delta_x, delta_y);
     }
-
     pub fn rotate_4d(&mut self, delta_x: f32, delta_y: f32) {
         self.camera.rotate_4d(delta_x, delta_y);
     }
-
     pub fn reset_to_fit(&mut self, scene_camera: &Camera, bounds: &(Vector4<f32>, Vector4<f32>)) {
         let norm_cam = normalize_to_tesseract(scene_camera.position, bounds);
-
         let q_left = *scene_camera.rotation_4d.q_left();
         let offset_local = Vector3::new(0.0, 0.0, -MAP_CAMERA_BACK_OFFSET);
         let rotated_offset = q_left.transform_vector(&offset_local);
-
         self.camera.position =
             norm_cam + Vector4::new(rotated_offset[0], rotated_offset[1], rotated_offset[2], 0.0);
-
         self.camera
             .set_yaw_pitch_l(scene_camera.yaw_l(), scene_camera.pitch_l());
         self.camera.set_yaw_r(scene_camera.yaw_r());
         self.camera.set_pitch_r(scene_camera.pitch_r());
     }
-
     pub fn render(
         &self,
         ui: &mut egui::Ui,
@@ -133,9 +108,7 @@ impl MapRenderer {
     ) {
         draw_background(ui, rect);
         draw_center_divider(ui, rect);
-
         let bounds = compute_bounds(scene_camera, waypoints);
-
         render_stereo_views(
             ui,
             rect,
@@ -157,7 +130,6 @@ impl MapRenderer {
             },
         );
     }
-
     fn render_tesseract_wireframe(
         &self,
         painter: &egui::Painter,
@@ -172,19 +144,16 @@ impl MapRenderer {
             },
             stereo: StereoSettings::new().with_projection_distance(self.projection_distance),
         };
-
         let ctx = TesseractRenderContext::from_config(
             &self.tesseract_vertices,
             &self.tesseract_indices,
             &self.camera,
             config,
         );
-
         let transformed = ctx.transform_vertices();
         ctx.render_edges(painter, projector, &transformed, painter.clip_rect());
         self.render_vertex_labels(painter, projector, &transformed);
     }
-
     fn render_vertex_labels(
         &self,
         painter: &egui::Painter,
@@ -193,7 +162,6 @@ impl MapRenderer {
     ) {
         let axis_chars = ['X', 'Y', 'Z', 'W'];
         let w_half = self.w_thickness * 0.5;
-
         for (i, tv) in transformed.iter().enumerate() {
             if !tv.in_slice {
                 continue;
@@ -201,19 +169,15 @@ impl MapRenderer {
             if tv.z <= -self.projection_distance {
                 continue;
             }
-
             let Some(p) = projector.project_3d(tv.x, tv.y, tv.z) else {
                 continue;
             };
-
             let vertex = &self.tesseract_vertices[i];
             let font_id = egui::FontId::monospace(8.0);
-
             for (ax, &ch) in axis_chars.iter().enumerate() {
                 let component = vertex.position[ax];
                 let color = compute_component_color(component, 1.0);
                 let egui_color = color.to_egui_color();
-
                 let offset_x = (ax as f32 - 1.5) * 7.0;
                 painter.text(
                     p.screen_pos + egui::Vec2::new(offset_x, 8.0),
@@ -223,13 +187,11 @@ impl MapRenderer {
                     egui_color,
                 );
             }
-
             let normalized_w = (tv.w / w_half).clamp(-1.0, 1.0);
             let dot_color = crate::render::w_to_color(normalized_w, 180, self.w_color_intensity);
             painter.circle_filled(p.screen_pos, 3.0, dot_color);
         }
     }
-
     fn render_slice_volume(
         &self,
         painter: &egui::Painter,
@@ -245,132 +207,55 @@ impl MapRenderer {
         let basis_w = slice_rotation.basis_w();
         let slice_normal = Vector4::new(basis_w[0], basis_w[1], basis_w[2], basis_w[3]);
         let map_transform = MapViewTransform::new(&self.camera);
-        let near_plane = self.projection_distance;
+        let near_z = -self.projection_distance + NEAR_MARGIN;
         let w_half = self.w_thickness * 0.5;
-
-        let mut all_edge_segments: Vec<(egui::Pos2, egui::Pos2, bool)> = Vec::new();
-
-        for face in &TESSERACT_FACES {
-            let face_verts: Vec<Vector4<f32>> = face
-                .iter()
-                .map(|&vi| vertex_to_4d(&self.tesseract_vertices[vi as usize]))
-                .collect();
-
-            let distances: Vec<f32> = face_verts
-                .iter()
-                .map(|v| (v - norm_cam).dot(&slice_normal))
-                .collect();
-
-            let polygon_4d = clip_polygon_to_slice(&face_verts, &distances, w_half);
-
-            if polygon_4d.len() < 3 {
-                continue;
-            }
-
-            let polygon_3d: Vec<Vector3<f32>> = polygon_4d
-                .iter()
-                .map(|v| map_transform.project_to_3d(*v))
-                .collect();
-
-            let clipped_3d = clip_polygon_3d_near_plane(&polygon_3d, near_plane);
-
-            if clipped_3d.len() < 3 {
-                continue;
-            }
-
-            let screen_pts: Vec<egui::Pos2> = clipped_3d
-                .iter()
-                .filter_map(|v3| projector.project_3d(v3.x, v3.y, v3.z))
-                .map(|p| p.screen_pos)
-                .collect();
-
+        let cross_section_4d = compute_slice_cross_section(
+            &self.tesseract_vertices,
+            &self.tesseract_indices,
+            slice_normal,
+            norm_cam,
+        );
+        let cross_section_3d: Vec<Vector3<f32>> = cross_section_4d
+            .iter()
+            .filter_map(|p4d| {
+                let pt3d = map_transform.project_to_3d(*p4d);
+                if pt3d.z > near_z {
+                    Some(pt3d)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        let segments = compute_in_band_segments(
+            &self.tesseract_vertices,
+            &self.tesseract_indices,
+            slice_normal,
+            norm_cam,
+            w_half,
+        );
+        if cross_section_3d.len() >= 3 {
+            let screen_pts = convex_hull_screen(&cross_section_3d, projector);
             if screen_pts.len() >= 3 {
                 painter.add(egui::Shape::convex_polygon(
                     screen_pts,
                     slice_green_fill(),
-                    egui::Stroke::new(1.0, SLICE_GREEN),
+                    egui::Stroke::new(1.5, SLICE_GREEN),
                 ));
             }
         }
-
-        for chunk in self.tesseract_indices.chunks(2) {
-            if chunk.len() != 2 {
-                continue;
-            }
-            let v0 = &self.tesseract_vertices[chunk[0] as usize];
-            let v1 = &self.tesseract_vertices[chunk[1] as usize];
-
-            let p0 = vertex_to_4d(v0);
-            let p1 = vertex_to_4d(v1);
-
-            let d0 = (p0 - norm_cam).dot(&slice_normal);
-            let d1 = (p1 - norm_cam).dot(&slice_normal);
-
-            let in0 = d0.abs() <= w_half;
-            let in1 = d1.abs() <= w_half;
-
-            if !in0 && !in1 {
-                if d0.signum() != d1.signum() && (d0 - d1).abs() > 1e-10 {
-                    let t_enter = (w_half * d0.signum() - d0) / (d1 - d0);
-                    let t_exit = (w_half * d1.signum() - d0) / (d1 - d0);
-                    let t_min = t_enter.min(t_exit).clamp(0.0, 1.0);
-                    let t_max = t_enter.max(t_exit).clamp(0.0, 1.0);
-
-                    let cp0 = p0 + (p1 - p0) * t_min;
-                    let cp1 = p0 + (p1 - p0) * t_max;
-
-                    let s0 = map_transform.project_to_3d(cp0);
-                    let s1 = map_transform.project_to_3d(cp1);
-
-                    if let (Some(sp0), Some(sp1)) = (
-                        projector.project_3d(s0.x, s0.y, s0.z),
-                        projector.project_3d(s1.x, s1.y, s1.z),
-                    ) {
-                        if sp0.depth > -near_plane && sp1.depth > -near_plane {
-                            all_edge_segments.push((sp0.screen_pos, sp1.screen_pos, false));
-                        }
-                    }
-                }
-                continue;
-            }
-
-            let (tp0, tp1, fully_in) = if in0 && in1 {
-                (p0, p1, true)
-            } else {
-                let outside_sign = if !in0 { d0.signum() } else { d1.signum() };
-                let t = (w_half * outside_sign - d0) / (d1 - d0);
-                let t = t.clamp(0.0, 1.0);
-                let clipped = p0 + (p1 - p0) * t;
-                if !in0 {
-                    (clipped, p1, false)
+        for seg in &segments {
+            if let Some(screen_seg) =
+                clip_segment_to_screen(&map_transform, projector, near_z, seg.p0, seg.p1)
+            {
+                let color = if seg.fully_in {
+                    SLICE_GREEN
                 } else {
-                    (p0, clipped, false)
-                }
-            };
-
-            let s0 = map_transform.project_to_3d(tp0);
-            let s1 = map_transform.project_to_3d(tp1);
-
-            if let (Some(sp0), Some(sp1)) = (
-                projector.project_3d(s0.x, s0.y, s0.z),
-                projector.project_3d(s1.x, s1.y, s1.z),
-            ) {
-                if sp0.depth > -near_plane && sp1.depth > -near_plane {
-                    all_edge_segments.push((sp0.screen_pos, sp1.screen_pos, fully_in));
-                }
+                    slice_green_dim()
+                };
+                painter.line_segment([screen_seg.0, screen_seg.1], egui::Stroke::new(2.0, color));
             }
-        }
-
-        for (s0, s1, fully_in) in all_edge_segments {
-            let color = if fully_in {
-                SLICE_GREEN
-            } else {
-                slice_green_dim()
-            };
-            painter.line_segment([s0, s1], egui::Stroke::new(2.0, color));
         }
     }
-
     fn render_waypoints(
         &self,
         painter: &egui::Painter,
@@ -382,32 +267,25 @@ impl MapRenderer {
     ) {
         let map_transform = MapViewTransform::new(&self.camera);
         let slice_info = SliceInfo::new(scene_camera, bounds, &self.camera, self.w_thickness);
-
         for wp in waypoints {
             let norm_pos = normalize_to_tesseract(wp.position, bounds);
             let vector_4d = match frame_mode {
                 CompassFrameMode::Camera => scene_camera.world_vector_to_camera_frame(norm_pos),
                 CompassFrameMode::World => norm_pos,
             };
-
             let s3d = map_transform.project_to_3d(norm_pos);
-
             if s3d.z <= -self.projection_distance {
                 continue;
             }
-
             let alpha = slice_info.alpha_for_point(norm_pos);
             let scale = 0.15;
             let gadget = TetrahedronGadget::from_4d_vector_with_scale(vector_4d, scale)
                 .with_tip_label(wp.title);
-
             let Some(center_screen) = projector.project_3d(s3d.x, s3d.y, s3d.z) else {
                 continue;
             };
-
             let shifted = projector.with_center(center_screen.screen_pos);
             render_tetrahedron_with_projector(painter, &gadget, &shifted, frame_mode, alpha);
-
             if alpha < 1.0 {
                 let dim_color =
                     egui::Color32::from_rgba_unmultiplied(255, 255, 255, (alpha * 150.0) as u8);
@@ -415,7 +293,6 @@ impl MapRenderer {
             }
         }
     }
-
     fn render_camera_position(
         &self,
         painter: &egui::Painter,
@@ -428,27 +305,21 @@ impl MapRenderer {
         let map_transform = MapViewTransform::new(&self.camera);
         let slice_info = SliceInfo::new(scene_camera, bounds, &self.camera, self.w_thickness);
         let s3d = map_transform.project_to_3d(norm_cam);
-
         if s3d.z <= -self.projection_distance {
             return;
         }
-
         let vector_4d = match frame_mode {
             CompassFrameMode::Camera => scene_camera.world_vector_to_camera_frame(norm_cam),
             CompassFrameMode::World => norm_cam,
         };
-
         let alpha = slice_info.alpha_for_point(norm_cam);
         let gadget =
             TetrahedronGadget::from_4d_vector_with_scale(vector_4d, 0.2).with_tip_label("Cam");
-
         let Some(center_screen) = projector.project_3d(s3d.x, s3d.y, s3d.z) else {
             return;
         };
-
         let shifted = projector.with_center(center_screen.screen_pos);
         render_tetrahedron_with_projector(painter, &gadget, &shifted, frame_mode, alpha);
-
         let dot_alpha = (alpha * 255.0) as u8;
         painter.circle_filled(
             center_screen.screen_pos,
@@ -457,13 +328,11 @@ impl MapRenderer {
         );
     }
 }
-
 struct SliceInfo {
     slice_normal: Vector4<f32>,
     norm_cam: Vector4<f32>,
     w_half: f32,
 }
-
 impl SliceInfo {
     fn new(
         scene_camera: &Camera,
@@ -484,7 +353,6 @@ impl SliceInfo {
             w_half: w_thickness * 0.5,
         }
     }
-
     fn alpha_for_point(&self, pos: Vector4<f32>) -> f32 {
         let d = (pos - self.norm_cam).dot(&self.slice_normal);
         if d.abs() <= self.w_half {
@@ -495,7 +363,6 @@ impl SliceInfo {
         }
     }
 }
-
 fn render_tetrahedron_with_projector(
     painter: &egui::Painter,
     gadget: &TetrahedronGadget,
@@ -508,7 +375,6 @@ fn render_tetrahedron_with_projector(
     } else {
         egui::Color32::from_rgba_unmultiplied(200, 200, 210, (alpha * 150.0) as u8)
     };
-
     for edge in &gadget.edges {
         let v0 = gadget.get_vertex_3d(edge.vertex_indices[0]).unwrap();
         let v1 = gadget.get_vertex_3d(edge.vertex_indices[1]).unwrap();
@@ -522,14 +388,11 @@ fn render_tetrahedron_with_projector(
             );
         }
     }
-
     let component_mags: [f32; 4] = gadget.component_values.map(|v| v.abs());
     let max_mag = component_mags.iter().cloned().fold(0.0f32, f32::max);
-
     for (i, vertex) in gadget.vertices.iter().enumerate() {
         let component = gadget.component_values[i];
         let color = compute_component_color(component, max_mag);
-
         if let (Some(pos), Some(normal)) = (gadget.get_vertex_3d(i), gadget.get_vertex_normal(i)) {
             let label_offset = 0.12;
             let label_x = pos.x + normal.x * label_offset;
@@ -542,7 +405,6 @@ fn render_tetrahedron_with_projector(
                 let text_color =
                     egui::Color32::from_rgba_unmultiplied(color.r, color.g, color.b, a);
                 let outline = egui::Color32::from_rgba_unmultiplied(0, 0, 0, (alpha * 180.0) as u8);
-
                 painter.text(
                     label_p.screen_pos + egui::Vec2::new(0.5, 0.5),
                     egui::Align2::CENTER_CENTER,
@@ -560,7 +422,6 @@ fn render_tetrahedron_with_projector(
             }
         }
     }
-
     let arrow = gadget.arrow_position();
     if let (Some(arrow_p), Some(origin_p)) = (
         projector.project_3d(arrow.x, arrow.y, arrow.z),
@@ -569,7 +430,6 @@ fn render_tetrahedron_with_projector(
         let arrow_end = arrow_p.screen_pos;
         let arrow_start = origin_p.screen_pos;
         let arrow_vec = arrow_end - arrow_start;
-
         if arrow_vec.length() > 2.0 {
             let a = (alpha * 255.0) as u8;
             let arrow_color = egui::Color32::from_rgba_unmultiplied(255, 150, 50, a);
@@ -577,7 +437,6 @@ fn render_tetrahedron_with_projector(
                 [arrow_start, arrow_end],
                 egui::Stroke::new(2.0, arrow_color),
             );
-
             let arrow_head_size = gadget.arrow_head_size() * 15.0;
             if arrow_vec.length() > arrow_head_size {
                 let dir = arrow_vec.normalized();
@@ -585,7 +444,6 @@ fn render_tetrahedron_with_projector(
                 let base = arrow_end - dir * arrow_head_size;
                 let left = base + perp * (arrow_head_size * 0.4);
                 let right = base - perp * (arrow_head_size * 0.4);
-
                 painter.add(egui::Shape::convex_polygon(
                     vec![arrow_end, left, right],
                     arrow_color,
@@ -593,10 +451,8 @@ fn render_tetrahedron_with_projector(
                 ));
             }
         }
-
         painter.circle_filled(arrow_start, 2.0, arrow_glow());
     }
-
     if let Some(ref label) = gadget.tip_label {
         if let Some(center) = projector.project_3d(0.0, 0.0, 0.0) {
             let a = (alpha * 230.0) as u8;
@@ -610,13 +466,11 @@ fn render_tetrahedron_with_projector(
         }
     }
 }
-
 struct MapViewTransform {
     mat_4d: nalgebra::Matrix4<f32>,
     offset_4d: Vector4<f32>,
     mat_3d: nalgebra::Rotation3<f32>,
 }
-
 impl MapViewTransform {
     fn new(map_camera: &Camera) -> Self {
         let map_inv = map_camera.rotation_4d.inverse_q_right_only();
@@ -633,27 +487,23 @@ impl MapViewTransform {
             mat_3d,
         }
     }
-
     fn project_to_3d(&self, pos_4d: Vector4<f32>) -> Vector3<f32> {
         let r = self.mat_4d * pos_4d - self.offset_4d;
         self.mat_3d * Vector3::new(r.x, r.y, r.z)
     }
 }
-
 pub fn compute_bounds(
     scene_camera: &Camera,
     waypoints: &[CompassWaypoint],
 ) -> (Vector4<f32>, Vector4<f32>) {
     let mut min = scene_camera.position;
     let mut max = scene_camera.position;
-
     for wp in waypoints {
         for i in 0..4 {
             min[i] = min[i].min(wp.position[i]);
             max[i] = max[i].max(wp.position[i]);
         }
     }
-
     for i in 0..4 {
         let range = max[i] - min[i];
         if range < 1e-6 {
@@ -665,10 +515,8 @@ pub fn compute_bounds(
             max[i] += padding;
         }
     }
-
     (min, max)
 }
-
 pub fn normalize_to_tesseract(
     pos: Vector4<f32>,
     bounds: &(Vector4<f32>, Vector4<f32>),
@@ -684,189 +532,427 @@ pub fn normalize_to_tesseract(
     }
     result
 }
-
 fn vertex_to_4d(v: &crate::polytopes::Vertex4D) -> Vector4<f32> {
     Vector4::new(v.position[0], v.position[1], v.position[2], v.position[3])
 }
-
-fn clip_polygon_to_slice(
-    verts: &[Vector4<f32>],
-    distances: &[f32],
-    w_half: f32,
-) -> Vec<Vector4<f32>> {
-    let mut result = Vec::new();
-    let n = verts.len();
-
-    for i in 0..n {
-        let j = (i + 1) % n;
-        let di = distances[i];
-        let dj = distances[j];
-        let in_i = di.abs() <= w_half;
-        let in_j = dj.abs() <= w_half;
-
-        if in_i {
-            result.push(verts[i]);
+fn clip_segment_to_screen(
+    map_transform: &MapViewTransform,
+    projector: &StereoProjector,
+    near_z: f32,
+    p0: Vector4<f32>,
+    p1: Vector4<f32>,
+) -> Option<(egui::Pos2, egui::Pos2)> {
+    let mut s0 = map_transform.project_to_3d(p0);
+    let mut s1 = map_transform.project_to_3d(p1);
+    let in0 = s0.z > near_z;
+    let in1 = s1.z > near_z;
+    if !in0 && !in1 {
+        return None;
+    }
+    if !in0 || !in1 {
+        let dz = s1.z - s0.z;
+        if dz.abs() < 1e-10 {
+            return None;
         }
-
-        if in_i != in_j {
-            let outside_sign = if !in_i { di.signum() } else { dj.signum() };
-            let t = (w_half * outside_sign - di) / (dj - di);
-            let t = t.clamp(0.0, 1.0);
-            result.push(verts[i] + (verts[j] - verts[i]) * t);
+        let t = (near_z - s0.z) / dz;
+        let clipped = s0 + (s1 - s0) * t;
+        if !in0 {
+            s0 = clipped;
+        } else {
+            s1 = clipped;
         }
     }
-
-    result
+    let sp0 = projector.project_3d(s0.x, s0.y, s0.z)?;
+    let sp1 = projector.project_3d(s1.x, s1.y, s1.z)?;
+    Some((sp0.screen_pos, sp1.screen_pos))
 }
-
-fn clip_polygon_3d_near_plane(polygon: &[Vector3<f32>], near_plane: f32) -> Vec<Vector3<f32>> {
-    let mut result = Vec::new();
-    let n = polygon.len();
-    if n == 0 {
-        return result;
-    }
-
-    for i in 0..n {
-        let j = (i + 1) % n;
-        let zi = polygon[i].z;
-        let zj = polygon[j].z;
-        let ci = zi > -near_plane;
-        let cj = zj > -near_plane;
-
-        if ci {
-            result.push(polygon[i]);
+struct SliceSegment {
+    p0: Vector4<f32>,
+    p1: Vector4<f32>,
+    fully_in: bool,
+}
+fn compute_slice_cross_section(
+    vertices: &[crate::polytopes::Vertex4D],
+    indices: &[u16],
+    slice_normal: Vector4<f32>,
+    slice_origin: Vector4<f32>,
+) -> Vec<Vector4<f32>> {
+    let mut points = Vec::new();
+    for chunk in indices.chunks(2) {
+        if chunk.len() != 2 {
+            continue;
         }
-
-        if ci != cj {
-            let dz = zj - zi;
-            if dz.abs() > 1e-10 {
-                let t = (-near_plane - zi) / dz;
-                result.push(polygon[i] + (polygon[j] - polygon[i]) * t);
+        let p0 = vertex_to_4d(&vertices[chunk[0] as usize]);
+        let p1 = vertex_to_4d(&vertices[chunk[1] as usize]);
+        let d0 = (p0 - slice_origin).dot(&slice_normal);
+        let d1 = (p1 - slice_origin).dot(&slice_normal);
+        let denom = d1 - d0;
+        if denom.abs() > 1e-10 {
+            let t = -d0 / denom;
+            if t > 0.0 && t < 1.0 {
+                points.push(p0 + (p1 - p0) * t);
             }
         }
     }
-
-    result
+    points
 }
-
+fn compute_in_band_segments(
+    vertices: &[crate::polytopes::Vertex4D],
+    indices: &[u16],
+    slice_normal: Vector4<f32>,
+    slice_origin: Vector4<f32>,
+    w_half: f32,
+) -> Vec<SliceSegment> {
+    let mut segments = Vec::new();
+    for chunk in indices.chunks(2) {
+        if chunk.len() != 2 {
+            continue;
+        }
+        let p0 = vertex_to_4d(&vertices[chunk[0] as usize]);
+        let p1 = vertex_to_4d(&vertices[chunk[1] as usize]);
+        let d0 = (p0 - slice_origin).dot(&slice_normal);
+        let d1 = (p1 - slice_origin).dot(&slice_normal);
+        let denom = d1 - d0;
+        let in0 = d0.abs() <= w_half;
+        let in1 = d1.abs() <= w_half;
+        if !in0 && !in1 {
+            if d0.signum() != d1.signum() && denom.abs() > 1e-10 {
+                let t_enter = (w_half * d0.signum() - d0) / denom;
+                let t_exit = (w_half * d1.signum() - d0) / denom;
+                let t_min = t_enter.min(t_exit).clamp(0.0, 1.0);
+                let t_max = t_enter.max(t_exit).clamp(0.0, 1.0);
+                segments.push(SliceSegment {
+                    p0: p0 + (p1 - p0) * t_min,
+                    p1: p0 + (p1 - p0) * t_max,
+                    fully_in: false,
+                });
+            }
+            continue;
+        }
+        let (tp0, tp1, fully_in) = if in0 && in1 {
+            (p0, p1, true)
+        } else {
+            let outside_sign = if !in0 { d0.signum() } else { d1.signum() };
+            let t = (w_half * outside_sign - d0) / denom;
+            let t = t.clamp(0.0, 1.0);
+            let clipped = p0 + (p1 - p0) * t;
+            if !in0 {
+                (clipped, p1, false)
+            } else {
+                (p0, clipped, false)
+            }
+        };
+        segments.push(SliceSegment {
+            p0: tp0,
+            p1: tp1,
+            fully_in,
+        });
+    }
+    segments
+}
+fn convex_hull_screen(pts_3d: &[Vector3<f32>], projector: &StereoProjector) -> Vec<egui::Pos2> {
+    let pts_2d: Vec<egui::Pos2> = pts_3d
+        .iter()
+        .filter_map(|v3| projector.project_3d(v3.x, v3.y, v3.z))
+        .map(|p| p.screen_pos)
+        .collect();
+    convex_hull_2d(&pts_2d)
+}
+fn convex_hull_2d(pts: &[egui::Pos2]) -> Vec<egui::Pos2> {
+    let n = pts.len();
+    if n < 3 {
+        return pts.to_vec();
+    }
+    let mut start = 0;
+    for i in 1..n {
+        if pts[i].x < pts[start].x || (pts[i].x == pts[start].x && pts[i].y < pts[start].y) {
+            start = i;
+        }
+    }
+    let mut hull = Vec::new();
+    let mut current = start;
+    loop {
+        hull.push(pts[current]);
+        let mut next = 0;
+        for i in 0..n {
+            if i == current {
+                continue;
+            }
+            if next == current {
+                next = i;
+                continue;
+            }
+            let oc = pts[i] - pts[current];
+            let on = pts[next] - pts[current];
+            let cross = oc.x * on.y - oc.y * on.x;
+            if cross > 0.0 {
+                next = i;
+            } else if cross.abs() < 1e-10 {
+                let d_i = oc.x * oc.x + oc.y * oc.y;
+                let d_n = on.x * on.x + on.y * on.y;
+                if d_i > d_n {
+                    next = i;
+                }
+            }
+        }
+        current = next;
+        if current == start {
+            break;
+        }
+        if hull.len() > n {
+            break;
+        }
+    }
+    hull
+}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::render::ProjectionMode;
     use crate::test_utils::assert_approx_eq;
-
-    #[test]
-    fn test_clip_polygon_all_inside() {
-        let verts = vec![
-            Vector4::new(0.0, 0.0, 0.0, 0.0),
-            Vector4::new(1.0, 0.0, 0.0, 0.0),
-            Vector4::new(0.0, 1.0, 0.0, 0.0),
-        ];
-        let distances = vec![0.0, 0.5, -0.5];
-        let result = clip_polygon_to_slice(&verts, &distances, 1.0);
-        assert_eq!(result.len(), 3);
+    fn make_projector() -> StereoProjector {
+        StereoProjector::new(
+            egui::Pos2::new(200.0, 200.0),
+            100.0,
+            3.0,
+            ProjectionMode::Perspective,
+        )
     }
-
     #[test]
-    fn test_clip_polygon_all_outside_same_side() {
-        let verts = vec![
-            Vector4::new(1.0, 0.0, 0.0, 0.0),
-            Vector4::new(2.0, 0.0, 0.0, 0.0),
-            Vector4::new(1.5, 1.0, 0.0, 0.0),
-        ];
-        let distances = vec![3.0, 4.0, 3.5];
-        let result = clip_polygon_to_slice(&verts, &distances, 1.0);
-        assert!(result.is_empty());
+    fn test_clip_segment_both_in_front() {
+        let mt = MapViewTransform::new(&Camera::new());
+        let proj = make_projector();
+        let near_z = -3.0 + NEAR_MARGIN;
+        let p0 = Vector4::new(0.0, 0.0, 0.0, 0.0);
+        let p1 = Vector4::new(1.0, 0.0, 0.0, 0.0);
+        assert!(clip_segment_to_screen(&mt, &proj, near_z, p0, p1).is_some());
     }
-
     #[test]
-    fn test_clip_near_plane_produces_valid_intersection() {
-        let polygon = vec![
-            Vector3::new(0.0, 0.0, 0.0),
-            Vector3::new(2.0, 0.0, -6.0),
-            Vector3::new(0.0, 2.0, 0.0),
-        ];
-        let result = clip_polygon_3d_near_plane(&polygon, 3.0);
-        assert_eq!(result.len(), 4);
-        for v in &result {
-            assert!(v.z >= -3.0 - 1e-5, "vertex behind near plane: z={}", v.z);
+    fn test_cross_section_default_w_slice_produces_cube() {
+        let (vertices, indices) = create_polytope(PolytopeType::EightCell);
+        let slice_normal = Vector4::new(0.0, 0.0, 0.0, 1.0);
+        let slice_origin = Vector4::zeros();
+        let cross = compute_slice_cross_section(&vertices, &indices, slice_normal, slice_origin);
+        assert_eq!(
+            cross.len(),
+            TESSERACT_CROSS_SECTION_VERTEX_COUNT,
+            "w=0 tesseract cross-section should have {} vertices, got {}",
+            TESSERACT_CROSS_SECTION_VERTEX_COUNT,
+            cross.len()
+        );
+        for pt in &cross {
+            assert_approx_eq(pt[3], 0.0, 1e-6);
+            for i in 0..3 {
+                assert!(
+                    pt[i].abs() <= 1.0 + 1e-6,
+                    "xyz component should be in [-1,1]"
+                );
+            }
         }
     }
-
     #[test]
-    fn test_clip_polygon_both_sides_crossing() {
-        let verts = vec![
-            Vector4::new(-1.0, 0.0, 0.0, 0.0),
-            Vector4::new(1.0, 0.0, 0.0, 0.0),
-            Vector4::new(0.0, 1.0, 0.0, 0.0),
-        ];
-        let distances = vec![-2.0, 2.0, 0.0];
-        let result = clip_polygon_to_slice(&verts, &distances, 1.0);
-        assert!(
-            result.len() >= 3,
-            "should produce a clipped polygon, got {} vertices",
-            result.len()
-        );
-        for v in &result {
-            let d = v[0] - v[0].signum() * 1.0;
-            let _ = d;
+    fn test_cross_section_tilted_slice_changes_count() {
+        let (vertices, indices) = create_polytope(PolytopeType::EightCell);
+        let slice_normal = Vector4::new(1.0, 0.0, 0.0, 1.0).normalize();
+        let slice_origin = Vector4::new(0.3, 0.0, 0.0, 0.3);
+        let cross = compute_slice_cross_section(&vertices, &indices, slice_normal, slice_origin);
+        for pt in &cross {
+            let d = (pt - slice_origin).dot(&slice_normal);
+            assert_approx_eq(d, 0.0, 1e-4);
         }
     }
-
     #[test]
-    fn test_clip_polygon_exit_through_opposite_boundary() {
-        let verts = vec![
-            Vector4::new(0.0, 0.0, 0.0, 0.0),
-            Vector4::new(3.0, 0.0, 0.0, 0.0),
-            Vector4::new(0.0, 1.0, 0.0, 0.0),
-        ];
-        let distances = vec![0.5, -2.5, 0.5];
-        let result = clip_polygon_to_slice(&verts, &distances, 1.0);
+    fn test_in_band_segments_default_slice() {
+        let (vertices, indices) = create_polytope(PolytopeType::EightCell);
+        let slice_normal = Vector4::new(0.0, 0.0, 0.0, 1.0);
+        let slice_origin = Vector4::zeros();
+        let w_half = 1.25;
+        let segments =
+            compute_in_band_segments(&vertices, &indices, slice_normal, slice_origin, w_half);
         assert!(
-            result.len() >= 3,
-            "should produce a clipped polygon, got {} vertices",
-            result.len()
+            segments.len() >= TESSERACT_CROSS_SECTION_EDGE_COUNT,
+            "w=0 slice at w_half=1.25 should have >= {} edges, got {}",
+            TESSERACT_CROSS_SECTION_EDGE_COUNT,
+            segments.len()
         );
-        assert_approx_eq(result[0].x, 0.0, 1e-5);
-        assert_approx_eq(result[1].x, 1.5, 1e-4);
+        let fully_in_count = segments.iter().filter(|s| s.fully_in).count();
+        assert!(
+            fully_in_count >= 4,
+            "at least 4 edges should be fully in the slice band, got {}",
+            fully_in_count
+        );
     }
-
     #[test]
-    fn test_clip_near_plane_all_in_front() {
-        let polygon = vec![
-            Vector3::new(0.0, 0.0, 1.0),
-            Vector3::new(1.0, 0.0, 1.0),
-            Vector3::new(0.0, 1.0, 1.0),
+    fn test_in_band_segments_edges_lie_within_band() {
+        let (vertices, indices) = create_polytope(PolytopeType::EightCell);
+        let slice_normal = Vector4::new(0.0, 0.0, 0.0, 1.0);
+        let slice_origin = Vector4::zeros();
+        let w_half = 1.25;
+        let segments =
+            compute_in_band_segments(&vertices, &indices, slice_normal, slice_origin, w_half);
+        for seg in &segments {
+            for p in &[seg.p0, seg.p1] {
+                let d = (p - slice_origin).dot(&slice_normal);
+                assert!(
+                    d.abs() <= w_half + 1e-6,
+                    "in-band segment endpoint should be within band: d={}, w_half={}",
+                    d,
+                    w_half
+                );
+            }
+        }
+    }
+    #[test]
+    fn test_convex_hull_square() {
+        let pts = vec![
+            egui::Pos2::new(0.0, 0.0),
+            egui::Pos2::new(1.0, 0.0),
+            egui::Pos2::new(1.0, 1.0),
+            egui::Pos2::new(0.0, 1.0),
         ];
-        let result = clip_polygon_3d_near_plane(&polygon, 3.0);
-        assert_eq!(result.len(), 3);
+        let hull = convex_hull_2d(&pts);
+        assert_eq!(hull.len(), 4);
+        for pt in &pts {
+            assert!(hull.contains(pt), "hull should contain {:?}", pt);
+        }
     }
-
     #[test]
-    fn test_clip_near_plane_all_behind() {
-        let polygon = vec![
-            Vector3::new(0.0, 0.0, -5.0),
-            Vector3::new(1.0, 0.0, -5.0),
-            Vector3::new(0.0, 1.0, -5.0),
+    fn test_convex_hull_with_interior_points() {
+        let pts = vec![
+            egui::Pos2::new(0.0, 0.0),
+            egui::Pos2::new(2.0, 0.0),
+            egui::Pos2::new(2.0, 2.0),
+            egui::Pos2::new(0.0, 2.0),
+            egui::Pos2::new(1.0, 1.0),
+            egui::Pos2::new(0.5, 0.5),
         ];
-        let result = clip_polygon_3d_near_plane(&polygon, 3.0);
-        assert!(result.is_empty());
+        let hull = convex_hull_2d(&pts);
+        assert_eq!(
+            hull.len(),
+            4,
+            "interior points should be excluded from hull"
+        );
+        assert!(
+            !hull.contains(&egui::Pos2::new(1.0, 1.0)),
+            "interior point should not be in hull"
+        );
+        assert!(
+            !hull.contains(&egui::Pos2::new(0.5, 0.5)),
+            "interior point should not be in hull"
+        );
     }
-
     #[test]
-    fn test_clip_near_plane_one_vertex_behind() {
-        let polygon = vec![
-            Vector3::new(0.0, 0.0, 1.0),
-            Vector3::new(1.0, 0.0, 1.0),
-            Vector3::new(0.0, 1.0, -5.0),
+    fn test_convex_hull_triangle() {
+        let pts = vec![
+            egui::Pos2::new(0.0, 0.0),
+            egui::Pos2::new(1.0, 0.0),
+            egui::Pos2::new(0.5, 1.0),
+            egui::Pos2::new(0.5, 0.3),
         ];
-        let result = clip_polygon_3d_near_plane(&polygon, 3.0);
-        assert_eq!(result.len(), 4);
+        let hull = convex_hull_2d(&pts);
+        assert_eq!(hull.len(), 3);
     }
-
     #[test]
-    fn test_clip_near_plane_empty_input() {
-        let polygon: Vec<Vector3<f32>> = vec![];
-        let result = clip_polygon_3d_near_plane(&polygon, 3.0);
-        assert!(result.is_empty());
+    fn test_convex_hull_collinear() {
+        let pts = vec![
+            egui::Pos2::new(0.0, 0.0),
+            egui::Pos2::new(1.0, 0.0),
+            egui::Pos2::new(2.0, 0.0),
+        ];
+        let hull = convex_hull_2d(&pts);
+        assert_eq!(
+            hull.len(),
+            2,
+            "collinear points should produce a degenerate hull"
+        );
+    }
+    #[test]
+    fn test_convex_hull_preserves_count() {
+        let proj = make_projector();
+        let pts = vec![
+            Vector3::new(0.5, 0.5, 1.0),
+            Vector3::new(-0.5, 0.5, 1.0),
+            Vector3::new(-0.5, -0.5, 1.0),
+            Vector3::new(0.5, -0.5, 1.0),
+        ];
+        assert_eq!(convex_hull_screen(&pts, &proj).len(), 4);
+    }
+    #[test]
+    fn test_near_margin_value() {
+        assert!(NEAR_MARGIN > 0.3);
+    }
+    #[test]
+    fn test_tesseract_edge_and_cross_section_counts() {
+        let (vertices, indices) = create_polytope(PolytopeType::EightCell);
+        assert_eq!(indices.len() / 2, TESSERACT_EDGE_COUNT);
+        let slice_normal = Vector4::new(0.0, 0.0, 0.0, 1.0);
+        let slice_origin = Vector4::zeros();
+        let cross = compute_slice_cross_section(&vertices, &indices, slice_normal, slice_origin);
+        assert_eq!(cross.len(), TESSERACT_CROSS_SECTION_VERTEX_COUNT);
+        let mut edge_count = 0usize;
+        for i in 0..cross.len() {
+            for j in (i + 1)..cross.len() {
+                let diff_count = (0..3)
+                    .filter(|&k| (cross[i][k] - cross[j][k]).abs() > 0.5)
+                    .count();
+                if diff_count == 1 {
+                    edge_count += 1;
+                }
+            }
+        }
+        assert_eq!(edge_count, TESSERACT_CROSS_SECTION_EDGE_COUNT);
+    }
+    #[test]
+    fn test_zero_w_slice_vertices_form_cube() {
+        let (vertices, indices) = create_polytope(PolytopeType::EightCell);
+        let slice_normal = Vector4::new(0.0, 0.0, 0.0, 1.0);
+        let slice_origin = Vector4::zeros();
+        let cross = compute_slice_cross_section(&vertices, &indices, slice_normal, slice_origin);
+        let mut distances = std::collections::HashSet::new();
+        for i in 0..cross.len() {
+            for j in (i + 1)..cross.len() {
+                let d = (cross[i] - cross[j]).norm();
+                let rounded = (d * 1000.0).round() as i64;
+                distances.insert(rounded);
+            }
+        }
+        assert!(
+            distances.len() <= 3,
+            "cube should have at most 3 distinct edge lengths (side, face diagonal, space diagonal), got {}",
+            distances.len()
+        );
+        let mut side_count = 0usize;
+        for i in 0..cross.len() {
+            for v in cross.iter().skip(i + 1) {
+                let d = (cross[i] - v).norm();
+                let rounded = (d * 1000.0).round();
+                if rounded == 2000.0 {
+                    side_count += 1;
+                }
+            }
+        }
+        let edges_per_vertex =
+            2.0 * side_count as f32 / TESSERACT_CROSS_SECTION_VERTEX_COUNT as f32;
+        assert!(
+            (edges_per_vertex - 3.0).abs() < 0.1,
+            "each cube vertex should have degree 3, got {}",
+            edges_per_vertex
+        );
+    }
+    #[test]
+    fn test_8_cell_structure_invariants() {
+        let (vertices, indices) = create_polytope(PolytopeType::EightCell);
+        assert_eq!(vertices.len(), 16);
+        assert_eq!(indices.len() / 2, TESSERACT_EDGE_COUNT);
+        let mut degrees = vec![0u16; vertices.len()];
+        for chunk in indices.chunks(2) {
+            if chunk.len() == 2 {
+                degrees[chunk[0] as usize] += 1;
+                degrees[chunk[1] as usize] += 1;
+            }
+        }
+        for (i, &d) in degrees.iter().enumerate() {
+            assert_eq!(d, 4, "tesseract vertex {} should have degree 4", i);
+        }
     }
 }
