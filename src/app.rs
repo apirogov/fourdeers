@@ -493,13 +493,7 @@ impl FourDeersApp {
                     labels_label,
                     None,
                 );
-                render_tap_zone_label(
-                    &left_painter,
-                    left_rect,
-                    Zone::SouthEast,
-                    "Reset",
-                    Some(egui::Color32::from_rgb(255, 230, 50)),
-                );
+                render_tap_zone_label(&left_painter, left_rect, Zone::SouthEast, "Reset", None);
 
                 let rot_label = if self.map_rotation_3d {
                     "Rot:3D"
