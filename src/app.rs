@@ -498,7 +498,7 @@ impl FourDeersApp {
                     left_rect,
                     Zone::SouthEast,
                     "Reset",
-                    Some(crate::colors::label_inactive()),
+                    Some(egui::Color32::from_rgb(255, 230, 50)),
                 );
 
                 let rot_label = if self.map_rotation_3d {
@@ -513,7 +513,6 @@ impl FourDeersApp {
                     rot_label,
                     Some(crate::colors::label_inactive()),
                 );
-                render_tap_zone_label(&right_painter, right_rect, Zone::SouthEast, "Ana", None);
             }
 
             if self.active_view == ActiveView::Main {
