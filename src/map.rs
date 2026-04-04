@@ -65,6 +65,23 @@ const TESSERACT_FACES: [[u16; 4]; 24] = [
     [3, 7, 15, 11],
 ];
 
+const AXIS_CHARS: [char; 4] = ['X', 'Y', 'Z', 'W'];
+
+fn edge_axis(vertices: &[crate::polytopes::Vertex4D], i0: usize, i1: usize) -> Option<usize> {
+    let v0 = vertices[i0].position;
+    let v1 = vertices[i1].position;
+    let mut diff_axis = None;
+    for ax in 0..4 {
+        if (v0[ax] - v1[ax]).abs() > f32::EPSILON {
+            if diff_axis.is_some() {
+                return None;
+            }
+            diff_axis = Some(ax);
+        }
+    }
+    diff_axis
+}
+
 fn slice_green_fill() -> egui::Color32 {
     egui::Color32::from_rgba_unmultiplied(60, 180, 60, 40)
 }
@@ -76,6 +93,7 @@ pub struct MapRenderer {
     w_thickness: f32,
     w_color_intensity: f32,
     projection_distance: f32,
+    labels_visible: bool,
 }
 impl Default for MapRenderer {
     fn default() -> Self {
@@ -92,10 +110,17 @@ impl MapRenderer {
             w_thickness: 2.5,
             w_color_intensity: 0.35,
             projection_distance: 3.0,
+            labels_visible: false,
         }
     }
     pub fn camera(&self) -> &Camera {
         &self.camera
+    }
+    pub fn toggle_labels(&mut self) {
+        self.labels_visible = !self.labels_visible;
+    }
+    pub fn labels_visible(&self) -> bool {
+        self.labels_visible
     }
     pub fn apply_action(&mut self, action: crate::camera::CameraAction, speed: f32) {
         self.camera.apply_action(action, speed);
@@ -173,7 +198,10 @@ impl MapRenderer {
         );
         let transformed = ctx.transform_vertices();
         ctx.render_edges(painter, projector, &transformed, painter.clip_rect());
-        self.render_vertex_labels(painter, projector, &transformed);
+        if self.labels_visible {
+            self.render_vertex_labels(painter, projector, &transformed);
+            self.render_edge_labels(painter, projector, &transformed);
+        }
     }
     fn render_vertex_labels(
         &self,
@@ -181,7 +209,6 @@ impl MapRenderer {
         projector: &StereoProjector,
         transformed: &[crate::render::TransformedVertex],
     ) {
-        let axis_chars = ['X', 'Y', 'Z', 'W'];
         let w_half = self.w_thickness * 0.5;
         for (i, tv) in transformed.iter().enumerate() {
             if !tv.in_slice {
@@ -195,7 +222,7 @@ impl MapRenderer {
             };
             let vertex = &self.tesseract_vertices[i];
             let font_id = egui::FontId::monospace(8.0);
-            for (ax, &ch) in axis_chars.iter().enumerate() {
+            for (ax, &ch) in AXIS_CHARS.iter().enumerate() {
                 let component = vertex.position[ax];
                 let color = compute_component_color(component, 1.0);
                 let egui_color = color.to_egui_color();
@@ -211,6 +238,50 @@ impl MapRenderer {
             let normalized_w = (tv.w / w_half).clamp(-1.0, 1.0);
             let dot_color = crate::render::w_to_color(normalized_w, 180, self.w_color_intensity);
             painter.circle_filled(p.screen_pos, 3.0, dot_color);
+        }
+    }
+    fn render_edge_labels(
+        &self,
+        painter: &egui::Painter,
+        projector: &StereoProjector,
+        transformed: &[crate::render::TransformedVertex],
+    ) {
+        let font_id = egui::FontId::monospace(7.0);
+        let near_plane = self.projection_distance;
+        for chunk in self.tesseract_indices.chunks(2) {
+            if chunk.len() != 2 {
+                continue;
+            }
+            let i0 = chunk[0] as usize;
+            let i1 = chunk[1] as usize;
+            let t0 = &transformed[i0];
+            let t1 = &transformed[i1];
+            if !t0.in_slice && !t1.in_slice {
+                continue;
+            }
+            if t0.z <= -near_plane && t1.z <= -near_plane {
+                continue;
+            }
+            let Some(s0) = projector.project_3d(t0.x, t0.y, t0.z) else {
+                continue;
+            };
+            let Some(s1) = projector.project_3d(t1.x, t1.y, t1.z) else {
+                continue;
+            };
+            let Some(ax) = edge_axis(&self.tesseract_vertices, i0, i1) else {
+                continue;
+            };
+            let mid = (s0.screen_pos + s1.screen_pos.to_vec2()) * 0.5;
+            let ch = AXIS_CHARS[ax];
+            let component = self.tesseract_vertices[i0].position[ax];
+            let color = compute_component_color(component, 1.0);
+            painter.text(
+                mid,
+                egui::Align2::CENTER_CENTER,
+                ch.to_string(),
+                font_id.clone(),
+                color.to_egui_color(),
+            );
         }
     }
     fn render_slice_volume(

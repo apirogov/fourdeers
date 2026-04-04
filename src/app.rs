@@ -481,6 +481,19 @@ impl FourDeersApp {
                 };
                 render_tap_zone_label(&left_painter, left_rect, Zone::South, frame_label, None);
 
+                let labels_label = if self.map_renderer.labels_visible() {
+                    "Labels: On"
+                } else {
+                    "Labels: Off"
+                };
+                render_tap_zone_label(
+                    &left_painter,
+                    left_rect,
+                    Zone::NorthEast,
+                    labels_label,
+                    None,
+                );
+
                 let rot_label = if self.map_rotation_3d {
                     "Rot:3D"
                 } else {
@@ -819,6 +832,13 @@ impl FourDeersApp {
                 && get_zone_from_rect(left_rect, pos, ZoneMode::NineZones) == Some(Zone::South)
             {
                 self.toggle_map_frame_mode();
+                return;
+            }
+
+            if left_rect.contains(pos)
+                && get_zone_from_rect(left_rect, pos, ZoneMode::NineZones) == Some(Zone::NorthEast)
+            {
+                self.map_renderer.toggle_labels();
                 return;
             }
 
