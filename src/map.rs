@@ -271,16 +271,14 @@ impl MapRenderer {
             let Some(ax) = edge_axis(&self.tesseract_vertices, i0, i1) else {
                 continue;
             };
-            let mid = (s0.screen_pos + s1.screen_pos.to_vec2()) * 0.5;
+            let mid = (s0.screen_pos + s1.screen_pos.to_vec2()) * 0.5 + egui::Vec2::new(2.0, -3.0);
             let ch = AXIS_CHARS[ax];
-            let component = self.tesseract_vertices[i0].position[ax];
-            let color = compute_component_color(component, 1.0);
             painter.text(
                 mid,
                 egui::Align2::CENTER_CENTER,
                 ch.to_string(),
                 font_id.clone(),
-                color.to_egui_color(),
+                egui::Color32::from_rgb(255, 230, 50),
             );
         }
     }
