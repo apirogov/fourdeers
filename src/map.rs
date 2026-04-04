@@ -38,16 +38,37 @@ const TESSERACT_CROSS_SECTION_VERTEX_COUNT: usize = 8;
 #[cfg(test)]
 const TESSERACT_CROSS_SECTION_EDGE_COUNT: usize = 12;
 
-#[cfg(test)]
-const TESSERACT_IN_BAND_EDGE_COUNT: usize = 40;
+const TESSERACT_FACES: [[u16; 4]; 24] = [
+    [0, 2, 6, 4],
+    [1, 3, 7, 5],
+    [0, 1, 5, 4],
+    [2, 3, 7, 6],
+    [0, 1, 3, 2],
+    [4, 5, 7, 6],
+    [8, 10, 14, 12],
+    [9, 11, 15, 13],
+    [8, 9, 13, 12],
+    [10, 11, 15, 14],
+    [8, 9, 11, 10],
+    [12, 13, 15, 14],
+    [0, 2, 10, 8],
+    [1, 3, 11, 9],
+    [0, 1, 9, 8],
+    [2, 3, 11, 10],
+    [4, 6, 14, 12],
+    [5, 7, 15, 13],
+    [4, 5, 13, 12],
+    [6, 7, 15, 14],
+    [0, 4, 12, 8],
+    [1, 5, 13, 9],
+    [2, 6, 14, 10],
+    [3, 7, 15, 11],
+];
 
 fn slice_green_fill() -> egui::Color32 {
     egui::Color32::from_rgba_unmultiplied(60, 180, 60, 40)
 }
 
-fn slice_green_dim() -> egui::Color32 {
-    egui::Color32::from_rgba_unmultiplied(80, 200, 80, 120)
-}
 pub struct MapRenderer {
     camera: Camera,
     tesseract_vertices: Vec<crate::polytopes::Vertex4D>,
@@ -208,7 +229,6 @@ impl MapRenderer {
         let slice_normal = Vector4::new(basis_w[0], basis_w[1], basis_w[2], basis_w[3]);
         let map_transform = MapViewTransform::new(&self.camera);
         let near_z = -self.projection_distance + NEAR_MARGIN;
-        let w_half = self.w_thickness * 0.5;
         let cross_section_4d = compute_slice_cross_section(
             &self.tesseract_vertices,
             &self.tesseract_indices,
@@ -226,12 +246,11 @@ impl MapRenderer {
                 }
             })
             .collect();
-        let segments = compute_in_band_segments(
+        let cs_edges = compute_cross_section_edges(
             &self.tesseract_vertices,
-            &self.tesseract_indices,
+            &TESSERACT_FACES,
             slice_normal,
             norm_cam,
-            w_half,
         );
         if cross_section_3d.len() >= 3 {
             let screen_pts = convex_hull_screen(&cross_section_3d, projector);
@@ -243,16 +262,14 @@ impl MapRenderer {
                 ));
             }
         }
-        for seg in &segments {
+        for [p0, p1] in &cs_edges {
             if let Some(screen_seg) =
-                clip_segment_to_screen(&map_transform, projector, near_z, seg.p0, seg.p1)
+                clip_segment_to_screen(&map_transform, projector, near_z, *p0, *p1)
             {
-                let color = if seg.fully_in {
-                    SLICE_GREEN
-                } else {
-                    slice_green_dim()
-                };
-                painter.line_segment([screen_seg.0, screen_seg.1], egui::Stroke::new(2.0, color));
+                painter.line_segment(
+                    [screen_seg.0, screen_seg.1],
+                    egui::Stroke::new(2.0, SLICE_GREEN),
+                );
             }
         }
     }
@@ -566,6 +583,7 @@ fn clip_segment_to_screen(
     let sp1 = projector.project_3d(s1.x, s1.y, s1.z)?;
     Some((sp0.screen_pos, sp1.screen_pos))
 }
+#[cfg(test)]
 struct SliceSegment {
     p0: Vector4<f32>,
     p1: Vector4<f32>,
@@ -596,6 +614,41 @@ fn compute_slice_cross_section(
     }
     points
 }
+fn compute_cross_section_edges(
+    vertices: &[crate::polytopes::Vertex4D],
+    faces: &[[u16; 4]],
+    slice_normal: Vector4<f32>,
+    slice_origin: Vector4<f32>,
+) -> Vec<[Vector4<f32>; 2]> {
+    let mut edges = Vec::new();
+    for face in faces {
+        let face_verts: Vec<Vector4<f32>> = face
+            .iter()
+            .map(|&vi| vertex_to_4d(&vertices[vi as usize]))
+            .collect();
+        let n = face_verts.len();
+        let distances: Vec<f32> = face_verts
+            .iter()
+            .map(|v| (v - slice_origin).dot(&slice_normal))
+            .collect();
+        let mut crossings: Vec<Vector4<f32>> = Vec::new();
+        for i in 0..n {
+            let j = (i + 1) % n;
+            let di = distances[i];
+            let dj = distances[j];
+            if di.signum() != dj.signum() && (di - dj).abs() > 1e-10 {
+                let t = di / (di - dj);
+                let t = t.clamp(0.0, 1.0);
+                crossings.push(face_verts[i] + (face_verts[j] - face_verts[i]) * t);
+            }
+        }
+        if crossings.len() == 2 {
+            edges.push([crossings[0], crossings[1]]);
+        }
+    }
+    edges
+}
+#[cfg(test)]
 fn compute_in_band_segments(
     vertices: &[crate::polytopes::Vertex4D],
     indices: &[u16],
@@ -953,6 +1006,220 @@ mod tests {
         }
         for (i, &d) in degrees.iter().enumerate() {
             assert_eq!(d, 4, "tesseract vertex {} should have degree 4", i);
+        }
+    }
+    fn snap_point(p: Vector4<f32>, resolution: f32) -> [i64; 4] {
+        [
+            (p[0] * resolution).round() as i64,
+            (p[1] * resolution).round() as i64,
+            (p[2] * resolution).round() as i64,
+            (p[3] * resolution).round() as i64,
+        ]
+    }
+    fn make_4d_rotated_camera() -> Camera {
+        let mut cam = Camera::new();
+        let rot = Rotation4D::from_6_plane_angles(0.37, -0.21, 0.44, 0.29, -0.18, 0.53);
+        cam.rotation_4d = rot;
+        cam
+    }
+    #[test]
+    fn test_cross_section_edges_from_faces_w0_is_cube() {
+        let (vertices, _indices) = create_polytope(PolytopeType::EightCell);
+        let slice_normal = Vector4::new(0.0, 0.0, 0.0, 1.0);
+        let slice_origin = Vector4::zeros();
+        let cs_edges =
+            compute_cross_section_edges(&vertices, &TESSERACT_FACES, slice_normal, slice_origin);
+        assert_eq!(
+            cs_edges.len(),
+            TESSERACT_CROSS_SECTION_EDGE_COUNT,
+            "w=0 cross-section should have 12 edges"
+        );
+        let mut vertex_counts: std::collections::HashMap<[i64; 4], u32> =
+            std::collections::HashMap::new();
+        let resolution = 1000.0;
+        for [p0, p1] in &cs_edges {
+            *vertex_counts
+                .entry(snap_point(*p0, resolution))
+                .or_insert(0) += 1;
+            *vertex_counts
+                .entry(snap_point(*p1, resolution))
+                .or_insert(0) += 1;
+        }
+        assert_eq!(
+            vertex_counts.len(),
+            TESSERACT_CROSS_SECTION_VERTEX_COUNT,
+            "w=0 cross-section should have 8 unique vertices"
+        );
+        for (key, &deg) in &vertex_counts {
+            assert_eq!(
+                deg, 3,
+                "cube vertex {:?} should have degree 3, got {}",
+                key, deg
+            );
+        }
+    }
+    #[test]
+    fn test_cross_section_edges_match_hull_under_4d_map_rotation() {
+        let (vertices, indices) = create_polytope(PolytopeType::EightCell);
+        let slice_normal = Vector4::new(0.0, 0.0, 0.0, 1.0);
+        let slice_origin = Vector4::zeros();
+        let cs_edges =
+            compute_cross_section_edges(&vertices, &TESSERACT_FACES, slice_normal, slice_origin);
+        let cross = compute_slice_cross_section(&vertices, &indices, slice_normal, slice_origin);
+        let map_camera = make_4d_rotated_camera();
+        let map_transform = MapViewTransform::new(&map_camera);
+        let proj = StereoProjector::new(
+            egui::Pos2::new(200.0, 200.0),
+            100.0,
+            3.0,
+            ProjectionMode::Perspective,
+        );
+        let near_z = -3.0 + NEAR_MARGIN;
+        let cross_screen: Vec<egui::Pos2> = cross
+            .iter()
+            .filter_map(|p| {
+                let p3 = map_transform.project_to_3d(*p);
+                if p3.z > near_z {
+                    proj.project_3d(p3.x, p3.y, p3.z)
+                } else {
+                    None
+                }
+            })
+            .map(|p| p.screen_pos)
+            .collect();
+        for [p0, p1] in &cs_edges {
+            let s0 = map_transform.project_to_3d(*p0);
+            let s1 = map_transform.project_to_3d(*p1);
+            if s0.z <= near_z || s1.z <= near_z {
+                continue;
+            }
+            let Some(sp0) = proj.project_3d(s0.x, s0.y, s0.z) else {
+                continue;
+            };
+            let Some(sp1) = proj.project_3d(s1.x, s1.y, s1.z) else {
+                continue;
+            };
+            let mut found0 = false;
+            let mut found1 = false;
+            for &cp in &cross_screen {
+                if (cp - sp0.screen_pos).length() < 1.0 {
+                    found0 = true;
+                }
+                if (cp - sp1.screen_pos).length() < 1.0 {
+                    found1 = true;
+                }
+            }
+            assert!(
+                found0,
+                "edge endpoint {:?} should match a cross-section screen point (4D rotated map)",
+                sp0.screen_pos
+            );
+            assert!(
+                found1,
+                "edge endpoint {:?} should match a cross-section screen point (4D rotated map)",
+                sp1.screen_pos
+            );
+        }
+    }
+    #[test]
+    fn test_cross_section_edges_with_tilted_slice() {
+        let (vertices, _indices) = create_polytope(PolytopeType::EightCell);
+        let slice_normal = Vector4::new(1.0, 0.5, -0.3, 1.0).normalize();
+        let slice_origin = Vector4::new(0.15, -0.1, 0.05, 0.2);
+        let cross = compute_slice_cross_section(&vertices, &_indices, slice_normal, slice_origin);
+        let cs_edges =
+            compute_cross_section_edges(&vertices, &TESSERACT_FACES, slice_normal, slice_origin);
+        assert!(
+            cross.len() >= 4,
+            "tilted slice should produce >= 4 vertices, got {}",
+            cross.len()
+        );
+        assert!(
+            cs_edges.len() >= 6,
+            "tilted slice should produce >= 6 edges, got {}",
+            cs_edges.len()
+        );
+        let resolution = 1000.0;
+        let mut vertex_degrees: std::collections::HashMap<[i64; 4], u32> =
+            std::collections::HashMap::new();
+        for [p0, p1] in &cs_edges {
+            *vertex_degrees
+                .entry(snap_point(*p0, resolution))
+                .or_insert(0) += 1;
+            *vertex_degrees
+                .entry(snap_point(*p1, resolution))
+                .or_insert(0) += 1;
+        }
+        for (key, &deg) in &vertex_degrees {
+            assert!(
+                deg >= 3,
+                "tilted slice vertex {:?} should have degree >= 3, got {}",
+                key,
+                deg
+            );
+        }
+    }
+    #[test]
+    fn test_cross_section_edges_project_consistently_with_map_transform() {
+        let (vertices, indices) = create_polytope(PolytopeType::EightCell);
+        let slice_normal = Vector4::new(0.7, -0.3, 0.5, 1.0).normalize();
+        let slice_origin = Vector4::new(0.1, -0.05, 0.2, 0.15);
+        let cross = compute_slice_cross_section(&vertices, &indices, slice_normal, slice_origin);
+        let cs_edges =
+            compute_cross_section_edges(&vertices, &TESSERACT_FACES, slice_normal, slice_origin);
+        let map_camera = make_4d_rotated_camera();
+        let map_transform = MapViewTransform::new(&map_camera);
+        let proj = StereoProjector::new(
+            egui::Pos2::new(200.0, 200.0),
+            100.0,
+            3.0,
+            ProjectionMode::Perspective,
+        );
+        let near_z = -3.0 + NEAR_MARGIN;
+        let cross_screen: Vec<egui::Pos2> = cross
+            .iter()
+            .filter_map(|p| {
+                let p3 = map_transform.project_to_3d(*p);
+                if p3.z > near_z {
+                    proj.project_3d(p3.x, p3.y, p3.z)
+                } else {
+                    None
+                }
+            })
+            .map(|p| p.screen_pos)
+            .collect();
+        for [p0, p1] in &cs_edges {
+            let s0 = map_transform.project_to_3d(*p0);
+            let s1 = map_transform.project_to_3d(*p1);
+            if s0.z <= near_z || s1.z <= near_z {
+                continue;
+            }
+            let Some(sp0) = proj.project_3d(s0.x, s0.y, s0.z) else {
+                continue;
+            };
+            let Some(sp1) = proj.project_3d(s1.x, s1.y, s1.z) else {
+                continue;
+            };
+            let mut found0 = false;
+            let mut found1 = false;
+            for &cp in &cross_screen {
+                if (cp - sp0.screen_pos).length() < 2.0 {
+                    found0 = true;
+                }
+                if (cp - sp1.screen_pos).length() < 2.0 {
+                    found1 = true;
+                }
+            }
+            assert!(
+                found0,
+                "edge endpoint screen {:?} should match a cross-section screen point (tilted slice + 4D map)",
+                sp0.screen_pos
+            );
+            assert!(
+                found1,
+                "edge endpoint screen {:?} should match a cross-section screen point (tilted slice + 4D map)",
+                sp1.screen_pos
+            );
         }
     }
 }
