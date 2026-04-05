@@ -101,7 +101,7 @@ pub struct MapRenderer {
     w_color_intensity: f32,
     projection_distance: f32,
     labels_visible: bool,
-    waypoint_tap_zones: Vec<(egui::Pos2, f32, usize)>,
+    waypoint_tap_zones: Vec<(egui::Pos2, egui::Pos2, f32, usize)>,
 }
 impl Default for MapRenderer {
     fn default() -> Self {
@@ -397,7 +397,7 @@ impl MapRenderer {
             if s3d.z <= -self.projection_distance {
                 continue;
             }
-            let (edge_color, alpha) = slice_info.style_for_point(norm_pos);
+            let (edge_color, alpha) = slice_info.style_for_point(wp.position);
             let gadget =
                 TetrahedronGadget::from_4d_vector_with_scale(vector_4d, TETRA_SCALE_WAYPOINT)
                     .with_tip_label(wp.title);
@@ -447,7 +447,7 @@ impl MapRenderer {
             CompassFrameMode::Camera => scene_camera.world_vector_to_camera_frame(norm_cam),
             CompassFrameMode::World => norm_cam,
         };
-        let (edge_color, alpha) = slice_info.style_for_point(norm_cam);
+        let (edge_color, alpha) = slice_info.style_for_point(scene_camera.position);
         let gadget = TetrahedronGadget::from_4d_vector_with_scale(vector_4d, TETRA_SCALE_CAMERA)
             .with_tip_label("Cam");
         let Some(center_screen) = projector.project_3d(s3d.x, s3d.y, s3d.z) else {
@@ -493,10 +493,6 @@ impl MapRenderer {
             let Some(right_p) = right_projector.project_3d(s3d.x, s3d.y, s3d.z) else {
                 continue;
             };
-            let avg_pos = egui::Pos2::new(
-                (left_p.screen_pos.x + right_p.screen_pos.x) * 0.5,
-                (left_p.screen_pos.y + right_p.screen_pos.y) * 0.5,
-            );
             let z_offset = self.projection_distance + s3d.z;
             if z_offset <= 0.1 {
                 continue;
@@ -504,13 +500,16 @@ impl MapRenderer {
             let projected_size = TETRA_SCALE_WAYPOINT * left_projector.scale() / z_offset;
             let tap_radius =
                 (projected_size * TAP_RADIUS_MULTIPLIER).clamp(TAP_RADIUS_MIN, TAP_RADIUS_MAX);
-            self.waypoint_tap_zones.push((avg_pos, tap_radius, idx));
+            self.waypoint_tap_zones
+                .push((left_p.screen_pos, right_p.screen_pos, tap_radius, idx));
         }
     }
     pub fn find_tapped_waypoint(&self, tap_pos: egui::Pos2) -> Option<usize> {
         let mut best: Option<(usize, f32)> = None;
-        for &(screen_pos, radius, wp_index) in &self.waypoint_tap_zones {
-            let dist = (tap_pos - screen_pos).length();
+        for &(left_pos, right_pos, radius, wp_index) in &self.waypoint_tap_zones {
+            let dist_left = (tap_pos - left_pos).length();
+            let dist_right = (tap_pos - right_pos).length();
+            let dist = dist_left.min(dist_right);
             if dist <= radius && (best.is_none() || dist < best.unwrap().1) {
                 best = Some((wp_index, dist));
             }
@@ -536,17 +535,16 @@ fn lerp_color(a: egui::Color32, b: egui::Color32, t: f32) -> egui::Color32 {
 
 struct SliceInfo {
     slice_normal: Vector4<f32>,
-    norm_cam: Vector4<f32>,
+    cam_position: Vector4<f32>,
     w_half: f32,
 }
 impl SliceInfo {
     fn new(
         scene_camera: &Camera,
-        bounds: &(Vector4<f32>, Vector4<f32>),
+        _bounds: &(Vector4<f32>, Vector4<f32>),
         _map_camera: &Camera,
         w_thickness: f32,
     ) -> Self {
-        let norm_cam = normalize_to_tesseract(scene_camera.position, bounds);
         let slice_rotation = Rotation4D::new(
             UnitQuaternion::identity(),
             *scene_camera.rotation_4d.q_right(),
@@ -555,12 +553,12 @@ impl SliceInfo {
         let slice_normal = Vector4::new(basis_w[0], basis_w[1], basis_w[2], basis_w[3]);
         Self {
             slice_normal,
-            norm_cam,
+            cam_position: scene_camera.position,
             w_half: w_thickness * 0.5,
         }
     }
-    fn style_for_point(&self, pos: Vector4<f32>) -> (egui::Color32, f32) {
-        let d = (pos - self.norm_cam).dot(&self.slice_normal);
+    fn style_for_point(&self, world_pos: Vector4<f32>) -> (egui::Color32, f32) {
+        let d = (world_pos - self.cam_position).dot(&self.slice_normal);
         let abs_d = d.abs();
         if abs_d <= self.w_half {
             (SLICE_GREEN, 1.0)
