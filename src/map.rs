@@ -17,18 +17,25 @@ use crate::camera::Camera;
 use crate::colors::*;
 use crate::polytopes::{create_polytope, PolytopeType};
 use crate::render::{
-    draw_background, draw_center_divider, render_stereo_views, CompassFrameMode, FourDSettings,
-    ObjectRotationAngles, ProjectionMode, StereoProjector, StereoSettings, TesseractRenderConfig,
-    TesseractRenderContext,
+    draw_background, draw_center_divider, render_stereo_views, split_stereo_views,
+    CompassFrameMode, FourDSettings, ObjectRotationAngles, ProjectionMode, StereoProjector,
+    StereoSettings, TesseractRenderConfig, TesseractRenderContext,
 };
 use crate::rotation4d::Rotation4D;
-use crate::tetrahedron::{compute_component_color, TetrahedronGadget};
+use crate::tetrahedron::{compute_component_color, format_magnitude, TetrahedronGadget};
 use crate::toy::CompassWaypoint;
 
 const BOUNDS_PADDING_FACTOR: f32 = 0.2;
 const SLICE_GREEN: egui::Color32 = egui::Color32::from_rgb(80, 200, 80);
+const DIM_GRAY: egui::Color32 = egui::Color32::from_rgb(200, 200, 210);
 const MAP_CAMERA_BACK_OFFSET: f32 = 4.0;
 const NEAR_MARGIN: f32 = 0.5;
+const TETRA_SCALE_WAYPOINT: f32 = 0.15;
+const TETRA_SCALE_CAMERA: f32 = 0.2;
+const EDGE_STROKE_WIDTH: f32 = 2.5;
+const TAP_RADIUS_MULTIPLIER: f32 = 5.0;
+const TAP_RADIUS_MIN: f32 = 15.0;
+const TAP_RADIUS_MAX: f32 = 50.0;
 #[cfg(test)]
 const TESSERACT_EDGE_COUNT: usize = 32;
 
@@ -94,6 +101,7 @@ pub struct MapRenderer {
     w_color_intensity: f32,
     projection_distance: f32,
     labels_visible: bool,
+    waypoint_tap_zones: Vec<(egui::Pos2, f32, usize)>,
 }
 impl Default for MapRenderer {
     fn default() -> Self {
@@ -111,6 +119,7 @@ impl MapRenderer {
             w_color_intensity: 0.35,
             projection_distance: 3.0,
             labels_visible: false,
+            waypoint_tap_zones: Vec::new(),
         }
     }
     pub fn camera(&self) -> &Camera {
@@ -144,7 +153,7 @@ impl MapRenderer {
         self.camera.set_pitch_r(scene_camera.pitch_r());
     }
     pub fn render(
-        &self,
+        &mut self,
         ui: &mut egui::Ui,
         rect: egui::Rect,
         scene_camera: &Camera,
@@ -174,6 +183,31 @@ impl MapRenderer {
                 );
                 self.render_camera_position(painter, projector, scene_camera, &bounds, frame_mode);
             },
+        );
+        let (left_rect, right_rect) = split_stereo_views(rect);
+        let scale = rect.height().min(rect.width() * 0.5) * 0.35;
+        let left_projector = StereoProjector::for_eye(
+            left_rect.center(),
+            scale,
+            stereo.eye_separation,
+            stereo.projection_distance,
+            ProjectionMode::Perspective,
+            -1.0,
+        );
+        let right_projector = StereoProjector::for_eye(
+            right_rect.center(),
+            scale,
+            stereo.eye_separation,
+            stereo.projection_distance,
+            ProjectionMode::Perspective,
+            1.0,
+        );
+        self.compute_waypoint_tap_zones(
+            &left_projector,
+            &right_projector,
+            scene_camera,
+            waypoints,
+            &bounds,
         );
     }
     fn render_tesseract_wireframe(
@@ -363,19 +397,34 @@ impl MapRenderer {
             if s3d.z <= -self.projection_distance {
                 continue;
             }
-            let alpha = slice_info.alpha_for_point(norm_pos);
-            let scale = 0.15;
-            let gadget = TetrahedronGadget::from_4d_vector_with_scale(vector_4d, scale)
-                .with_tip_label(wp.title);
+            let (edge_color, alpha) = slice_info.style_for_point(norm_pos);
+            let gadget =
+                TetrahedronGadget::from_4d_vector_with_scale(vector_4d, TETRA_SCALE_WAYPOINT)
+                    .with_tip_label(wp.title);
             let Some(center_screen) = projector.project_3d(s3d.x, s3d.y, s3d.z) else {
                 continue;
             };
-            let shifted = projector.with_center(center_screen.screen_pos);
-            render_tetrahedron_with_projector(painter, &gadget, &shifted, frame_mode, alpha);
-            if alpha < 1.0 {
-                let dim_color =
-                    egui::Color32::from_rgba_unmultiplied(255, 255, 255, (alpha * 150.0) as u8);
-                painter.circle_filled(center_screen.screen_pos, 3.0, dim_color);
+            let dist = (wp.position - scene_camera.position).norm();
+            let dist_label = format!("({})", format_magnitude(dist));
+            render_tetrahedron_with_projector(
+                painter,
+                &gadget,
+                projector,
+                frame_mode,
+                edge_color,
+                alpha,
+                s3d,
+                Some(&dist_label),
+                self.labels_visible,
+            );
+            {
+                let dot_color = egui::Color32::from_rgba_unmultiplied(
+                    edge_color.r(),
+                    edge_color.g(),
+                    edge_color.b(),
+                    (alpha * 200.0) as u8,
+                );
+                painter.circle_filled(center_screen.screen_pos, 3.0, dot_color);
             }
         }
     }
@@ -398,14 +447,23 @@ impl MapRenderer {
             CompassFrameMode::Camera => scene_camera.world_vector_to_camera_frame(norm_cam),
             CompassFrameMode::World => norm_cam,
         };
-        let alpha = slice_info.alpha_for_point(norm_cam);
-        let gadget =
-            TetrahedronGadget::from_4d_vector_with_scale(vector_4d, 0.2).with_tip_label("Cam");
+        let (edge_color, alpha) = slice_info.style_for_point(norm_cam);
+        let gadget = TetrahedronGadget::from_4d_vector_with_scale(vector_4d, TETRA_SCALE_CAMERA)
+            .with_tip_label("Cam");
         let Some(center_screen) = projector.project_3d(s3d.x, s3d.y, s3d.z) else {
             return;
         };
-        let shifted = projector.with_center(center_screen.screen_pos);
-        render_tetrahedron_with_projector(painter, &gadget, &shifted, frame_mode, alpha);
+        render_tetrahedron_with_projector(
+            painter,
+            &gadget,
+            projector,
+            frame_mode,
+            edge_color,
+            alpha,
+            s3d,
+            None,
+            self.labels_visible,
+        );
         let dot_alpha = (alpha * 255.0) as u8;
         painter.circle_filled(
             center_screen.screen_pos,
@@ -413,7 +471,69 @@ impl MapRenderer {
             egui::Color32::from_rgba_unmultiplied(255, 255, 255, dot_alpha),
         );
     }
+    fn compute_waypoint_tap_zones(
+        &mut self,
+        left_projector: &StereoProjector,
+        right_projector: &StereoProjector,
+        _scene_camera: &Camera,
+        waypoints: &[CompassWaypoint],
+        bounds: &(Vector4<f32>, Vector4<f32>),
+    ) {
+        self.waypoint_tap_zones.clear();
+        let map_transform = MapViewTransform::new(&self.camera);
+        for (idx, wp) in waypoints.iter().enumerate() {
+            let norm_pos = normalize_to_tesseract(wp.position, bounds);
+            let s3d = map_transform.project_to_3d(norm_pos);
+            if s3d.z <= -self.projection_distance {
+                continue;
+            }
+            let Some(left_p) = left_projector.project_3d(s3d.x, s3d.y, s3d.z) else {
+                continue;
+            };
+            let Some(right_p) = right_projector.project_3d(s3d.x, s3d.y, s3d.z) else {
+                continue;
+            };
+            let avg_pos = egui::Pos2::new(
+                (left_p.screen_pos.x + right_p.screen_pos.x) * 0.5,
+                (left_p.screen_pos.y + right_p.screen_pos.y) * 0.5,
+            );
+            let z_offset = self.projection_distance + s3d.z;
+            if z_offset <= 0.1 {
+                continue;
+            }
+            let projected_size = TETRA_SCALE_WAYPOINT * left_projector.scale() / z_offset;
+            let tap_radius =
+                (projected_size * TAP_RADIUS_MULTIPLIER).clamp(TAP_RADIUS_MIN, TAP_RADIUS_MAX);
+            self.waypoint_tap_zones.push((avg_pos, tap_radius, idx));
+        }
+    }
+    pub fn find_tapped_waypoint(&self, tap_pos: egui::Pos2) -> Option<usize> {
+        let mut best: Option<(usize, f32)> = None;
+        for &(screen_pos, radius, wp_index) in &self.waypoint_tap_zones {
+            let dist = (tap_pos - screen_pos).length();
+            if dist <= radius && (best.is_none() || dist < best.unwrap().1) {
+                best = Some((wp_index, dist));
+            }
+        }
+        best.map(|(idx, _)| idx)
+    }
 }
+
+fn lerp_color(a: egui::Color32, b: egui::Color32, t: f32) -> egui::Color32 {
+    let t = t.clamp(0.0, 1.0);
+    let ar = a.r() as f32;
+    let ag = a.g() as f32;
+    let ab = a.b() as f32;
+    let br = b.r() as f32;
+    let bg = b.g() as f32;
+    let bb = b.b() as f32;
+    egui::Color32::from_rgb(
+        (ar + (br - ar) * t) as u8,
+        (ag + (bg - ag) * t) as u8,
+        (ab + (bb - ab) * t) as u8,
+    )
+}
+
 struct SliceInfo {
     slice_normal: Vector4<f32>,
     norm_cam: Vector4<f32>,
@@ -439,80 +559,113 @@ impl SliceInfo {
             w_half: w_thickness * 0.5,
         }
     }
-    fn alpha_for_point(&self, pos: Vector4<f32>) -> f32 {
+    fn style_for_point(&self, pos: Vector4<f32>) -> (egui::Color32, f32) {
         let d = (pos - self.norm_cam).dot(&self.slice_normal);
-        if d.abs() <= self.w_half {
-            1.0
+        let abs_d = d.abs();
+        if abs_d <= self.w_half {
+            (SLICE_GREEN, 1.0)
+        } else if abs_d < 2.0 * self.w_half {
+            let t = ((abs_d - self.w_half) / self.w_half).clamp(0.0, 1.0);
+            let alpha = 1.0 - t * 0.7;
+            let edge_color = lerp_color(SLICE_GREEN, DIM_GRAY, t);
+            (edge_color, alpha)
         } else {
-            let fade = ((d.abs() - self.w_half) / self.w_half).min(1.0);
-            1.0 - fade * 0.7
+            (DIM_GRAY, 0.3)
         }
     }
 }
+#[allow(clippy::too_many_arguments)]
 fn render_tetrahedron_with_projector(
     painter: &egui::Painter,
     gadget: &TetrahedronGadget,
     projector: &StereoProjector,
     frame_mode: CompassFrameMode,
+    edge_color: egui::Color32,
     alpha: f32,
+    center_3d: Vector3<f32>,
+    distance_label: Option<&str>,
+    labels_visible: bool,
 ) {
-    let edge_color = if alpha >= 0.99 {
-        egui::Color32::from_rgba_unmultiplied(200, 200, 210, 200)
-    } else {
-        egui::Color32::from_rgba_unmultiplied(200, 200, 210, (alpha * 150.0) as u8)
-    };
+    let edge_stroke_color = egui::Color32::from_rgba_unmultiplied(
+        edge_color.r(),
+        edge_color.g(),
+        edge_color.b(),
+        (alpha * 200.0) as u8,
+    );
     for edge in &gadget.edges {
-        let v0 = gadget.get_vertex_3d(edge.vertex_indices[0]).unwrap();
-        let v1 = gadget.get_vertex_3d(edge.vertex_indices[1]).unwrap();
+        let v0 = gadget
+            .get_vertex_3d(edge.vertex_indices[0])
+            .unwrap()
+            .to_vector3()
+            + center_3d;
+        let v1 = gadget
+            .get_vertex_3d(edge.vertex_indices[1])
+            .unwrap()
+            .to_vector3()
+            + center_3d;
         if let (Some(p0), Some(p1)) = (
             projector.project_3d(v0.x, v0.y, v0.z),
             projector.project_3d(v1.x, v1.y, v1.z),
         ) {
             painter.line_segment(
                 [p0.screen_pos, p1.screen_pos],
-                egui::Stroke::new(1.5, edge_color),
+                egui::Stroke::new(EDGE_STROKE_WIDTH, edge_stroke_color),
             );
         }
     }
-    let component_mags: [f32; 4] = gadget.component_values.map(|v| v.abs());
-    let max_mag = component_mags.iter().cloned().fold(0.0f32, f32::max);
-    for (i, vertex) in gadget.vertices.iter().enumerate() {
-        let component = gadget.component_values[i];
-        let color = compute_component_color(component, max_mag);
-        if let (Some(pos), Some(normal)) = (gadget.get_vertex_3d(i), gadget.get_vertex_normal(i)) {
-            let label_offset = 0.12;
-            let label_x = pos.x + normal.x * label_offset;
-            let label_y = pos.y + normal.y * label_offset;
-            if let Some(label_p) = projector.project_3d(label_x, label_y, pos.z) {
-                let vertex_label =
-                    crate::render::compass_vertex_label(frame_mode, i, component, &vertex.label);
-                let font_id = egui::FontId::monospace(10.0);
-                let a = (alpha * 230.0) as u8;
-                let text_color =
-                    egui::Color32::from_rgba_unmultiplied(color.r, color.g, color.b, a);
-                let outline = egui::Color32::from_rgba_unmultiplied(0, 0, 0, (alpha * 180.0) as u8);
-                painter.text(
-                    label_p.screen_pos + egui::Vec2::new(0.5, 0.5),
-                    egui::Align2::CENTER_CENTER,
-                    vertex_label,
-                    font_id.clone(),
-                    outline,
-                );
-                painter.text(
-                    label_p.screen_pos,
-                    egui::Align2::CENTER_CENTER,
-                    vertex_label,
-                    font_id,
-                    text_color,
-                );
+    if labels_visible {
+        let component_mags: [f32; 4] = gadget.component_values.map(|v| v.abs());
+        let max_mag = component_mags.iter().cloned().fold(0.0f32, f32::max);
+        for (i, vertex) in gadget.vertices.iter().enumerate() {
+            let component = gadget.component_values[i];
+            let color = compute_component_color(component, max_mag);
+            if let (Some(pos), Some(normal)) =
+                (gadget.get_vertex_3d(i), gadget.get_vertex_normal(i))
+            {
+                let pos_v = pos.to_vector3();
+                let normal_v = normal.to_vector3();
+                let label_pos = pos_v + normal_v * 0.12 + center_3d;
+                let pos_c = pos_v + center_3d;
+                if let Some(label_p) = projector.project_3d(label_pos.x, label_pos.y, pos_c.z) {
+                    let vertex_label = crate::render::compass_vertex_label(
+                        frame_mode,
+                        i,
+                        component,
+                        &vertex.label,
+                    );
+                    let font_id = egui::FontId::monospace(10.0);
+                    let a = (alpha * 230.0) as u8;
+                    let text_color =
+                        egui::Color32::from_rgba_unmultiplied(color.r, color.g, color.b, a);
+                    let outline = egui::Color32::from_rgba_unmultiplied(
+                        edge_color.r(),
+                        edge_color.g(),
+                        edge_color.b(),
+                        (alpha * 120.0) as u8,
+                    );
+                    painter.text(
+                        label_p.screen_pos + egui::Vec2::new(0.5, 0.5),
+                        egui::Align2::CENTER_CENTER,
+                        vertex_label,
+                        font_id.clone(),
+                        outline,
+                    );
+                    painter.text(
+                        label_p.screen_pos,
+                        egui::Align2::CENTER_CENTER,
+                        vertex_label,
+                        font_id,
+                        text_color,
+                    );
+                }
             }
         }
     }
-    let arrow = gadget.arrow_position();
-    if let (Some(arrow_p), Some(origin_p)) = (
-        projector.project_3d(arrow.x, arrow.y, arrow.z),
-        projector.project_3d(0.0, 0.0, 0.0),
-    ) {
+    let arrow = gadget.arrow_position().to_vector3() + center_3d;
+    let origin = center_3d;
+    let arrow_screen = projector.project_3d(arrow.x, arrow.y, arrow.z);
+    let origin_screen = projector.project_3d(origin.x, origin.y, origin.z);
+    if let (Some(arrow_p), Some(origin_p)) = (arrow_screen, origin_screen) {
         let arrow_end = arrow_p.screen_pos;
         let arrow_start = origin_p.screen_pos;
         let arrow_vec = arrow_end - arrow_start;
@@ -540,14 +693,26 @@ fn render_tetrahedron_with_projector(
         painter.circle_filled(arrow_start, 2.0, arrow_glow());
     }
     if let Some(ref label) = gadget.tip_label {
-        if let Some(center) = projector.project_3d(0.0, 0.0, 0.0) {
+        if let Some(tip_p) = arrow_screen {
             let a = (alpha * 230.0) as u8;
             painter.text(
-                center.screen_pos + egui::Vec2::new(0.0, -12.0),
+                tip_p.screen_pos + egui::Vec2::new(0.0, -12.0),
                 egui::Align2::CENTER_BOTTOM,
                 label,
                 egui::FontId::proportional(9.0),
                 egui::Color32::from_rgba_unmultiplied(255, 180, 80, a),
+            );
+        }
+    }
+    if let Some(dist) = distance_label {
+        if let Some(base_p) = origin_screen {
+            let a = (alpha * 200.0) as u8;
+            painter.text(
+                base_p.screen_pos + egui::Vec2::new(0.0, 12.0),
+                egui::Align2::CENTER_TOP,
+                dist,
+                egui::FontId::proportional(8.0),
+                egui::Color32::from_rgba_unmultiplied(200, 200, 220, a),
             );
         }
     }

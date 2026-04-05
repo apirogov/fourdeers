@@ -828,6 +828,12 @@ impl FourDeersApp {
         }
 
         if self.active_view == ActiveView::Map {
+            if let Some(wp_index) = self.map_renderer.find_tapped_waypoint(pos) {
+                self.compass_waypoint_index = wp_index;
+                self.active_view = ActiveView::Compass;
+                return;
+            }
+
             if left_rect.contains(pos)
                 && get_zone_from_rect(left_rect, pos, ZoneMode::NineZones) == Some(Zone::South)
             {
