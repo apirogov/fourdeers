@@ -36,7 +36,13 @@ const EDGE_STROKE_WIDTH: f32 = 2.5;
 const TAP_RADIUS_MULTIPLIER: f32 = 5.0;
 const TAP_RADIUS_MIN: f32 = 15.0;
 const TAP_RADIUS_MAX: f32 = 50.0;
+/// Stroke color for the visibility cone overlay — darker than SLICE_GREEN (80,200,80) so the
+/// cone is visually distinct from the cross-section outline.
 const VISIBILITY_DARK_GREEN: egui::Color32 = egui::Color32::from_rgb(30, 120, 30);
+
+/// Distance used for frustum corner far points when projecting frustum rays to screen.
+/// The exact value doesn't matter because perspective projection preserves angular relationships;
+/// we only need the *direction* of each ray on screen, not a specific intersection point.
 const FRUSTUM_FAR_DISTANCE: f32 = 5.0;
 #[cfg(test)]
 const TESSERACT_EDGE_COUNT: usize = 32;
@@ -91,10 +97,13 @@ fn edge_axis(vertices: &[crate::polytopes::Vertex4D], i0: usize, i1: usize) -> O
     diff_axis
 }
 
+/// Semi-transparent fill for the slice cross-section polygon.
 fn slice_green_fill() -> egui::Color32 {
     egui::Color32::from_rgba_unmultiplied(60, 180, 60, 40)
 }
 
+/// Fill color for the visibility cone — darker green and slightly more opaque than
+/// `slice_green_fill()` (60,180,60,alpha=40) to stand out against the cross-section.
 fn visibility_dark_green_fill() -> egui::Color32 {
     egui::Color32::from_rgba_unmultiplied(30, 120, 30, 50)
 }
@@ -375,6 +384,31 @@ impl MapRenderer {
                 egui::Stroke::new(1.5, SLICE_GREEN),
             ));
 
+            // ── Visibility cone computation (2D post-projection clipping) ──────────
+            //
+            // 1. Project the scene camera's tesseract position to screen via the map's own
+            //    camera/projector pipeline → `cam_screen`.
+            //    Skip entirely if the camera is behind the map's near plane.
+            //
+            // 2. Derive tan(half-FOV) from the viewport rect + projection distance using
+            //    `compute_frustum_half_angles`, which reconstructs the same scale formula
+            //    that `render_stereo_views` uses internally.
+            //
+            // 3. Build 4 frustum corner directions in camera-local 3D:
+            //      (±tan_x, ±tan_y, 1)  — un-normalized, but the ratios are what matter.
+            //
+            // 4. For each direction: project camera-local 3D → world 4D → normalize to
+            //    tesseract → map 3D → screen. This gives 4 screen-space frustum corners.
+            //
+            // 5. Clip the cross-section's convex hull polygon against the 4 half-planes
+            //    defining the frustum cone (apex = camera screen point, edges through corners).
+            //
+            // 6. If the clipped polygon has ≥ 3 vertices, draw it as a dark green filled
+            //    polygon overlaid on the lighter green cross-section.
+            //
+            // Key insight: because we work entirely in 2D screen space, the frustum cone is
+            // defined purely by angular relationships which perspective projection preserves.
+            // The exact far distance chosen in step 4 doesn't matter — only the direction.
             let cam_3d = map_transform.project_to_3d(norm_cam);
             if cam_3d.z > near_z {
                 if let Some(cam_screen) = projector.project_3d(cam_3d.x, cam_3d.y, cam_3d.z) {
@@ -800,6 +834,14 @@ impl MapViewTransform {
         self.mat_3d * Vector3::new(r.x, r.y, r.z)
     }
 
+    /// Transform a **direction vector** (not a position) from tesseract 4D space to map 3D space.
+    ///
+    /// Unlike `project_to_3d`, this does NOT subtract the camera offset. This is essential for
+    /// transforming frustum edge directions: subtracting the offset would corrupt direction-only
+    /// transforms, since directions are not rooted at any position.
+    ///
+    /// The rotation matrices (`mat_4d` and `mat_3d`) are still applied — only the translation
+    /// component is omitted.
     #[allow(dead_code)]
     fn direction_to_3d(&self, dir_4d: Vector4<f32>) -> Vector3<f32> {
         let r = self.mat_4d * dir_4d;
@@ -881,6 +923,14 @@ fn clip_segment_to_screen(
     Some((sp0.screen_pos, sp1.screen_pos))
 }
 
+/// Derive the scene camera's angular half-FOV from the viewport rect and projection distance.
+///
+/// The `scale` formula `rect.height().min(rect.width() * 0.5) * 0.35` matches
+/// `render_stereo_views()` in `render.rs`. We reconstruct it here because `render_stereo_views`
+/// computes it internally and doesn't expose it.
+///
+/// The stereo split gives each eye half the rect width, so `half_width = rect.width() * 0.25`
+/// (one quarter = half of one eye's view). Height is not split: `half_height = rect.height() * 0.5`.
 fn compute_frustum_half_angles(rect: egui::Rect, projection_distance: f32) -> (f32, f32) {
     let scale = rect.height().min(rect.width() * 0.5) * 0.35;
     let half_width = rect.width() * 0.25;
@@ -890,6 +940,16 @@ fn compute_frustum_half_angles(rect: egui::Rect, projection_distance: f32) -> (f
     (tan_half_fov_x, tan_half_fov_y)
 }
 
+/// Sutherland-Hodgman polygon clipping against a single half-plane.
+///
+/// Points on the LEFT side of the directed line `edge_start → edge_end` are kept
+/// (2D cross product ≥ 0). The algorithm iterates over each edge of the polygon,
+/// classifies both endpoints, and emits 0, 1, or 2 output vertices per edge:
+///
+/// - both inside → emit current vertex
+/// - inside → outside → emit current + intersection
+/// - outside → inside → emit intersection
+/// - both outside → emit nothing
 fn clip_polygon_by_half_plane(
     polygon: &[egui::Pos2],
     edge_start: egui::Pos2,
@@ -928,6 +988,14 @@ fn clip_polygon_by_half_plane(
     output
 }
 
+/// Clip a 2D polygon to the frustum visibility cone defined by `cam_screen` and 4 corner points.
+///
+/// The frustum cone is the convex quadrilateral fan with apex at `cam_screen` and edges through
+/// each `frustum_corners[i]`. The polygon is clipped by 4 half-planes, one per boundary ray.
+///
+/// **Half-plane construction:** For each ray `cam → corner[i]`, we determine which side is "inside"
+/// by checking whether the centroid of the 4 frustum corners lies on that side. This auto-detects
+/// the correct orientation regardless of winding order or coordinate system handedness.
 fn clip_polygon_to_frustum_cone(
     polygon: &[egui::Pos2],
     cam_screen: egui::Pos2,
