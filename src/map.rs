@@ -1392,6 +1392,315 @@ mod tests {
         }
     }
     #[test]
+    fn test_style_for_point_at_camera_is_in_slab() {
+        let cam = Camera::new();
+        let bounds = (
+            Vector4::new(-1.0, -1.0, -1.0, -1.0),
+            Vector4::new(1.0, 1.0, 1.0, 1.0),
+        );
+        let map_cam = Camera::new();
+        let info = SliceInfo::new(&cam, &bounds, &map_cam, 2.5);
+        let (color, alpha) = info.style_for_point(cam.position);
+        assert_eq!(color, SLICE_GREEN);
+        assert_approx_eq(alpha, 1.0, 1e-6);
+    }
+
+    #[test]
+    fn test_style_for_point_in_slab_small_w_offset() {
+        let cam = Camera::new();
+        let bounds = (
+            Vector4::new(-1.0, -1.0, -1.0, -1.0),
+            Vector4::new(1.0, 1.0, 1.0, 1.0),
+        );
+        let map_cam = Camera::new();
+        let info = SliceInfo::new(&cam, &bounds, &map_cam, 2.5);
+        let pos_nearby = cam.position + Vector4::new(0.0, 0.0, 0.0, 0.5);
+        let (color, alpha) = info.style_for_point(pos_nearby);
+        assert_eq!(color, SLICE_GREEN);
+        assert_approx_eq(alpha, 1.0, 1e-6);
+    }
+
+    #[test]
+    fn test_style_for_point_near_slab_lerps() {
+        let cam = Camera::new();
+        let bounds = (
+            Vector4::new(-1.0, -1.0, -1.0, -1.0),
+            Vector4::new(1.0, 1.0, 1.0, 1.0),
+        );
+        let map_cam = Camera::new();
+        let info = SliceInfo::new(&cam, &bounds, &map_cam, 2.5);
+        let w_half = 1.25;
+        let pos_near = cam.position + Vector4::new(0.0, 0.0, 0.0, w_half + 0.5 * w_half);
+        let (color, alpha) = info.style_for_point(pos_near);
+        assert_ne!(color, SLICE_GREEN);
+        assert_ne!(color, DIM_GRAY);
+        assert!(
+            alpha > 0.3 && alpha < 1.0,
+            "alpha should be between 0.3 and 1.0 for near-slab, got {}",
+            alpha
+        );
+    }
+
+    #[test]
+    fn test_style_for_point_far_from_slab() {
+        let cam = Camera::new();
+        let bounds = (
+            Vector4::new(-1.0, -1.0, -1.0, -1.0),
+            Vector4::new(1.0, 1.0, 1.0, 1.0),
+        );
+        let map_cam = Camera::new();
+        let info = SliceInfo::new(&cam, &bounds, &map_cam, 2.5);
+        let pos_far = cam.position + Vector4::new(0.0, 0.0, 0.0, 20.0);
+        let (color, alpha) = info.style_for_point(pos_far);
+        assert_eq!(color, DIM_GRAY);
+        assert_approx_eq(alpha, 0.3, 1e-6);
+    }
+
+    #[test]
+    fn test_style_for_point_far_negative_w() {
+        let cam = Camera::new();
+        let bounds = (
+            Vector4::new(-1.0, -1.0, -1.0, -1.0),
+            Vector4::new(1.0, 1.0, 1.0, 1.0),
+        );
+        let map_cam = Camera::new();
+        let info = SliceInfo::new(&cam, &bounds, &map_cam, 2.5);
+        let pos_far_neg = cam.position + Vector4::new(0.0, 0.0, 0.0, -20.0);
+        let (color, alpha) = info.style_for_point(pos_far_neg);
+        assert_eq!(color, DIM_GRAY);
+        assert_approx_eq(alpha, 0.3, 1e-6);
+    }
+
+    #[test]
+    fn test_style_for_point_boundary_at_w_half() {
+        let cam = Camera::new();
+        let bounds = (
+            Vector4::new(-1.0, -1.0, -1.0, -1.0),
+            Vector4::new(1.0, 1.0, 1.0, 1.0),
+        );
+        let map_cam = Camera::new();
+        let w_thickness = 2.5;
+        let info = SliceInfo::new(&cam, &bounds, &map_cam, w_thickness);
+        let w_half = w_thickness * 0.5;
+        let pos_boundary = cam.position + Vector4::new(0.0, 0.0, 0.0, w_half);
+        let (color, alpha) = info.style_for_point(pos_boundary);
+        assert_eq!(color, SLICE_GREEN);
+        assert_approx_eq(alpha, 1.0, 1e-6);
+    }
+
+    #[test]
+    fn test_style_for_point_boundary_at_2w_half() {
+        let cam = Camera::new();
+        let bounds = (
+            Vector4::new(-1.0, -1.0, -1.0, -1.0),
+            Vector4::new(1.0, 1.0, 1.0, 1.0),
+        );
+        let map_cam = Camera::new();
+        let w_thickness = 2.5;
+        let info = SliceInfo::new(&cam, &bounds, &map_cam, w_thickness);
+        let w_half = w_thickness * 0.5;
+        let pos_boundary = cam.position + Vector4::new(0.0, 0.0, 0.0, 2.0 * w_half);
+        let (color, alpha) = info.style_for_point(pos_boundary);
+        assert_eq!(color, DIM_GRAY);
+        assert_approx_eq(alpha, 0.3, 1e-6);
+    }
+
+    #[test]
+    fn test_style_for_point_with_tilted_slice() {
+        let mut cam = Camera::new();
+        cam.rotation_4d = Rotation4D::from_6_plane_angles(0.0, 0.0, 0.0, 0.5, 0.0, 0.0);
+        let bounds = (
+            Vector4::new(-1.0, -1.0, -1.0, -1.0),
+            Vector4::new(1.0, 1.0, 1.0, 1.0),
+        );
+        let map_cam = Camera::new();
+        let info = SliceInfo::new(&cam, &bounds, &map_cam, 2.5);
+        let (color, alpha) = info.style_for_point(cam.position);
+        assert_eq!(color, SLICE_GREEN);
+        assert_approx_eq(alpha, 1.0, 1e-6);
+        let pos_far = cam.position + Vector4::new(0.0, 0.0, 0.0, 20.0);
+        let (color_far, alpha_far) = info.style_for_point(pos_far);
+        assert_eq!(color_far, DIM_GRAY);
+        assert_approx_eq(alpha_far, 0.3, 1e-6);
+    }
+
+    #[test]
+    fn test_style_for_point_lerp_is_continuous() {
+        let cam = Camera::new();
+        let bounds = (
+            Vector4::new(-1.0, -1.0, -1.0, -1.0),
+            Vector4::new(1.0, 1.0, 1.0, 1.0),
+        );
+        let map_cam = Camera::new();
+        let w_thickness = 2.5;
+        let info = SliceInfo::new(&cam, &bounds, &map_cam, w_thickness);
+        let w_half = w_thickness * 0.5;
+        let epsilon = 0.01;
+        let pos_just_inside = cam.position + Vector4::new(0.0, 0.0, 0.0, w_half - epsilon);
+        let pos_just_outside = cam.position + Vector4::new(0.0, 0.0, 0.0, w_half + epsilon);
+        let (color_in, alpha_in) = info.style_for_point(pos_just_inside);
+        let (color_out, alpha_out) = info.style_for_point(pos_just_outside);
+        let color_dist = ((color_in.r() as i32 - color_out.r() as i32).abs()
+            + (color_in.g() as i32 - color_out.g() as i32).abs()
+            + (color_in.b() as i32 - color_out.b() as i32).abs()) as f32;
+        assert!(
+            color_dist < 15.0,
+            "color should be nearly continuous at w_half boundary, distance={}",
+            color_dist
+        );
+        assert!(
+            (alpha_in - alpha_out).abs() < 0.1,
+            "alpha should be nearly continuous at w_half boundary: in={}, out={}",
+            alpha_in,
+            alpha_out
+        );
+    }
+
+    #[test]
+    fn test_lerp_color_endpoints() {
+        let a = egui::Color32::from_rgb(0, 0, 0);
+        let b = egui::Color32::from_rgb(255, 255, 255);
+        let at_zero = lerp_color(a, b, 0.0);
+        let at_one = lerp_color(a, b, 1.0);
+        assert_eq!(at_zero, a);
+        assert_eq!(at_one, b);
+    }
+
+    #[test]
+    fn test_lerp_color_midpoint() {
+        let a = egui::Color32::from_rgb(0, 0, 0);
+        let b = egui::Color32::from_rgb(100, 200, 50);
+        let mid = lerp_color(a, b, 0.5);
+        assert_eq!(mid.r(), 50);
+        assert_eq!(mid.g(), 100);
+        assert_eq!(mid.b(), 25);
+    }
+
+    #[test]
+    fn test_lerp_color_clamps() {
+        let a = egui::Color32::from_rgb(0, 0, 0);
+        let b = egui::Color32::from_rgb(255, 255, 255);
+        assert_eq!(lerp_color(a, b, -1.0), a);
+        assert_eq!(lerp_color(a, b, 2.0), b);
+    }
+
+    #[test]
+    fn test_normalize_to_tesseract_center() {
+        let bounds = (
+            Vector4::new(-1.0, -1.0, -1.0, -1.0),
+            Vector4::new(1.0, 1.0, 1.0, 1.0),
+        );
+        let center = normalize_to_tesseract(Vector4::new(0.0, 0.0, 0.0, 0.0), &bounds);
+        for i in 0..4 {
+            assert_approx_eq(center[i], 0.0, 1e-6);
+        }
+    }
+
+    #[test]
+    fn test_normalize_to_tesseract_corners() {
+        let bounds = (
+            Vector4::new(-1.0, -1.0, -1.0, -1.0),
+            Vector4::new(1.0, 1.0, 1.0, 1.0),
+        );
+        let min_corner = normalize_to_tesseract(bounds.0, &bounds);
+        let max_corner = normalize_to_tesseract(bounds.1, &bounds);
+        for i in 0..4 {
+            assert_approx_eq(min_corner[i], -1.0, 1e-6);
+            assert_approx_eq(max_corner[i], 1.0, 1e-6);
+        }
+    }
+
+    #[test]
+    fn test_normalize_to_tesseract_asymmetric_bounds() {
+        let bounds = (
+            Vector4::new(0.0, 0.0, 0.0, 0.0),
+            Vector4::new(10.0, 10.0, 10.0, 10.0),
+        );
+        let result = normalize_to_tesseract(Vector4::new(5.0, 0.0, 10.0, 2.5), &bounds);
+        assert_approx_eq(result[0], 0.0, 1e-6);
+        assert_approx_eq(result[1], -1.0, 1e-6);
+        assert_approx_eq(result[2], 1.0, 1e-6);
+        assert_approx_eq(result[3], -0.5, 1e-6);
+    }
+
+    #[test]
+    fn test_find_tapped_waypoint_no_zones() {
+        let renderer = MapRenderer::new();
+        assert_eq!(
+            renderer.find_tapped_waypoint(egui::Pos2::new(100.0, 100.0)),
+            None
+        );
+    }
+
+    #[test]
+    fn test_find_tapped_waypoint_hit_left_eye() {
+        let mut renderer = MapRenderer::new();
+        renderer.waypoint_tap_zones = vec![(
+            egui::Pos2::new(100.0, 200.0),
+            egui::Pos2::new(300.0, 200.0),
+            20.0,
+            0,
+        )];
+        assert_eq!(
+            renderer.find_tapped_waypoint(egui::Pos2::new(105.0, 205.0)),
+            Some(0)
+        );
+    }
+
+    #[test]
+    fn test_find_tapped_waypoint_hit_right_eye() {
+        let mut renderer = MapRenderer::new();
+        renderer.waypoint_tap_zones = vec![(
+            egui::Pos2::new(100.0, 200.0),
+            egui::Pos2::new(300.0, 200.0),
+            20.0,
+            0,
+        )];
+        assert_eq!(
+            renderer.find_tapped_waypoint(egui::Pos2::new(305.0, 205.0)),
+            Some(0)
+        );
+    }
+
+    #[test]
+    fn test_find_tapped_waypoint_miss() {
+        let mut renderer = MapRenderer::new();
+        renderer.waypoint_tap_zones = vec![(
+            egui::Pos2::new(100.0, 200.0),
+            egui::Pos2::new(300.0, 200.0),
+            10.0,
+            0,
+        )];
+        assert_eq!(
+            renderer.find_tapped_waypoint(egui::Pos2::new(50.0, 50.0)),
+            None
+        );
+    }
+
+    #[test]
+    fn test_find_tapped_waypoint_closest_wins() {
+        let mut renderer = MapRenderer::new();
+        renderer.waypoint_tap_zones = vec![
+            (
+                egui::Pos2::new(100.0, 100.0),
+                egui::Pos2::new(100.0, 100.0),
+                30.0,
+                0,
+            ),
+            (
+                egui::Pos2::new(115.0, 100.0),
+                egui::Pos2::new(115.0, 100.0),
+                30.0,
+                1,
+            ),
+        ];
+        assert_eq!(
+            renderer.find_tapped_waypoint(egui::Pos2::new(112.0, 100.0)),
+            Some(1)
+        );
+    }
+
+    #[test]
     fn test_cross_section_edges_project_consistently_with_map_transform() {
         let (vertices, indices) = create_polytope(PolytopeType::EightCell);
         let slice_normal = Vector4::new(0.7, -0.3, 0.5, 1.0).normalize();
