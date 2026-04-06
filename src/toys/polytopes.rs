@@ -13,6 +13,7 @@ use crate::render::{
     split_stereo_views, FourDSettings, ObjectRotationAngles, StereoSettings, TesseractRenderConfig,
     TesseractRenderContext,
 };
+use crate::rotation4d::Rotation4D;
 use crate::toy::{CompassWaypoint, DragState, Toy};
 
 pub struct PolytopesToy {
@@ -480,6 +481,31 @@ impl Toy for PolytopesToy {
                 position: Vector4::new(1.0, 2.0, 3.0, 4.0),
             },
         ]
+    }
+
+    fn scene_geometry_bounds(&self) -> Option<(Vector4<f32>, Vector4<f32>)> {
+        if self.cached_vertices.is_empty() {
+            return None;
+        }
+        let rotation = Rotation4D::from_6_plane_angles(
+            self.rot_xy,
+            self.rot_xz,
+            self.rot_yz,
+            self.rot_xw,
+            self.rot_yw,
+            self.rot_zw,
+        );
+        let mut min = Vector4::repeat(f32::MAX);
+        let mut max = Vector4::repeat(f32::MIN);
+        for v in &self.cached_vertices {
+            let pos = Vector4::new(v.position[0], v.position[1], v.position[2], v.position[3]);
+            let rotated = rotation.rotate_vector(pos);
+            for i in 0..4 {
+                min[i] = min[i].min(rotated[i]);
+                max[i] = max[i].max(rotated[i]);
+            }
+        }
+        Some((min, max))
     }
 
     fn map_camera(&self) -> Option<&Camera> {

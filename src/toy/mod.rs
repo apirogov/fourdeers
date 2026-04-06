@@ -55,6 +55,10 @@ pub trait Toy {
         None
     }
 
+    fn scene_geometry_bounds(&self) -> Option<(Vector4<f32>, Vector4<f32>)> {
+        None
+    }
+
     fn map_waypoints(&self) -> Vec<CompassWaypoint> {
         self.compass_waypoints()
     }

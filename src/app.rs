@@ -224,8 +224,10 @@ impl FourDeersApp {
     }
 
     fn render_map_scene(&mut self, ui: &mut egui::Ui, rect: egui::Rect) {
-        let scene_camera = self.toy_manager.active_toy().map_camera();
-        let waypoints = self.toy_manager.active_toy().map_waypoints();
+        let toy = self.toy_manager.active_toy();
+        let scene_camera = toy.map_camera();
+        let waypoints = toy.map_waypoints();
+        let geometry_bounds = toy.scene_geometry_bounds();
 
         if let Some(camera) = scene_camera {
             self.map_renderer.render(
@@ -235,6 +237,7 @@ impl FourDeersApp {
                 &waypoints,
                 self.settings.stereo,
                 self.map_frame_mode,
+                geometry_bounds,
             );
         } else {
             draw_background(ui, rect);
@@ -738,9 +741,11 @@ impl FourDeersApp {
     }
 
     fn reset_map_camera(&mut self) {
-        if let Some(camera) = self.toy_manager.active_toy().map_camera() {
-            let waypoints = self.toy_manager.active_toy().map_waypoints();
-            let bounds = crate::map::compute_bounds(camera, &waypoints);
+        let toy = self.toy_manager.active_toy();
+        if let Some(camera) = toy.map_camera() {
+            let waypoints = toy.map_waypoints();
+            let geometry_bounds = toy.scene_geometry_bounds();
+            let bounds = crate::map::compute_bounds(camera, &waypoints, geometry_bounds);
             self.map_renderer.reset_to_fit(camera, &bounds);
         }
     }

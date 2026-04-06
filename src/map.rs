@@ -167,6 +167,7 @@ impl MapRenderer {
         self.camera.set_yaw_r(scene_camera.yaw_r());
         self.camera.set_pitch_r(scene_camera.pitch_r());
     }
+    #[allow(clippy::too_many_arguments)]
     pub fn render(
         &mut self,
         ui: &mut egui::Ui,
@@ -175,10 +176,11 @@ impl MapRenderer {
         waypoints: &[CompassWaypoint],
         stereo: StereoSettings,
         frame_mode: CompassFrameMode,
+        geometry_bounds: Option<(Vector4<f32>, Vector4<f32>)>,
     ) {
         draw_background(ui, rect);
         draw_center_divider(ui, rect);
-        let bounds = compute_bounds(scene_camera, waypoints);
+        let bounds = compute_bounds(scene_camera, waypoints, geometry_bounds);
         render_stereo_views(
             ui,
             rect,
@@ -1134,6 +1136,7 @@ fn compute_frustum_planes(
 pub fn compute_bounds(
     scene_camera: &Camera,
     waypoints: &[CompassWaypoint],
+    geometry_bounds: Option<(Vector4<f32>, Vector4<f32>)>,
 ) -> (Vector4<f32>, Vector4<f32>) {
     let mut min = scene_camera.position;
     let mut max = scene_camera.position;
@@ -1141,6 +1144,12 @@ pub fn compute_bounds(
         for i in 0..4 {
             min[i] = min[i].min(wp.position[i]);
             max[i] = max[i].max(wp.position[i]);
+        }
+    }
+    if let Some((geo_min, geo_max)) = geometry_bounds {
+        for i in 0..4 {
+            min[i] = min[i].min(geo_min[i]);
+            max[i] = max[i].max(geo_max[i]);
         }
     }
     for i in 0..4 {
@@ -2199,6 +2208,34 @@ mod tests {
         assert_approx_eq(result[1], 0.5, 1e-6);
         assert_approx_eq(result[2], 0.5, 1e-6);
         assert_approx_eq(result[3], 0.5, 1e-6);
+    }
+
+    #[test]
+    fn test_compute_bounds_includes_geometry() {
+        let mut camera = Camera::new();
+        camera.position = Vector4::new(5.0, 5.0, 5.0, 5.0);
+        let waypoints: Vec<CompassWaypoint> = vec![];
+        let (min, max) = compute_bounds(&camera, &waypoints, None);
+        assert!(
+            min[0] > 0.0,
+            "without geometry, bounds should be near camera"
+        );
+        assert!(
+            max[0] > 0.0,
+            "without geometry, bounds should be near camera"
+        );
+
+        let geometry_bounds = Some((
+            Vector4::new(-1.0, -1.0, -1.0, -1.0),
+            Vector4::new(1.0, 1.0, 1.0, 1.0),
+        ));
+        let (min_g, max_g) = compute_bounds(&camera, &waypoints, geometry_bounds);
+        assert!(
+            min_g[0] < min[0],
+            "with geometry, min should extend to include geometry"
+        );
+        assert!(min_g[0] <= -1.0, "geometry min should be included");
+        assert!(max_g[0] >= 5.0, "camera should still be included");
     }
 
     #[test]
