@@ -16,6 +16,12 @@ use crate::render::{
 use crate::rotation4d::Rotation4D;
 use crate::toy::{CompassWaypoint, DragState, Toy};
 
+const TAP_MOVE_SPEED: f32 = 0.15;
+const HOLD_MOVE_SPEED: f32 = 0.08;
+const KEYBOARD_MOVE_SPEED: f32 = 0.15;
+const POSITION_SLIDER_RANGE: std::ops::RangeInclusive<f32> = -10.0..=10.0;
+const W_SLIDER_RANGE: std::ops::RangeInclusive<f32> = -3.0..=3.0;
+
 pub struct PolytopesToy {
     pub camera: Camera,
     polytope_type: PolytopeType,
@@ -73,6 +79,15 @@ impl PolytopesToy {
         self.tetrahedron_rotations.clear();
     }
 
+    fn reset_rotation_angles(&mut self) {
+        self.rot_xy = 0.0;
+        self.rot_xz = 0.0;
+        self.rot_yz = 0.0;
+        self.rot_xw = 0.0;
+        self.rot_yw = 0.0;
+        self.rot_zw = 0.0;
+    }
+
     fn ensure_polytope_cached(&mut self) {
         let (vertices, indices) = create_polytope(self.polytope_type);
         self.cached_vertices = vertices;
@@ -114,12 +129,7 @@ impl Toy for PolytopesToy {
 
     fn reset(&mut self) {
         self.camera.reset();
-        self.rot_xy = 0.0;
-        self.rot_xz = 0.0;
-        self.rot_yz = 0.0;
-        self.rot_xw = 0.0;
-        self.rot_yw = 0.0;
-        self.rot_zw = 0.0;
+        self.reset_rotation_angles();
         self.tetrahedron_rotations.clear();
     }
 
@@ -173,17 +183,28 @@ impl Toy for PolytopesToy {
             // X + Y
             ui.horizontal(|ui| {
                 ui.label("X:");
-                ui.add(egui::Slider::new(&mut self.camera.position.x, -10.0..=10.0).text(""));
+                ui.add(
+                    egui::Slider::new(&mut self.camera.position.x, POSITION_SLIDER_RANGE.clone())
+                        .text(""),
+                );
                 ui.label("Y:");
-                ui.add(egui::Slider::new(&mut self.camera.position.y, -10.0..=10.0).text(""));
+                ui.add(
+                    egui::Slider::new(&mut self.camera.position.y, POSITION_SLIDER_RANGE.clone())
+                        .text(""),
+                );
             });
 
             // Z + W
             ui.horizontal(|ui| {
                 ui.label("Z:");
-                ui.add(egui::Slider::new(&mut self.camera.position.z, -10.0..=10.0).text(""));
+                ui.add(
+                    egui::Slider::new(&mut self.camera.position.z, POSITION_SLIDER_RANGE.clone())
+                        .text(""),
+                );
                 ui.label("W:");
-                ui.add(egui::Slider::new(&mut self.camera.position.w, -3.0..=3.0).text(""));
+                ui.add(
+                    egui::Slider::new(&mut self.camera.position.w, W_SLIDER_RANGE.clone()).text(""),
+                );
             });
 
             // Yaw(L) + Pitch(L)
@@ -393,7 +414,7 @@ impl Toy for PolytopesToy {
         }
 
         if let Some(action) = Self::zone_to_action(analysis.zone, analysis.is_left_view) {
-            self.apply_camera_action(action, 0.15);
+            self.apply_camera_action(action, TAP_MOVE_SPEED);
         }
     }
 
@@ -419,7 +440,7 @@ impl Toy for PolytopesToy {
 
     fn handle_hold(&mut self, analysis: &TapAnalysis) {
         if let Some(action) = Self::zone_to_action(analysis.zone, analysis.is_left_view) {
-            self.apply_camera_action(action, 0.08);
+            self.apply_camera_action(action, HOLD_MOVE_SPEED);
         }
     }
 
@@ -428,7 +449,7 @@ impl Toy for PolytopesToy {
     }
 
     fn handle_keyboard(&mut self, ctx: &egui::Context) {
-        let move_speed = 0.15;
+        let move_speed = KEYBOARD_MOVE_SPEED;
 
         ctx.input(|i| {
             if i.key_down(egui::Key::ArrowUp) {

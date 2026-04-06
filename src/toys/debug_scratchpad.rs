@@ -8,8 +8,6 @@ use crate::{DragView, TapAnalysis};
 
 pub struct DebugScratchpadToy {
     visualization_rect: Option<egui::Rect>,
-    stereo: StereoSettings,
-    four_d: FourDSettings,
 }
 
 impl Default for DebugScratchpadToy {
@@ -22,8 +20,6 @@ impl DebugScratchpadToy {
     pub fn new() -> Self {
         Self {
             visualization_rect: None,
-            stereo: StereoSettings::default(),
-            four_d: FourDSettings::default(),
         }
     }
 }
@@ -37,10 +33,7 @@ impl Toy for DebugScratchpadToy {
         "debug_scratchpad"
     }
 
-    fn reset(&mut self) {
-        self.stereo = StereoSettings::default();
-        self.four_d = FourDSettings::default();
-    }
+    fn reset(&mut self) {}
 
     fn render_sidebar(&mut self, ui: &mut egui::Ui) {
         ui.heading("DebugScratchpad");
@@ -75,11 +68,7 @@ impl Toy for DebugScratchpadToy {
         self.visualization_rect
     }
 
-    fn set_stereo_settings(&mut self, settings: &StereoSettings) {
-        self.stereo = *settings;
-    }
+    fn set_stereo_settings(&mut self, _settings: &StereoSettings) {}
 
-    fn set_four_d_settings(&mut self, settings: &FourDSettings) {
-        self.four_d = *settings;
-    }
+    fn set_four_d_settings(&mut self, _settings: &FourDSettings) {}
 }

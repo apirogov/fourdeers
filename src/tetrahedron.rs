@@ -497,15 +497,7 @@ pub fn format_component_value(value: f32) -> String {
 }
 
 pub fn format_magnitude(magnitude: f32) -> String {
-    if magnitude.abs() < 1e-6 {
-        "0.00".to_string()
-    } else if magnitude.abs() >= 100.0 {
-        format!("{:.0}", magnitude)
-    } else if magnitude.abs() >= 10.0 {
-        format!("{:.1}", magnitude)
-    } else {
-        format!("{:.2}", magnitude)
-    }
+    format_component_value(magnitude)
 }
 
 #[cfg(test)]

@@ -11,6 +11,25 @@ use crate::polytopes::Vertex4D;
 use crate::rotation4d::Rotation4D;
 use crate::tetrahedron::{get_tetrahedron_layout, TetrahedronGadget};
 
+const STEREO_SCALE_FACTOR: f32 = 0.35;
+const EDGE_STROKE_WIDTH: f32 = 2.5;
+const EDGE_CLIP_MARGIN: f32 = 50.0;
+const NEAR_PLANE_THRESHOLD: f32 = 0.1;
+const TETRA_FOCAL_LENGTH_SCALE: f32 = 3.0;
+const TETRA_EDGE_STROKE: f32 = 1.5;
+const ARROW_STROKE_WIDTH: f32 = 2.0;
+const COMPASS_ARROW_STROKE_WIDTH: f32 = 3.0;
+const ARROW_HEAD_SCALE: f32 = 15.0;
+const COMPASS_ARROW_HEAD_SCALE: f32 = 20.0;
+const ARROW_HEAD_HALF_WIDTH: f32 = 0.5;
+const VERTEX_LABEL_FONT_SIZE: f32 = 14.0;
+const MAGNITUDE_LABEL_FONT_SIZE: f32 = 10.0;
+const COMPASS_LABEL_FONT_SIZE: f32 = 16.0;
+const COMPASS_VALUE_FONT_SIZE: f32 = 11.0;
+const BASE_LABEL_FONT_SIZE: f32 = 11.0;
+const BASE_LABEL_OFFSET_Y: f32 = 18.0;
+const TAP_LABEL_FONT_SIZE: f32 = 11.0;
+
 pub fn split_stereo_views(rect: egui::Rect) -> (egui::Rect, egui::Rect) {
     let left_rect = egui::Rect {
         min: rect.min,
@@ -32,7 +51,7 @@ pub fn render_stereo_views(
     render_fn: impl Fn(&egui::Painter, &StereoProjector, egui::Rect),
 ) {
     let (left_rect, right_rect) = split_stereo_views(rect);
-    let scale = rect.height().min(rect.width() * 0.5) * 0.35;
+    let scale = rect.height().min(rect.width() * 0.5) * STEREO_SCALE_FACTOR;
 
     let left_projector = StereoProjector::for_eye(
         left_rect.center(),
@@ -75,9 +94,6 @@ pub fn render_tap_zone_label(
     label: &str,
     text_color: Option<egui::Color32>,
 ) {
-    let _third_w = view_rect.width() / 3.0;
-    let _third_h = view_rect.height() / 3.0;
-
     let (label_pos, align) = match zone {
         Zone::NorthWest => (view_rect.min, egui::Align2::LEFT_TOP),
         Zone::NorthEast => (
@@ -108,7 +124,7 @@ pub fn render_tap_zone_label(
         Zone::Center => (view_rect.center(), egui::Align2::CENTER_CENTER),
     };
 
-    let font_id = egui::FontId::proportional(11.0);
+    let font_id = egui::FontId::proportional(TAP_LABEL_FONT_SIZE);
     let outline_color = outline_default();
     let text_color = text_color.unwrap_or_else(label_default);
 
@@ -116,36 +132,8 @@ pub fn render_tap_zone_label(
     painter.text(label_pos, align, label, font_id, text_color);
 }
 
-pub fn render_menu_label(painter: &egui::Painter, view_rect: egui::Rect) {
-    render_tap_zone_label(painter, view_rect, Zone::NorthWest, "Menu", None);
-}
-
-pub fn render_stereo_menu<F>(painter: &egui::Painter, view_rect: egui::Rect, toy_menu: F)
-where
-    F: Fn(&egui::Painter, egui::Rect),
-{
-    let left_rect = egui::Rect {
-        min: view_rect.min,
-        max: egui::pos2(view_rect.center().x, view_rect.min.y + 30.0),
-    };
-    let right_rect = egui::Rect {
-        min: egui::pos2(view_rect.center().x, view_rect.min.y),
-        max: egui::pos2(view_rect.max.x, view_rect.min.y + 30.0),
-    };
-
-    render_common_menu_half(painter, left_rect);
-    toy_menu(painter, right_rect);
-}
-
 pub fn render_common_menu_half(painter: &egui::Painter, rect: egui::Rect) {
     render_tap_zone_label(painter, rect, Zone::NorthWest, "Menu", None);
-}
-
-pub fn render_toy_menu_half<F>(painter: &egui::Painter, rect: egui::Rect, toy_menu: F)
-where
-    F: Fn(&egui::Painter, egui::Rect),
-{
-    toy_menu(painter, rect);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -160,6 +148,15 @@ pub enum CompassFrameMode {
     #[default]
     World,
     Camera,
+}
+
+impl CompassFrameMode {
+    pub fn other(self) -> Self {
+        match self {
+            Self::World => Self::Camera,
+            Self::Camera => Self::World,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -313,7 +310,7 @@ impl StereoProjector {
         let scale_factor = match self.mode {
             ProjectionMode::Perspective => {
                 let z_offset = self.projection_distance + z;
-                if z_offset <= 0.1 {
+                if z_offset <= NEAR_PLANE_THRESHOLD {
                     return None;
                 }
                 self.projection_distance / z_offset
@@ -468,9 +465,9 @@ impl<'a> TesseractRenderContext<'a> {
         transformed: &[TransformedVertex],
         clip_rect: egui::Rect,
     ) {
-        let stroke_width = 2.5;
+        let stroke_width = EDGE_STROKE_WIDTH;
         let near_plane = self.projection_distance;
-        let margin = 50.0;
+        let margin = EDGE_CLIP_MARGIN;
         let x_min = clip_rect.min.x - margin;
         let x_max = clip_rect.max.x + margin;
         let y_min = clip_rect.min.y - margin;
@@ -719,7 +716,7 @@ fn zone_to_direction_label(zone: Zone) -> &'static str {
 fn render_single_tetrahedron(painter: &egui::Painter, spec: &TetraRenderSpec<'_>) {
     let gadget =
         TetrahedronGadget::for_zone(spec.vector_4d, spec.zone, spec.user_rotation, spec.scale);
-    let focal_length = spec.scale * 3.0;
+    let focal_length = spec.scale * TETRA_FOCAL_LENGTH_SCALE;
 
     for edge in &gadget.edges {
         let v0_idx = edge.vertex_indices[0];
@@ -727,7 +724,7 @@ fn render_single_tetrahedron(painter: &egui::Painter, spec: &TetraRenderSpec<'_>
 
         let p0 = gadget.get_vertex_3d(v0_idx).and_then(|pos| {
             let z_offset = focal_length + pos.z;
-            if z_offset > 0.1 {
+            if z_offset > NEAR_PLANE_THRESHOLD {
                 let s = focal_length / z_offset;
                 Some((spec.center_x + pos.x * s, spec.center_y - pos.y * s))
             } else {
@@ -736,7 +733,7 @@ fn render_single_tetrahedron(painter: &egui::Painter, spec: &TetraRenderSpec<'_>
         });
         let p1 = gadget.get_vertex_3d(v1_idx).and_then(|pos| {
             let z_offset = focal_length + pos.z;
-            if z_offset > 0.1 {
+            if z_offset > NEAR_PLANE_THRESHOLD {
                 let s = focal_length / z_offset;
                 Some((spec.center_x + pos.x * s, spec.center_y - pos.y * s))
             } else {
@@ -747,7 +744,7 @@ fn render_single_tetrahedron(painter: &egui::Painter, spec: &TetraRenderSpec<'_>
         if let (Some(p0), Some(p1)) = (p0, p1) {
             painter.line_segment(
                 [egui::Pos2::new(p0.0, p0.1), egui::Pos2::new(p1.0, p1.1)],
-                egui::Stroke::new(1.5, object_tint_positive()),
+                egui::Stroke::new(TETRA_EDGE_STROKE, object_tint_positive()),
             );
         }
     }
@@ -761,7 +758,7 @@ fn render_single_tetrahedron(painter: &egui::Painter, spec: &TetraRenderSpec<'_>
 
             if let Some(pos) = gadget.get_vertex_3d(i) {
                 let z_offset = focal_length + pos.z;
-                if z_offset > 0.1 {
+                if z_offset > NEAR_PLANE_THRESHOLD {
                     let s = focal_length / z_offset;
                     let screen_pos =
                         egui::Pos2::new(spec.center_x + pos.x * s, spec.center_y - pos.y * s);
@@ -769,7 +766,7 @@ fn render_single_tetrahedron(painter: &egui::Painter, spec: &TetraRenderSpec<'_>
                     if spec.show_captions {
                         let color = crate::tetrahedron::compute_component_color(component, max_mag);
                         let egui_color = color.to_egui_color();
-                        let font_id = egui::FontId::proportional(14.0);
+                        let font_id = egui::FontId::proportional(VERTEX_LABEL_FONT_SIZE);
                         let outline_color = outline_default();
 
                         painter.text(
@@ -838,24 +835,27 @@ fn render_single_tetrahedron(painter: &egui::Painter, spec: &TetraRenderSpec<'_>
 
     let arrow = gadget.arrow_position();
     let z_offset = focal_length + arrow.z;
-    if z_offset > 0.1 {
+    if z_offset > NEAR_PLANE_THRESHOLD {
         let s = focal_length / z_offset;
         let center = egui::Pos2::new(spec.center_x, spec.center_y);
         let arrow_end = egui::Pos2::new(spec.center_x + arrow.x * s, spec.center_y - arrow.y * s);
         let arrow_vec = arrow_end - center;
 
         if arrow_vec.length() > 1e-3 {
-            painter.line_segment([center, arrow_end], egui::Stroke::new(2.0, arrow_primary()));
+            painter.line_segment(
+                [center, arrow_end],
+                egui::Stroke::new(ARROW_STROKE_WIDTH, arrow_primary()),
+            );
 
-            let arrow_head_size = gadget.arrow_head_size() * 15.0;
+            let arrow_head_size = gadget.arrow_head_size() * ARROW_HEAD_SCALE;
             if arrow_vec.length() > arrow_head_size {
                 let dir = arrow_vec.normalized();
                 let perp = egui::Vec2::new(-dir.y, dir.x);
 
                 let arrow_tip = arrow_end;
                 let arrow_base = arrow_end - dir * arrow_head_size;
-                let arrow_left = arrow_base + perp * (arrow_head_size * 0.5);
-                let arrow_right = arrow_base - perp * (arrow_head_size * 0.5);
+                let arrow_left = arrow_base + perp * (arrow_head_size * ARROW_HEAD_HALF_WIDTH);
+                let arrow_right = arrow_base - perp * (arrow_head_size * ARROW_HEAD_HALF_WIDTH);
 
                 painter.add(egui::Shape::convex_polygon(
                     vec![arrow_tip, arrow_left, arrow_right],
@@ -874,7 +874,7 @@ fn render_single_tetrahedron(painter: &egui::Painter, spec: &TetraRenderSpec<'_>
                 label_pos,
                 egui::Align2::CENTER_BOTTOM,
                 label,
-                egui::FontId::proportional(10.0),
+                egui::FontId::proportional(MAGNITUDE_LABEL_FONT_SIZE),
                 arrow_tip(),
             );
         } else if arrow_vec.length() > 1e-3 {
@@ -883,8 +883,8 @@ fn render_single_tetrahedron(painter: &egui::Painter, spec: &TetraRenderSpec<'_>
     }
 
     if let Some(label) = spec.base_label {
-        let base_pos = egui::Pos2::new(spec.center_x, spec.center_y + 18.0);
-        let font_id = egui::FontId::proportional(11.0);
+        let base_pos = egui::Pos2::new(spec.center_x, spec.center_y + BASE_LABEL_OFFSET_Y);
+        let font_id = egui::FontId::proportional(BASE_LABEL_FONT_SIZE);
         let outline_color = egui::Color32::from_rgba_unmultiplied(0, 0, 0, 180);
         let text_color = label_default();
 
@@ -916,9 +916,7 @@ fn format_4d_vector_compact(v: [f32; 4]) -> String {
         .iter()
         .filter(|(val, _)| val.abs() >= 0.05)
         .map(|(val, axis)| {
-            if val.abs() < 0.05 {
-                String::new()
-            } else if (val - 1.0).abs() < 0.05 {
+            if (val - 1.0).abs() < 0.05 {
                 format!("+{}", axis)
             } else if (val + 1.0).abs() < 0.05 {
                 format!("-{}", axis)
@@ -955,7 +953,7 @@ pub fn render_tetrahedron_with_projector(
         if let (Some(p0), Some(p1)) = (p0, p1) {
             painter.line_segment(
                 [p0.screen_pos, p1.screen_pos],
-                egui::Stroke::new(2.0, object_tint_negative()),
+                egui::Stroke::new(ARROW_STROKE_WIDTH, object_tint_negative()),
             );
         }
     }
@@ -973,7 +971,7 @@ pub fn render_tetrahedron_with_projector(
             let label_x = pos.x + normal.x * label_offset;
             let label_y = pos.y + normal.y * label_offset;
             if let Some(p) = projector.project_3d(label_x, label_y, pos.z) {
-                let font_id = egui::FontId::proportional(16.0);
+                let font_id = egui::FontId::proportional(COMPASS_LABEL_FONT_SIZE);
                 let outline_color = outline_default();
 
                 let vertex_label = compass_vertex_label(frame_mode, i, component, &vertex.label);
@@ -1008,7 +1006,7 @@ pub fn render_tetrahedron_with_projector(
             let label_y = pos.y + normal.y * label_offset;
             if let Some(label_p) = projector.project_3d(label_x, label_y, pos.z) {
                 let value_text = crate::tetrahedron::format_component_value(component);
-                let font_id = egui::FontId::monospace(11.0);
+                let font_id = egui::FontId::monospace(COMPASS_VALUE_FONT_SIZE);
                 let outline_color = outline_thin();
                 let text_color = text_highlight();
 
@@ -1041,18 +1039,18 @@ pub fn render_tetrahedron_with_projector(
         if arrow_vec.length() > 1e-3 {
             painter.line_segment(
                 [arrow_start, arrow_end],
-                egui::Stroke::new(3.0, arrow_primary()),
+                egui::Stroke::new(COMPASS_ARROW_STROKE_WIDTH, arrow_primary()),
             );
 
-            let arrow_head_size = gadget.arrow_head_size() * 20.0;
+            let arrow_head_size = gadget.arrow_head_size() * COMPASS_ARROW_HEAD_SCALE;
             if arrow_vec.length() > arrow_head_size {
                 let dir = arrow_vec.normalized();
                 let perp = egui::Vec2::new(-dir.y, dir.x);
 
                 let arrow_tip = arrow_end;
                 let arrow_base = arrow_end - dir * arrow_head_size;
-                let arrow_left = arrow_base + perp * (arrow_head_size * 0.5);
-                let arrow_right = arrow_base - perp * (arrow_head_size * 0.5);
+                let arrow_left = arrow_base + perp * (arrow_head_size * ARROW_HEAD_HALF_WIDTH);
+                let arrow_right = arrow_base - perp * (arrow_head_size * ARROW_HEAD_HALF_WIDTH);
 
                 painter.add(egui::Shape::convex_polygon(
                     vec![arrow_tip, arrow_left, arrow_right],
@@ -1065,8 +1063,8 @@ pub fn render_tetrahedron_with_projector(
         painter.circle_filled(arrow_start, 3.0, arrow_glow());
 
         if let Some(ref label) = gadget.base_label {
-            let base_pos = arrow_start + egui::Vec2::new(0.0, 18.0);
-            let font_id = egui::FontId::proportional(11.0);
+            let base_pos = arrow_start + egui::Vec2::new(0.0, BASE_LABEL_OFFSET_Y);
+            let font_id = egui::FontId::proportional(BASE_LABEL_FONT_SIZE);
             let outline_color = outline_default();
             let text_color = label_default();
 

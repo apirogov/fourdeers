@@ -2,6 +2,8 @@
 
 use wasm_bindgen::prelude::*;
 
+const CANVAS_ELEMENT_ID: &str = "the_canvas_id";
+
 #[wasm_bindgen(start)]
 pub fn start() {
     console_error_panic_hook::set_once();
@@ -10,7 +12,7 @@ pub fn start() {
         .unwrap()
         .document()
         .unwrap()
-        .get_element_by_id("the_canvas_id")
+        .get_element_by_id(CANVAS_ELEMENT_ID)
         .unwrap()
         .dyn_into::<web_sys::HtmlCanvasElement>()
         .unwrap();

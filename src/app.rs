@@ -18,6 +18,16 @@ use crate::render::{
 };
 use crate::toy::{CompassWaypoint, ToyManager};
 
+const DRAG_THRESHOLD: f32 = 10.0;
+const TAP_MAX_DISTANCE: f32 = 10.0;
+const TAP_MAX_TIME: f64 = 0.3;
+const DOUBLE_TAP_SUPPRESSION_TIME: f64 = 0.15;
+const COMPASS_ROTATION_SENSITIVITY: f32 = 0.005;
+const MENU_BAR_HEIGHT: f32 = 30.0;
+const MAP_HOLD_SPEED: f32 = 0.08;
+const MAP_TAP_SPEED: f32 = 0.3;
+const MAP_KEYBOARD_SPEED: f32 = 0.05;
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 enum ActiveView {
     #[default]
@@ -148,17 +158,11 @@ impl FourDeersApp {
     }
 
     fn toggle_compass_frame_mode(&mut self) {
-        self.compass_frame_mode = match self.compass_frame_mode {
-            CompassFrameMode::World => CompassFrameMode::Camera,
-            CompassFrameMode::Camera => CompassFrameMode::World,
-        };
+        self.compass_frame_mode = self.compass_frame_mode.other();
     }
 
     fn toggle_map_frame_mode(&mut self) {
-        self.map_frame_mode = match self.map_frame_mode {
-            CompassFrameMode::World => CompassFrameMode::Camera,
-            CompassFrameMode::Camera => CompassFrameMode::World,
-        };
+        self.map_frame_mode = self.map_frame_mode.other();
     }
 
     fn render_compass_scene(&mut self, ui: &mut egui::Ui, rect: egui::Rect) {
@@ -294,9 +298,8 @@ impl FourDeersApp {
                 if let Some(mouse_down_pos) = self.mouse_down_pos {
                     if !self.is_drag_mode {
                         let drag_distance = (pos - mouse_down_pos).length();
-                        let drag_threshold = 10.0;
 
-                        if drag_distance > drag_threshold {
+                        if drag_distance > DRAG_THRESHOLD {
                             self.is_drag_mode = true;
                             if let Some(vis_rect) = self.visualization_rect {
                                 let center_x = vis_rect.center().x;
@@ -332,10 +335,14 @@ impl FourDeersApp {
             match self.active_view {
                 ActiveView::Compass => {
                     let delta = pos - last_pos;
-                    let yaw_rot =
-                        UnitQuaternion::from_axis_angle(&Vector3::y_axis(), delta.x * 0.005);
-                    let pitch_rot =
-                        UnitQuaternion::from_axis_angle(&Vector3::x_axis(), delta.y * 0.005);
+                    let yaw_rot = UnitQuaternion::from_axis_angle(
+                        &Vector3::y_axis(),
+                        delta.x * COMPASS_ROTATION_SENSITIVITY,
+                    );
+                    let pitch_rot = UnitQuaternion::from_axis_angle(
+                        &Vector3::x_axis(),
+                        delta.y * COMPASS_ROTATION_SENSITIVITY,
+                    );
                     let incremental = pitch_rot * yaw_rot;
                     self.compass_rotation = incremental * self.compass_rotation;
                 }
@@ -367,7 +374,7 @@ impl FourDeersApp {
                 if visualization_rect.contains(pos) {
                     let (_, right_rect) = split_stereo_views(visualization_rect);
                     if let Some(action) = self.map_tap_action(right_rect, pos) {
-                        self.map_renderer.apply_action(action, 0.08);
+                        self.map_renderer.apply_action(action, MAP_HOLD_SPEED);
                     }
                 }
             }
@@ -439,11 +446,11 @@ impl FourDeersApp {
 
             let left_menu_rect = egui::Rect {
                 min: left_rect.min,
-                max: egui::pos2(left_rect.max.x, left_rect.min.y + 30.0),
+                max: egui::pos2(left_rect.max.x, left_rect.min.y + MENU_BAR_HEIGHT),
             };
             let right_menu_rect = egui::Rect {
                 min: right_rect.min,
-                max: egui::pos2(right_rect.max.x, right_rect.min.y + 30.0),
+                max: egui::pos2(right_rect.max.x, right_rect.min.y + MENU_BAR_HEIGHT),
             };
 
             render_common_menu_half(&left_painter, left_menu_rect);
@@ -683,7 +690,7 @@ impl FourDeersApp {
             (Some(down_pos), Some(down_time)) => {
                 let movement_distance = down_pos.distance(pos);
                 let time_elapsed = time - down_time;
-                movement_distance < 10.0 && time_elapsed < 0.3
+                movement_distance < TAP_MAX_DISTANCE && time_elapsed < TAP_MAX_TIME
             }
             _ => false,
         };
@@ -693,7 +700,7 @@ impl FourDeersApp {
 
         if is_tap && !ctx.wants_pointer_input() {
             if let Some(last_tap) = self.last_tap_time {
-                if time - last_tap < 0.15 {
+                if time - last_tap < DOUBLE_TAP_SUPPRESSION_TIME {
                     return;
                 }
             }
@@ -703,7 +710,7 @@ impl FourDeersApp {
     }
 
     fn handle_map_keyboard(&mut self, ctx: &egui::Context) {
-        let move_speed = 0.05;
+        let move_speed = MAP_KEYBOARD_SPEED;
         ctx.input(|i| {
             if i.key_down(egui::Key::ArrowUp) {
                 self.map_renderer
@@ -869,7 +876,7 @@ impl FourDeersApp {
                 }
             }
             if let Some(action) = self.map_tap_action(right_rect, pos) {
-                self.map_renderer.apply_action(action, 0.3);
+                self.map_renderer.apply_action(action, MAP_TAP_SPEED);
             }
             return;
         }

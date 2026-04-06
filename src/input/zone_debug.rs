@@ -253,38 +253,3 @@ fn render_9zone_labels(painter: &egui::Painter, view_rect: egui::Rect, options: 
         );
     }
 }
-
-pub fn get_zone_center(view_rect: egui::Rect, zone: Zone) -> egui::Pos2 {
-    let min = view_rect.min;
-    let width = view_rect.width();
-    let height = view_rect.height();
-
-    let third_w = width / 3.0;
-    let third_h = height / 3.0;
-
-    match zone {
-        Zone::NorthWest => egui::pos2(min.x + third_w / 2.0, min.y + third_h / 2.0),
-        Zone::North => egui::pos2(min.x + third_w * 1.5, min.y + third_h / 2.0),
-        Zone::NorthEast => egui::pos2(min.x + third_w * 2.5, min.y + third_h / 2.0),
-        Zone::West => egui::pos2(min.x + third_w / 2.0, min.y + third_h * 1.5),
-        Zone::Center => egui::pos2(min.x + third_w * 1.5, min.y + third_h * 1.5),
-        Zone::East => egui::pos2(min.x + third_w * 2.5, min.y + third_h * 1.5),
-        Zone::SouthWest => egui::pos2(min.x + third_w / 2.0, min.y + third_h * 2.5),
-        Zone::South => egui::pos2(min.x + third_w * 1.5, min.y + third_h * 2.5),
-        Zone::SouthEast => egui::pos2(min.x + third_w * 2.5, min.y + third_h * 2.5),
-    }
-}
-
-pub fn get_cardinal_zone_center_with_offset(
-    view_rect: egui::Rect,
-    zone: Zone,
-    offset: f32,
-) -> egui::Pos2 {
-    match zone {
-        Zone::North => egui::pos2(view_rect.center().x, view_rect.min.y + offset),
-        Zone::South => egui::pos2(view_rect.center().x, view_rect.max.y - offset),
-        Zone::West => egui::pos2(view_rect.min.x + offset, view_rect.center().y),
-        Zone::East => egui::pos2(view_rect.max.x - offset, view_rect.center().y),
-        _ => get_zone_center(view_rect, zone),
-    }
-}

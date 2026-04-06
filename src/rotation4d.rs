@@ -86,14 +86,6 @@ impl Rotation4D {
         self.q_right = quaternion_from_yaw_pitch_4d(yaw, pitch);
     }
 
-    pub fn set_q_left_from_yaw_pitch_preserving_right(&mut self, yaw: f32, pitch: f32) {
-        self.q_left = quaternion_from_yaw_pitch(yaw, pitch);
-    }
-
-    pub fn set_q_right_from_yaw_pitch_preserving_left(&mut self, yaw: f32, pitch: f32) {
-        self.q_right = quaternion_from_yaw_pitch_4d(yaw, pitch);
-    }
-
     /// Returns the inverse rotation.
     pub fn inverse(&self) -> Self {
         Self {
