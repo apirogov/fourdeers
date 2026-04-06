@@ -397,7 +397,8 @@ impl MapRenderer {
             // 3. Build 4 frustum corner directions in camera-local 3D:
             //      (±tan_x, ±tan_y, 1)  — un-normalized, but the ratios are what matter.
             //
-            // 4. For each direction: project camera-local 3D → world 4D → normalize to
+            // 4. For each direction: project camera-local 3D → world 4D via `project_3d_to_4d`
+            //    (which applies the full q_left * v * q_right⁻¹ rotation) → normalize to
             //    tesseract → map 3D → screen. This gives 4 screen-space frustum corners.
             //
             // 5. Clip the cross-section's convex hull polygon against the 4 half-planes
@@ -414,21 +415,18 @@ impl MapRenderer {
                 if let Some(cam_screen) = projector.project_3d(cam_3d.x, cam_3d.y, cam_3d.z) {
                     let (tan_half_fov_x, tan_half_fov_y) =
                         compute_frustum_half_angles(rect, stereo.projection_distance);
-                    let right3 = scene_camera.right_vector();
-                    let up3 = scene_camera.up_vector();
-                    let forward3 = scene_camera.forward_vector();
 
-                    let corner_dirs_3d = [
-                        right3 * tan_half_fov_x + up3 * tan_half_fov_y + forward3,
-                        -right3 * tan_half_fov_x + up3 * tan_half_fov_y + forward3,
-                        -right3 * tan_half_fov_x - up3 * tan_half_fov_y + forward3,
-                        right3 * tan_half_fov_x - up3 * tan_half_fov_y + forward3,
+                    let corner_dirs_local = [
+                        Vector3::new(tan_half_fov_x, tan_half_fov_y, 1.0),
+                        Vector3::new(-tan_half_fov_x, tan_half_fov_y, 1.0),
+                        Vector3::new(-tan_half_fov_x, -tan_half_fov_y, 1.0),
+                        Vector3::new(tan_half_fov_x, -tan_half_fov_y, 1.0),
                     ];
 
                     let mut frustum_screen = [egui::Pos2::ZERO; 4];
                     let mut all_valid = true;
-                    for (i, dir_3d) in corner_dirs_3d.iter().enumerate() {
-                        let dir_4d = scene_camera.project_camera_3d_to_world_4d(*dir_3d);
+                    for (i, dir_local) in corner_dirs_local.iter().enumerate() {
+                        let dir_4d = scene_camera.project_3d_to_4d(*dir_local);
                         let far_world = scene_camera.position + dir_4d * FRUSTUM_FAR_DISTANCE;
                         let far_tess = normalize_to_tesseract(far_world, bounds);
                         let far_3d = map_transform.project_to_3d(far_tess);
@@ -2204,22 +2202,19 @@ mod tests {
         };
         let rect = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(400.0, 400.0));
         let (tan_x, tan_y) = compute_frustum_half_angles(rect, 3.0);
-        let right3 = scene_camera.right_vector();
-        let up3 = scene_camera.up_vector();
-        let forward3 = scene_camera.forward_vector();
-        let corner_dirs = [
-            right3 * tan_x + up3 * tan_y + forward3,
-            -right3 * tan_x + up3 * tan_y + forward3,
-            -right3 * tan_x - up3 * tan_y + forward3,
-            right3 * tan_x - up3 * tan_y + forward3,
+        let corner_dirs_local = [
+            Vector3::new(tan_x, tan_y, 1.0),
+            Vector3::new(-tan_x, tan_y, 1.0),
+            Vector3::new(-tan_x, -tan_y, 1.0),
+            Vector3::new(tan_x, -tan_y, 1.0),
         ];
         let bounds = (
             Vector4::new(-1.0, -1.0, -1.0, -1.0),
             Vector4::new(1.0, 1.0, 1.0, 1.0),
         );
         let mut frustum_screen = [egui::Pos2::ZERO; 4];
-        for (i, dir_3d) in corner_dirs.iter().enumerate() {
-            let dir_4d = scene_camera.project_camera_3d_to_world_4d(*dir_3d);
+        for (i, dir_local) in corner_dirs_local.iter().enumerate() {
+            let dir_4d = scene_camera.project_3d_to_4d(*dir_local);
             let far_world = scene_camera.position + dir_4d * FRUSTUM_FAR_DISTANCE;
             let far_tess = normalize_to_tesseract(far_world, &bounds);
             let far_3d = map_transform.project_to_3d(far_tess);
@@ -2294,14 +2289,11 @@ mod tests {
         };
         let rect = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(400.0, 400.0));
         let (tan_x, tan_y) = compute_frustum_half_angles(rect, 3.0);
-        let right3 = scene_camera.right_vector();
-        let up3 = scene_camera.up_vector();
-        let forward3 = scene_camera.forward_vector();
-        let corner_dirs = [
-            right3 * tan_x + up3 * tan_y + forward3,
-            -right3 * tan_x + up3 * tan_y + forward3,
-            -right3 * tan_x - up3 * tan_y + forward3,
-            right3 * tan_x - up3 * tan_y + forward3,
+        let corner_dirs_local = [
+            Vector3::new(tan_x, tan_y, 1.0),
+            Vector3::new(-tan_x, tan_y, 1.0),
+            Vector3::new(-tan_x, -tan_y, 1.0),
+            Vector3::new(tan_x, -tan_y, 1.0),
         ];
         let bounds = (
             Vector4::new(-1.0, -1.0, -1.0, -1.0),
@@ -2309,8 +2301,8 @@ mod tests {
         );
         let mut frustum_screen = [egui::Pos2::ZERO; 4];
         let mut all_valid = true;
-        for (i, dir_3d) in corner_dirs.iter().enumerate() {
-            let dir_4d = scene_camera.project_camera_3d_to_world_4d(*dir_3d);
+        for (i, dir_local) in corner_dirs_local.iter().enumerate() {
+            let dir_4d = scene_camera.project_3d_to_4d(*dir_local);
             let far_world = scene_camera.position + dir_4d * FRUSTUM_FAR_DISTANCE;
             let far_tess = normalize_to_tesseract(far_world, &bounds);
             let far_3d = map_transform.project_to_3d(far_tess);
@@ -2327,6 +2319,91 @@ mod tests {
         assert!(
             visibility.len() >= 3,
             "visibility polygon should be non-empty with identity camera, got {} points",
+            visibility.len()
+        );
+    }
+
+    #[test]
+    fn test_visibility_polygon_with_rotated_cam() {
+        let (vertices, indices) = create_polytope(PolytopeType::EightCell);
+        let slice_normal = Vector4::new(0.0, 0.0, 0.0, 1.0);
+        let slice_origin = Vector4::zeros();
+        let cross = compute_slice_cross_section(&vertices, &indices, slice_normal, slice_origin);
+        let map_camera = Camera::new();
+        let map_transform = MapViewTransform::new(&map_camera);
+        let proj = StereoProjector::new(
+            egui::Pos2::new(200.0, 200.0),
+            100.0,
+            3.0,
+            ProjectionMode::Perspective,
+        );
+        let near_z = -3.0 + NEAR_MARGIN;
+        let cross_3d: Vec<Vector3<f32>> = cross
+            .iter()
+            .filter_map(|p| {
+                let p3 = map_transform.project_to_3d(*p);
+                if p3.z > near_z {
+                    Some(p3)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        let screen_pts = convex_hull_screen(&cross_3d, &proj);
+        if screen_pts.len() < 3 {
+            return;
+        }
+        let mut scene_camera = Camera::new();
+        scene_camera.rotate(0.5, 0.3);
+        let norm_cam = normalize_to_tesseract(
+            scene_camera.position,
+            &(
+                Vector4::new(-1.0, -1.0, -1.0, -1.0),
+                Vector4::new(1.0, 1.0, 1.0, 1.0),
+            ),
+        );
+        let cam_3d = map_transform.project_to_3d(norm_cam);
+        if cam_3d.z <= near_z {
+            return;
+        }
+        let Some(cam_screen) = proj.project_3d(cam_3d.x, cam_3d.y, cam_3d.z) else {
+            return;
+        };
+        let rect = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(400.0, 400.0));
+        let (tan_x, tan_y) = compute_frustum_half_angles(rect, 3.0);
+        let corner_dirs_local = [
+            Vector3::new(tan_x, tan_y, 1.0),
+            Vector3::new(-tan_x, tan_y, 1.0),
+            Vector3::new(-tan_x, -tan_y, 1.0),
+            Vector3::new(tan_x, -tan_y, 1.0),
+        ];
+        let bounds = (
+            Vector4::new(-1.0, -1.0, -1.0, -1.0),
+            Vector4::new(1.0, 1.0, 1.0, 1.0),
+        );
+        let mut frustum_screen = [egui::Pos2::ZERO; 4];
+        let mut all_valid = true;
+        for (i, dir_local) in corner_dirs_local.iter().enumerate() {
+            let dir_4d = scene_camera.project_3d_to_4d(*dir_local);
+            let far_world = scene_camera.position + dir_4d * FRUSTUM_FAR_DISTANCE;
+            let far_tess = normalize_to_tesseract(far_world, &bounds);
+            let far_3d = map_transform.project_to_3d(far_tess);
+            if let Some(fp) = proj.project_3d(far_3d.x, far_3d.y, far_3d.z) {
+                frustum_screen[i] = fp.screen_pos;
+            } else {
+                all_valid = false;
+                break;
+            }
+        }
+        assert!(
+            all_valid,
+            "all frustum corners should project to screen with rotated camera"
+        );
+        let visibility =
+            clip_polygon_to_frustum_cone(&screen_pts, cam_screen.screen_pos, &frustum_screen);
+        assert!(
+            visibility.len() >= 3,
+            "visibility polygon should be non-empty with rotated camera, got {} points",
             visibility.len()
         );
     }
