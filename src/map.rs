@@ -32,13 +32,14 @@ const MAP_CAMERA_BACK_OFFSET: f32 = 4.0;
 const NEAR_MARGIN: f32 = 0.5;
 const TETRA_SCALE_WAYPOINT: f32 = 0.15;
 const TETRA_SCALE_CAMERA: f32 = 0.2;
+const FORWARD_ARROW_LENGTH: f32 = 0.4;
 const EDGE_STROKE_WIDTH: f32 = 2.5;
 const TAP_RADIUS_MULTIPLIER: f32 = 5.0;
 const TAP_RADIUS_MIN: f32 = 15.0;
 const TAP_RADIUS_MAX: f32 = 50.0;
 /// Stroke color for the visibility cone overlay — darker than SLICE_GREEN (80,200,80) so the
 /// cone is visually distinct from the cross-section outline.
-const VISIBILITY_DARK_GREEN: egui::Color32 = egui::Color32::from_rgb(30, 120, 30);
+const VISIBILITY_DARK_GREEN: egui::Color32 = egui::Color32::from_rgb(15, 70, 15);
 
 /// Squared distance threshold for merging vertices in polyhedron construction.
 /// sqrt(1e-6) ≈ 0.001 — handles floating-point imprecision from edge-plane intersections.
@@ -101,10 +102,10 @@ fn slice_green_fill() -> egui::Color32 {
     egui::Color32::from_rgba_unmultiplied(60, 180, 60, 40)
 }
 
-/// Fill color for the visibility cone — darker green and slightly more opaque than
+/// Fill color for the visibility cone — darker green and more opaque than
 /// `slice_green_fill()` (60,180,60,alpha=40) to stand out against the cross-section.
 fn visibility_dark_green_fill() -> egui::Color32 {
-    egui::Color32::from_rgba_unmultiplied(30, 120, 30, 50)
+    egui::Color32::from_rgba_unmultiplied(15, 70, 15, 100)
 }
 
 pub struct MapRenderer {
@@ -553,6 +554,24 @@ impl MapRenderer {
             4.0,
             egui::Color32::from_rgba_unmultiplied(255, 255, 255, dot_alpha),
         );
+
+        let forward_4d = scene_camera.project_3d_to_4d(Vector3::new(0.0, 0.0, 1.0));
+        let forward_tess = direction_to_tesseract(forward_4d, bounds);
+        let forward_3d = map_transform.direction_to_3d(forward_tess);
+        let forward_len = forward_3d.norm();
+        if forward_len > 1e-10 {
+            let forward_dir = forward_3d / forward_len;
+            let tip_3d = s3d + forward_dir * FORWARD_ARROW_LENGTH;
+            draw_direction_arrow(
+                painter,
+                projector,
+                s3d,
+                tip_3d,
+                arrow_forward(),
+                alpha,
+                10.0,
+            );
+        }
     }
     fn compute_waypoint_tap_zones(
         &mut self,
@@ -655,6 +674,47 @@ impl SliceInfo {
         }
     }
 }
+
+fn draw_direction_arrow(
+    painter: &egui::Painter,
+    projector: &StereoProjector,
+    origin_3d: Vector3<f32>,
+    tip_3d: Vector3<f32>,
+    color: egui::Color32,
+    alpha: f32,
+    head_size: f32,
+) {
+    let arrow_screen = projector.project_3d(tip_3d.x, tip_3d.y, tip_3d.z);
+    let origin_screen = projector.project_3d(origin_3d.x, origin_3d.y, origin_3d.z);
+    if let (Some(arrow_p), Some(origin_p)) = (arrow_screen, origin_screen) {
+        let arrow_end = arrow_p.screen_pos;
+        let arrow_start = origin_p.screen_pos;
+        let arrow_vec = arrow_end - arrow_start;
+        if arrow_vec.length() > 2.0 {
+            let a = (alpha * 255.0) as u8;
+            let arrow_color =
+                egui::Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), a);
+            painter.line_segment(
+                [arrow_start, arrow_end],
+                egui::Stroke::new(2.0, arrow_color),
+            );
+            if arrow_vec.length() > head_size {
+                let dir = arrow_vec.normalized();
+                let perp = egui::Vec2::new(-dir.y, dir.x);
+                let base = arrow_end - dir * head_size;
+                let left = base + perp * (head_size * 0.4);
+                let right = base - perp * (head_size * 0.4);
+                painter.add(egui::Shape::convex_polygon(
+                    vec![arrow_end, left, right],
+                    arrow_color,
+                    egui::Stroke::NONE,
+                ));
+            }
+        }
+        painter.circle_filled(arrow_start, 2.0, arrow_glow());
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn render_tetrahedron_with_projector(
     painter: &egui::Painter,
@@ -744,36 +804,18 @@ fn render_tetrahedron_with_projector(
     }
 
     let arrow = gadget.arrow_position().to_vector3() + center_3d;
-    let origin = center_3d;
+    let head_size = gadget.arrow_head_size() * 15.0;
+    draw_direction_arrow(
+        painter,
+        projector,
+        center_3d,
+        arrow,
+        arrow_primary(),
+        alpha,
+        head_size,
+    );
     let arrow_screen = projector.project_3d(arrow.x, arrow.y, arrow.z);
-    let origin_screen = projector.project_3d(origin.x, origin.y, origin.z);
-    if let (Some(arrow_p), Some(origin_p)) = (arrow_screen, origin_screen) {
-        let arrow_end = arrow_p.screen_pos;
-        let arrow_start = origin_p.screen_pos;
-        let arrow_vec = arrow_end - arrow_start;
-        if arrow_vec.length() > 2.0 {
-            let a = (alpha * 255.0) as u8;
-            let arrow_color = egui::Color32::from_rgba_unmultiplied(255, 150, 50, a);
-            painter.line_segment(
-                [arrow_start, arrow_end],
-                egui::Stroke::new(2.0, arrow_color),
-            );
-            let arrow_head_size = gadget.arrow_head_size() * 15.0;
-            if arrow_vec.length() > arrow_head_size {
-                let dir = arrow_vec.normalized();
-                let perp = egui::Vec2::new(-dir.y, dir.x);
-                let base = arrow_end - dir * arrow_head_size;
-                let left = base + perp * (arrow_head_size * 0.4);
-                let right = base - perp * (arrow_head_size * 0.4);
-                painter.add(egui::Shape::convex_polygon(
-                    vec![arrow_end, left, right],
-                    arrow_color,
-                    egui::Stroke::NONE,
-                ));
-            }
-        }
-        painter.circle_filled(arrow_start, 2.0, arrow_glow());
-    }
+    let origin_screen = projector.project_3d(center_3d.x, center_3d.y, center_3d.z);
     if let Some(ref label) = gadget.tip_label {
         if let Some(tip_p) = arrow_screen {
             let a = (alpha * 230.0) as u8;
