@@ -40,10 +40,9 @@ const TAP_RADIUS_MAX: f32 = 50.0;
 /// cone is visually distinct from the cross-section outline.
 const VISIBILITY_DARK_GREEN: egui::Color32 = egui::Color32::from_rgb(30, 120, 30);
 
-/// Distance used for frustum corner far points when projecting frustum rays to screen.
-/// The exact value doesn't matter because perspective projection preserves angular relationships;
-/// we only need the *direction* of each ray on screen, not a specific intersection point.
-const FRUSTUM_FAR_DISTANCE: f32 = 5.0;
+/// Squared distance threshold for merging vertices in polyhedron construction.
+/// sqrt(1e-6) ≈ 0.001 — handles floating-point imprecision from edge-plane intersections.
+const VERTEX_MERGE_EPS_SQ: f32 = 1e-6;
 #[cfg(test)]
 const TESSERACT_EDGE_COUNT: usize = 32;
 
@@ -187,7 +186,14 @@ impl MapRenderer {
             ProjectionMode::Perspective,
             |painter, projector, view_rect| {
                 self.render_tesseract_wireframe(painter, projector, view_rect);
-                self.render_slice_volume(painter, projector, scene_camera, &bounds, rect, stereo);
+                self.render_slice_volume(
+                    painter,
+                    projector,
+                    scene_camera,
+                    &bounds,
+                    view_rect,
+                    stereo,
+                );
                 self.render_waypoints(
                     painter,
                     projector,
@@ -337,7 +343,7 @@ impl MapRenderer {
         projector: &StereoProjector,
         scene_camera: &Camera,
         bounds: &(Vector4<f32>, Vector4<f32>),
-        rect: egui::Rect,
+        view_rect: egui::Rect,
         stereo: StereoSettings,
     ) {
         let norm_cam = normalize_to_tesseract(scene_camera.position, bounds);
@@ -412,41 +418,28 @@ impl MapRenderer {
             // The exact far distance chosen in step 4 doesn't matter — only the direction.
             let cam_3d = map_transform.project_to_3d(norm_cam);
             if cam_3d.z > near_z {
-                if let Some(cam_screen) = projector.project_3d(cam_3d.x, cam_3d.y, cam_3d.z) {
-                    let (tan_half_fov_x, tan_half_fov_y) =
-                        compute_frustum_half_angles(rect, stereo.projection_distance);
-
-                    let corner_dirs_local = [
-                        Vector3::new(tan_half_fov_x, tan_half_fov_y, 1.0),
-                        Vector3::new(-tan_half_fov_x, tan_half_fov_y, 1.0),
-                        Vector3::new(-tan_half_fov_x, -tan_half_fov_y, 1.0),
-                        Vector3::new(tan_half_fov_x, -tan_half_fov_y, 1.0),
-                    ];
-
-                    let mut frustum_screen = [egui::Pos2::ZERO; 4];
-                    let mut all_valid = true;
-                    for (i, dir_local) in corner_dirs_local.iter().enumerate() {
-                        let dir_4d = scene_camera.project_3d_to_4d(*dir_local);
-                        let far_world = scene_camera.position + dir_4d * FRUSTUM_FAR_DISTANCE;
-                        let far_tess = normalize_to_tesseract(far_world, bounds);
-                        let far_3d = map_transform.project_to_3d(far_tess);
-                        if let Some(fp) = projector.project_3d(far_3d.x, far_3d.y, far_3d.z) {
-                            frustum_screen[i] = fp.screen_pos;
-                        } else {
-                            all_valid = false;
+                let poly = build_cross_section_polyhedron(&cs_edges, &map_transform);
+                if poly.vertices.len() >= 3 {
+                    let rays = compute_frustum_rays(
+                        scene_camera,
+                        view_rect,
+                        stereo,
+                        bounds,
+                        &map_transform,
+                    );
+                    let planes = compute_frustum_planes(&rays, cam_3d);
+                    let mut clipped = poly;
+                    for (pp, pn) in &planes {
+                        clipped = clip_polyhedron_by_plane(&clipped, *pp, *pn);
+                        if clipped.vertices.is_empty() {
                             break;
                         }
                     }
-
-                    if all_valid {
-                        let visibility = clip_polygon_to_frustum_cone(
-                            &screen_pts,
-                            cam_screen.screen_pos,
-                            &frustum_screen,
-                        );
-                        if visibility.len() >= 3 {
+                    if clipped.vertices.len() >= 3 {
+                        let vis_screen = convex_hull_screen(&clipped.vertices, projector);
+                        if vis_screen.len() >= 3 {
                             painter.add(egui::Shape::convex_polygon(
-                                visibility,
+                                vis_screen,
                                 visibility_dark_green_fill(),
                                 egui::Stroke::new(1.0, VISIBILITY_DARK_GREEN),
                             ));
@@ -840,11 +833,261 @@ impl MapViewTransform {
     ///
     /// The rotation matrices (`mat_4d` and `mat_3d`) are still applied — only the translation
     /// component is omitted.
-    #[allow(dead_code)]
     fn direction_to_3d(&self, dir_4d: Vector4<f32>) -> Vector3<f32> {
         let r = self.mat_4d * dir_4d;
         self.mat_3d * Vector3::new(r.x, r.y, r.z)
     }
+}
+
+struct ConvexPolyhedron {
+    vertices: Vec<Vector3<f32>>,
+    edges: Vec<[usize; 2]>,
+}
+
+fn build_cross_section_polyhedron(
+    cs_edges: &[[Vector4<f32>; 2]],
+    map_transform: &MapViewTransform,
+) -> ConvexPolyhedron {
+    let mut vertices: Vec<Vector3<f32>> = Vec::new();
+    let mut edges: Vec<[usize; 2]> = Vec::new();
+    let mut find_or_add = |v: Vector3<f32>| -> usize {
+        for (i, existing) in vertices.iter().enumerate() {
+            if (existing - v).norm_squared() < VERTEX_MERGE_EPS_SQ {
+                return i;
+            }
+        }
+        vertices.push(v);
+        vertices.len() - 1
+    };
+    for [p0_4d, p1_4d] in cs_edges {
+        let v0 = map_transform.project_to_3d(*p0_4d);
+        let v1 = map_transform.project_to_3d(*p1_4d);
+        let i0 = find_or_add(v0);
+        let i1 = find_or_add(v1);
+        if i0 != i1 {
+            edges.push([i0, i1]);
+        }
+    }
+    ConvexPolyhedron { vertices, edges }
+}
+
+fn convex_hull_2d_indexed(points: &[(f32, f32)]) -> Vec<usize> {
+    let n = points.len();
+    if n < 3 {
+        return (0..n).collect();
+    }
+    let mut start = 0;
+    for i in 1..n {
+        if points[i].0 < points[start].0
+            || (points[i].0 == points[start].0 && points[i].1 < points[start].1)
+        {
+            start = i;
+        }
+    }
+    let mut hull = Vec::new();
+    let mut current = start;
+    loop {
+        hull.push(current);
+        let mut next = 0;
+        for i in 0..n {
+            if i == current {
+                continue;
+            }
+            if next == current {
+                next = i;
+                continue;
+            }
+            let oc_x = points[i].0 - points[current].0;
+            let oc_y = points[i].1 - points[current].1;
+            let on_x = points[next].0 - points[current].0;
+            let on_y = points[next].1 - points[current].1;
+            let cross = oc_x * on_y - oc_y * on_x;
+            if cross > 0.0 {
+                next = i;
+            } else if cross.abs() < 1e-10 {
+                let d_i = oc_x * oc_x + oc_y * oc_y;
+                let d_n = on_x * on_x + on_y * on_y;
+                if d_i > d_n {
+                    next = i;
+                }
+            }
+        }
+        current = next;
+        if current == start {
+            break;
+        }
+        if hull.len() > n {
+            break;
+        }
+    }
+    hull
+}
+
+fn clip_polyhedron_by_plane(
+    poly: &ConvexPolyhedron,
+    plane_point: Vector3<f32>,
+    plane_normal: Vector3<f32>,
+) -> ConvexPolyhedron {
+    if poly.vertices.is_empty() {
+        return ConvexPolyhedron {
+            vertices: Vec::new(),
+            edges: Vec::new(),
+        };
+    }
+    let distances: Vec<f32> = poly
+        .vertices
+        .iter()
+        .map(|v| (v - plane_point).dot(&plane_normal))
+        .collect();
+    let is_inside = |i: usize| distances[i] >= 0.0;
+    let mut new_verts: Vec<Vector3<f32>> = Vec::new();
+    let mut new_edges: Vec<[usize; 2]> = Vec::new();
+    let mut find_or_add = |v: Vector3<f32>| -> usize {
+        for (i, existing) in new_verts.iter().enumerate() {
+            if (existing - v).norm_squared() < VERTEX_MERGE_EPS_SQ {
+                return i;
+            }
+        }
+        new_verts.push(v);
+        new_verts.len() - 1
+    };
+    let mut crossing_points: Vec<Vector3<f32>> = Vec::new();
+    for &[i, j] in &poly.edges {
+        let ci = is_inside(i);
+        let cj = is_inside(j);
+        if ci && cj {
+            let ni = find_or_add(poly.vertices[i]);
+            let nj = find_or_add(poly.vertices[j]);
+            if ni != nj {
+                new_edges.push([ni, nj]);
+            }
+        } else if ci != cj {
+            let d_i = distances[i];
+            let d_j = distances[j];
+            let t = d_i / (d_i - d_j);
+            let intersection = poly.vertices[i] + (poly.vertices[j] - poly.vertices[i]) * t;
+            let ix = find_or_add(intersection);
+            crossing_points.push(intersection);
+            if ci {
+                let ni = find_or_add(poly.vertices[i]);
+                if ni != ix {
+                    new_edges.push([ni, ix]);
+                }
+            } else {
+                let nj = find_or_add(poly.vertices[j]);
+                if nj != ix {
+                    new_edges.push([ix, nj]);
+                }
+            }
+        }
+    }
+    if crossing_points.len() >= 3 {
+        let normal = plane_normal.normalize();
+        let (u, v) = if normal.z.abs() < 0.9 {
+            let u = normal.cross(&Vector3::z()).normalize();
+            let v = normal.cross(&u).normalize();
+            (u, v)
+        } else {
+            let u = normal.cross(&Vector3::x()).normalize();
+            let v = normal.cross(&u).normalize();
+            (u, v)
+        };
+        let pts_2d: Vec<(f32, f32)> = crossing_points
+            .iter()
+            .map(|p| {
+                let d = *p - plane_point;
+                (d.dot(&u), d.dot(&v))
+            })
+            .collect();
+        let hull_idx = convex_hull_2d_indexed(&pts_2d);
+        for w in hull_idx.windows(2) {
+            let a = find_or_add(crossing_points[w[0]]);
+            let b = find_or_add(crossing_points[w[1]]);
+            if a != b {
+                new_edges.push([a, b]);
+            }
+        }
+        if hull_idx.len() >= 3 {
+            let a = find_or_add(crossing_points[*hull_idx.last().unwrap()]);
+            let b = find_or_add(crossing_points[hull_idx[0]]);
+            if a != b {
+                new_edges.push([a, b]);
+            }
+        }
+    }
+    ConvexPolyhedron {
+        vertices: new_verts,
+        edges: new_edges,
+    }
+}
+
+fn compute_frustum_rays(
+    scene_camera: &Camera,
+    view_rect: egui::Rect,
+    stereo: StereoSettings,
+    bounds: &(Vector4<f32>, Vector4<f32>),
+    map_transform: &MapViewTransform,
+) -> [Vector3<f32>; 4] {
+    let scale = view_rect.height().min(view_rect.width() * 0.5) * 0.35;
+    let cx = view_rect.center().x;
+    let cy = view_rect.center().y;
+    let pd = stereo.projection_distance;
+    let corners = [
+        Vector3::new(
+            (view_rect.left() - cx) / scale,
+            (cy - view_rect.top()) / scale,
+            pd,
+        ),
+        Vector3::new(
+            (view_rect.right() - cx) / scale,
+            (cy - view_rect.top()) / scale,
+            pd,
+        ),
+        Vector3::new(
+            (view_rect.right() - cx) / scale,
+            (cy - view_rect.bottom()) / scale,
+            pd,
+        ),
+        Vector3::new(
+            (view_rect.left() - cx) / scale,
+            (cy - view_rect.bottom()) / scale,
+            pd,
+        ),
+    ];
+    let mut rays = [Vector3::zeros(); 4];
+    for (i, dir_local) in corners.iter().enumerate() {
+        let dir_4d = scene_camera.project_3d_to_4d(*dir_local);
+        let dir_tess = direction_to_tesseract(dir_4d, bounds);
+        let dir_map_3d = map_transform.direction_to_3d(dir_tess);
+        let len = dir_map_3d.norm();
+        rays[i] = if len > 1e-10 {
+            dir_map_3d / len
+        } else {
+            dir_map_3d
+        };
+    }
+    rays
+}
+
+fn compute_frustum_planes(
+    rays: &[Vector3<f32>; 4],
+    cam_3d: Vector3<f32>,
+) -> [(Vector3<f32>, Vector3<f32>); 4] {
+    let forward = (rays[0] + rays[1] + rays[2] + rays[3]) * 0.25;
+    let mut planes = [(Vector3::zeros(), Vector3::zeros()); 4];
+    for i in 0..4 {
+        let j = (i + 1) % 4;
+        let mut normal = rays[i].cross(&rays[j]);
+        let len = normal.norm();
+        if len > 1e-10 {
+            normal /= len;
+        }
+        if normal.dot(&forward) < 0.0 {
+            normal = -normal;
+        }
+        planes[i] = (cam_3d, normal);
+    }
+    planes
 }
 pub fn compute_bounds(
     scene_camera: &Camera,
@@ -886,6 +1129,22 @@ pub fn normalize_to_tesseract(
     }
     result
 }
+
+fn direction_to_tesseract(
+    dir_world: Vector4<f32>,
+    bounds: &(Vector4<f32>, Vector4<f32>),
+) -> Vector4<f32> {
+    let mut result = Vector4::zeros();
+    for i in 0..4 {
+        let range = bounds.1[i] - bounds.0[i];
+        if range.abs() < 1e-6 {
+            result[i] = dir_world[i];
+        } else {
+            result[i] = dir_world[i] * 2.0 / range;
+        }
+    }
+    result
+}
 fn vertex_to_4d(v: &crate::polytopes::Vertex4D) -> Vector4<f32> {
     Vector4::new(v.position[0], v.position[1], v.position[2], v.position[3])
 }
@@ -919,117 +1178,6 @@ fn clip_segment_to_screen(
     let sp0 = projector.project_3d(s0.x, s0.y, s0.z)?;
     let sp1 = projector.project_3d(s1.x, s1.y, s1.z)?;
     Some((sp0.screen_pos, sp1.screen_pos))
-}
-
-/// Derive the scene camera's angular half-FOV from the viewport rect and projection distance.
-///
-/// The `scale` formula `rect.height().min(rect.width() * 0.5) * 0.35` matches
-/// `render_stereo_views()` in `render.rs`. We reconstruct it here because `render_stereo_views`
-/// computes it internally and doesn't expose it.
-///
-/// The stereo split gives each eye half the rect width, so `half_width = rect.width() * 0.25`
-/// (one quarter = half of one eye's view). Height is not split: `half_height = rect.height() * 0.5`.
-fn compute_frustum_half_angles(rect: egui::Rect, projection_distance: f32) -> (f32, f32) {
-    let scale = rect.height().min(rect.width() * 0.5) * 0.35;
-    let half_width = rect.width() * 0.25;
-    let half_height = rect.height() * 0.5;
-    let tan_half_fov_x = half_width / (scale * projection_distance);
-    let tan_half_fov_y = half_height / (scale * projection_distance);
-    (tan_half_fov_x, tan_half_fov_y)
-}
-
-/// Sutherland-Hodgman polygon clipping against a single half-plane.
-///
-/// Points on the LEFT side of the directed line `edge_start → edge_end` are kept
-/// (2D cross product ≥ 0). The algorithm iterates over each edge of the polygon,
-/// classifies both endpoints, and emits 0, 1, or 2 output vertices per edge:
-///
-/// - both inside → emit current vertex
-/// - inside → outside → emit current + intersection
-/// - outside → inside → emit intersection
-/// - both outside → emit nothing
-fn clip_polygon_by_half_plane(
-    polygon: &[egui::Pos2],
-    edge_start: egui::Pos2,
-    edge_end: egui::Pos2,
-) -> Vec<egui::Pos2> {
-    if polygon.is_empty() {
-        return Vec::new();
-    }
-    let cross_2d = |a: egui::Pos2, b: egui::Pos2, p: egui::Pos2| -> f32 {
-        let ab = b - a;
-        let ap = p - a;
-        ab.x * ap.y - ab.y * ap.x
-    };
-    let is_inside = |p: egui::Pos2| cross_2d(edge_start, edge_end, p) >= 0.0;
-    let n = polygon.len();
-    let mut output = Vec::with_capacity(n + 1);
-    for i in 0..n {
-        let curr = polygon[i];
-        let next = polygon[(i + 1) % n];
-        let curr_inside = is_inside(curr);
-        let next_inside = is_inside(next);
-        if curr_inside {
-            output.push(curr);
-        }
-        if curr_inside != next_inside {
-            let dc = cross_2d(edge_start, edge_end, curr);
-            let dn = cross_2d(edge_start, edge_end, next);
-            let denom = dc - dn;
-            if denom.abs() > 1e-12 {
-                let t = dc / denom;
-                let intersection = curr + (next - curr) * t;
-                output.push(intersection);
-            }
-        }
-    }
-    output
-}
-
-/// Clip a 2D polygon to the frustum visibility cone defined by `cam_screen` and 4 corner points.
-///
-/// The frustum cone is the convex quadrilateral fan with apex at `cam_screen` and edges through
-/// each `frustum_corners[i]`. The polygon is clipped by 4 half-planes, one per boundary ray.
-///
-/// **Half-plane construction:** For each ray `cam → corner[i]`, we determine which side is "inside"
-/// by checking whether the centroid of the 4 frustum corners lies on that side. This auto-detects
-/// the correct orientation regardless of winding order or coordinate system handedness.
-fn clip_polygon_to_frustum_cone(
-    polygon: &[egui::Pos2],
-    cam_screen: egui::Pos2,
-    frustum_corners: &[egui::Pos2; 4],
-) -> Vec<egui::Pos2> {
-    let centroid = egui::Pos2::new(
-        (frustum_corners[0].x + frustum_corners[1].x + frustum_corners[2].x + frustum_corners[3].x)
-            * 0.25,
-        (frustum_corners[0].y + frustum_corners[1].y + frustum_corners[2].y + frustum_corners[3].y)
-            * 0.25,
-    );
-    let mut result = polygon.to_vec();
-    for i in 0..4 {
-        let edge_start = cam_screen;
-        let edge_end = frustum_corners[i];
-        let next = frustum_corners[(i + 1) % 4];
-        let cross_centroid = {
-            let ab = edge_end - edge_start;
-            let ac = centroid - edge_start;
-            ab.x * ac.y - ab.y * ac.x
-        };
-        let cross_next = {
-            let ab = edge_end - edge_start;
-            let an = next - edge_start;
-            ab.x * an.y - ab.y * an.x
-        };
-        if cross_centroid >= 0.0 && cross_next >= 0.0 {
-            result = clip_polygon_by_half_plane(&result, edge_start, edge_end);
-        } else {
-            result = clip_polygon_by_half_plane(&result, edge_end, edge_start);
-        }
-        if result.is_empty() {
-            return Vec::new();
-        }
-    }
-    result
 }
 
 #[cfg(test)]
@@ -1250,17 +1398,6 @@ mod tests {
                     "xyz component should be in [-1,1]"
                 );
             }
-        }
-    }
-    #[test]
-    fn test_cross_section_tilted_slice_changes_count() {
-        let (vertices, indices) = create_polytope(PolytopeType::EightCell);
-        let slice_normal = Vector4::new(1.0, 0.0, 0.0, 1.0).normalize();
-        let slice_origin = Vector4::new(0.3, 0.0, 0.0, 0.3);
-        let cross = compute_slice_cross_section(&vertices, &indices, slice_normal, slice_origin);
-        for pt in &cross {
-            let d = (pt - slice_origin).dot(&slice_normal);
-            assert_approx_eq(d, 0.0, 1e-4);
         }
     }
     #[test]
@@ -1995,416 +2132,251 @@ mod tests {
     }
 
     #[test]
-    fn test_compute_frustum_half_angles() {
-        let rect = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(400.0, 400.0));
-        let proj_dist = 3.0;
-        let (tan_x, tan_y) = compute_frustum_half_angles(rect, proj_dist);
-        assert!(tan_x > 0.0, "tan_half_fov_x should be positive");
-        assert!(tan_y > 0.0, "tan_half_fov_y should be positive");
+    fn test_direction_to_tesseract_identity_bounds() {
+        let bounds = (
+            Vector4::new(-1.0, -1.0, -1.0, -1.0),
+            Vector4::new(1.0, 1.0, 1.0, 1.0),
+        );
+        let dir = Vector4::new(1.0, 2.0, 3.0, 4.0);
+        let result = direction_to_tesseract(dir, &bounds);
+        assert_approx_eq(result[0], 1.0, 1e-6);
+        assert_approx_eq(result[1], 2.0, 1e-6);
+        assert_approx_eq(result[2], 3.0, 1e-6);
+        assert_approx_eq(result[3], 4.0, 1e-6);
+    }
+
+    #[test]
+    fn test_direction_to_tesseract_scaled() {
+        let bounds = (
+            Vector4::new(-2.0, -2.0, -2.0, -2.0),
+            Vector4::new(2.0, 2.0, 2.0, 2.0),
+        );
+        let dir = Vector4::new(1.0, 1.0, 1.0, 1.0);
+        let result = direction_to_tesseract(dir, &bounds);
+        assert_approx_eq(result[0], 0.5, 1e-6);
+        assert_approx_eq(result[1], 0.5, 1e-6);
+        assert_approx_eq(result[2], 0.5, 1e-6);
+        assert_approx_eq(result[3], 0.5, 1e-6);
+    }
+
+    #[test]
+    fn test_build_cross_section_polyhedron_cube() {
+        let (vertices, indices) = create_polytope(PolytopeType::EightCell);
+        let slice_normal = Vector4::new(0.0, 0.0, 0.0, 1.0);
+        let slice_origin = Vector4::zeros();
+        let cs_edges =
+            compute_cross_section_edges(&vertices, &TESSERACT_FACES, slice_normal, slice_origin);
+        let map_camera = Camera::new();
+        let map_transform = MapViewTransform::new(&map_camera);
+        let poly = build_cross_section_polyhedron(&cs_edges, &map_transform);
+        assert_eq!(poly.vertices.len(), TESSERACT_CROSS_SECTION_VERTEX_COUNT);
+        assert_eq!(poly.edges.len(), TESSERACT_CROSS_SECTION_EDGE_COUNT);
+    }
+
+    #[test]
+    fn test_clip_polyhedron_preserves_fully_inside() {
+        let cube = unit_cube_polyhedron();
+        let plane_point = Vector3::new(-2.0, 0.0, 0.0);
+        let plane_normal = Vector3::new(1.0, 0.0, 0.0);
+        let result = clip_polyhedron_by_plane(&cube, plane_point, plane_normal);
+        assert_eq!(result.vertices.len(), 8, "cube should be fully preserved");
+        assert_eq!(result.edges.len(), 12, "all edges should be preserved");
+    }
+
+    #[test]
+    fn test_clip_polyhedron_empties_fully_outside() {
+        let cube = unit_cube_polyhedron();
+        let plane_point = Vector3::new(1.5, 0.0, 0.0);
+        let plane_normal = Vector3::new(1.0, 0.0, 0.0);
+        let result = clip_polyhedron_by_plane(&cube, plane_point, plane_normal);
         assert!(
-            tan_x < tan_y,
-            "tan_x should be less than tan_y (stereo split halves width)"
+            result.vertices.is_empty(),
+            "cube entirely outside should be empty"
         );
     }
 
     #[test]
-    fn test_clip_polygon_by_half_plane_square() {
-        let square = vec![
-            egui::Pos2::new(0.0, 0.0),
-            egui::Pos2::new(1.0, 0.0),
-            egui::Pos2::new(1.0, 1.0),
-            egui::Pos2::new(0.0, 1.0),
-        ];
-        let result = clip_polygon_by_half_plane(
-            &square,
-            egui::Pos2::new(0.5, 1.0),
-            egui::Pos2::new(0.5, 0.0),
+    fn test_clip_polyhedron_half_cube() {
+        let cube = unit_cube_polyhedron();
+        let plane_point = Vector3::new(0.0, 0.0, 0.0);
+        let plane_normal = Vector3::new(1.0, 0.0, 0.0);
+        let result = clip_polyhedron_by_plane(&cube, plane_point, plane_normal);
+        assert!(
+            result.vertices.len() >= 6,
+            "half-cube should have >= 6 vertices, got {}",
+            result.vertices.len()
         );
         assert!(
-            result.len() >= 3,
-            "clipped polygon should have >= 3 vertices"
+            result.edges.len() >= 8,
+            "half-cube should have >= 8 edges, got {}",
+            result.edges.len()
         );
-        for p in &result {
+        for v in &result.vertices {
             assert!(
-                p.x >= 0.5 - 1e-6,
-                "point {:?} should be on right side of x=0.5",
-                p
+                v.x >= -1e-6,
+                "all vertices should have x >= 0, got x={}",
+                v.x
             );
         }
     }
 
     #[test]
-    fn test_clip_polygon_by_half_plane_triangle() {
-        let tri = vec![
-            egui::Pos2::new(0.0, 0.0),
-            egui::Pos2::new(2.0, 0.0),
-            egui::Pos2::new(1.0, 2.0),
-        ];
-        let result =
-            clip_polygon_by_half_plane(&tri, egui::Pos2::new(1.0, 1.0), egui::Pos2::new(1.0, 0.0));
+    fn test_clip_polyhedron_by_plane_diagonal() {
+        let cube = unit_cube_polyhedron();
+        let plane_point = Vector3::new(0.0, 0.0, 0.0);
+        let plane_normal = Vector3::new(1.0, 1.0, 0.0).normalize();
+        let result = clip_polyhedron_by_plane(&cube, plane_point, plane_normal);
         assert!(
-            result.len() >= 3,
-            "clipped triangle should have >= 3 vertices"
-        );
-        for p in &result {
-            assert!(
-                p.x >= 1.0 - 1e-6,
-                "point {:?} should be on right side of x=1.0",
-                p
-            );
-        }
-    }
-
-    #[test]
-    fn test_clip_polygon_empty_result() {
-        let square = vec![
-            egui::Pos2::new(0.0, 0.0),
-            egui::Pos2::new(1.0, 0.0),
-            egui::Pos2::new(1.0, 1.0),
-            egui::Pos2::new(0.0, 1.0),
-        ];
-        let result = clip_polygon_by_half_plane(
-            &square,
-            egui::Pos2::new(2.0, 1.0),
-            egui::Pos2::new(2.0, 0.0),
+            result.vertices.len() >= 4,
+            "diagonal clip should produce >= 4 vertices, got {}",
+            result.vertices.len()
         );
         assert!(
-            result.is_empty(),
-            "polygon entirely to the left should be clipped away"
+            result.edges.len() >= 6,
+            "diagonal clip should produce >= 6 edges, got {}",
+            result.edges.len()
         );
     }
 
     #[test]
-    fn test_clip_polygon_unchanged() {
-        let square = vec![
-            egui::Pos2::new(2.0, 0.0),
-            egui::Pos2::new(3.0, 0.0),
-            egui::Pos2::new(3.0, 1.0),
-            egui::Pos2::new(2.0, 1.0),
-        ];
-        let result = clip_polygon_by_half_plane(
-            &square,
-            egui::Pos2::new(0.0, 1.0),
-            egui::Pos2::new(0.0, 0.0),
-        );
-        assert_eq!(
-            result.len(),
-            4,
-            "polygon entirely inside should be unchanged"
-        );
-    }
-
-    #[test]
-    fn test_clip_polygon_to_frustum_cone_basic() {
-        let cam = egui::Pos2::new(200.0, 200.0);
-        let corners = [
-            egui::Pos2::new(180.0, 170.0),
-            egui::Pos2::new(220.0, 170.0),
-            egui::Pos2::new(220.0, 230.0),
-            egui::Pos2::new(180.0, 230.0),
-        ];
-        let polygon = vec![
-            egui::Pos2::new(150.0, 150.0),
-            egui::Pos2::new(250.0, 150.0),
-            egui::Pos2::new(250.0, 250.0),
-            egui::Pos2::new(150.0, 250.0),
-        ];
-        let result = clip_polygon_to_frustum_cone(&polygon, cam, &corners);
-        assert!(
-            result.len() >= 3,
-            "partially overlapping polygon should produce >= 3 vertices"
-        );
-    }
-
-    #[test]
-    fn test_clip_polygon_to_frustum_cone_full_containment() {
-        let cam = egui::Pos2::new(200.0, 200.0);
-        let corners = [
-            egui::Pos2::new(100.0, 100.0),
-            egui::Pos2::new(300.0, 100.0),
-            egui::Pos2::new(300.0, 300.0),
-            egui::Pos2::new(100.0, 300.0),
-        ];
-        let polygon = vec![
-            egui::Pos2::new(180.0, 180.0),
-            egui::Pos2::new(220.0, 180.0),
-            egui::Pos2::new(220.0, 220.0),
-            egui::Pos2::new(180.0, 220.0),
-        ];
-        let result = clip_polygon_to_frustum_cone(&polygon, cam, &corners);
-        assert_eq!(
-            result.len(),
-            4,
-            "polygon fully inside cone should be unchanged"
-        );
-    }
-
-    #[test]
-    fn test_clip_polygon_to_frustum_cone_no_overlap() {
-        let cam = egui::Pos2::new(200.0, 200.0);
-        let corners = [
-            egui::Pos2::new(190.0, 190.0),
-            egui::Pos2::new(210.0, 190.0),
-            egui::Pos2::new(210.0, 210.0),
-            egui::Pos2::new(190.0, 210.0),
-        ];
-        let polygon = vec![
-            egui::Pos2::new(50.0, 50.0),
-            egui::Pos2::new(60.0, 50.0),
-            egui::Pos2::new(60.0, 60.0),
-            egui::Pos2::new(50.0, 60.0),
-        ];
-        let result = clip_polygon_to_frustum_cone(&polygon, cam, &corners);
-        assert!(
-            result.is_empty(),
-            "polygon entirely outside cone should be empty"
-        );
-    }
-
-    #[test]
-    fn test_visibility_polygon_is_subset_of_cross_section() {
-        let (vertices, indices) = create_polytope(PolytopeType::EightCell);
-        let slice_normal = Vector4::new(0.0, 0.0, 0.0, 1.0);
-        let slice_origin = Vector4::zeros();
-        let cross = compute_slice_cross_section(&vertices, &indices, slice_normal, slice_origin);
+    fn test_frustum_ray_directions_identity() {
+        let scene_camera = Camera::new();
         let map_camera = Camera::new();
         let map_transform = MapViewTransform::new(&map_camera);
-        let proj = StereoProjector::new(
-            egui::Pos2::new(200.0, 200.0),
-            100.0,
-            3.0,
-            ProjectionMode::Perspective,
-        );
-        let near_z = -3.0 + NEAR_MARGIN;
-        let cross_3d: Vec<Vector3<f32>> = cross
-            .iter()
-            .filter_map(|p| {
-                let p3 = map_transform.project_to_3d(*p);
-                if p3.z > near_z {
-                    Some(p3)
-                } else {
-                    None
-                }
-            })
-            .collect();
-        let screen_pts = convex_hull_screen(&cross_3d, &proj);
-        if screen_pts.len() < 3 {
-            return;
-        }
-        let scene_camera = Camera::new();
-        let norm_cam = Vector4::zeros();
-        let cam_3d = map_transform.project_to_3d(norm_cam);
-        if cam_3d.z <= near_z {
-            return;
-        }
-        let Some(cam_screen) = proj.project_3d(cam_3d.x, cam_3d.y, cam_3d.z) else {
-            return;
-        };
-        let rect = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(400.0, 400.0));
-        let (tan_x, tan_y) = compute_frustum_half_angles(rect, 3.0);
-        let corner_dirs_local = [
-            Vector3::new(tan_x, tan_y, 1.0),
-            Vector3::new(-tan_x, tan_y, 1.0),
-            Vector3::new(-tan_x, -tan_y, 1.0),
-            Vector3::new(tan_x, -tan_y, 1.0),
-        ];
+        let view_rect = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(200.0, 400.0));
+        let stereo = StereoSettings::default();
         let bounds = (
             Vector4::new(-1.0, -1.0, -1.0, -1.0),
             Vector4::new(1.0, 1.0, 1.0, 1.0),
         );
-        let mut frustum_screen = [egui::Pos2::ZERO; 4];
-        for (i, dir_local) in corner_dirs_local.iter().enumerate() {
-            let dir_4d = scene_camera.project_3d_to_4d(*dir_local);
-            let far_world = scene_camera.position + dir_4d * FRUSTUM_FAR_DISTANCE;
-            let far_tess = normalize_to_tesseract(far_world, &bounds);
-            let far_3d = map_transform.project_to_3d(far_tess);
-            if let Some(fp) = proj.project_3d(far_3d.x, far_3d.y, far_3d.z) {
-                frustum_screen[i] = fp.screen_pos;
-            }
-        }
-        let visibility =
-            clip_polygon_to_frustum_cone(&screen_pts, cam_screen.screen_pos, &frustum_screen);
-        if visibility.len() >= 3 {
-            for p in &visibility {
-                let mut inside = false;
-                let n = screen_pts.len();
-                for i in 0..n {
-                    let j = (i + 1) % n;
-                    let xi = screen_pts[i].x;
-                    let yi = screen_pts[i].y;
-                    let xj = screen_pts[j].x;
-                    let yj = screen_pts[j].y;
-                    if ((yi > p.y) != (yj > p.y)) && (p.x < (xj - xi) * (p.y - yi) / (yj - yi) + xi)
-                    {
-                        inside = !inside;
-                    }
-                }
-                assert!(
-                    inside,
-                    "visibility point {:?} should be inside cross-section hull",
-                    p
-                );
-            }
+        let rays = compute_frustum_rays(&scene_camera, view_rect, stereo, &bounds, &map_transform);
+        let avg_z = (rays[0].z + rays[1].z + rays[2].z + rays[3].z) * 0.25;
+        assert!(
+            avg_z > 0.0,
+            "average z should be positive (pointing forward), got {}",
+            avg_z
+        );
+        for ray in &rays {
+            assert_approx_eq(ray.norm(), 1.0, 1e-6);
         }
     }
 
     #[test]
-    fn test_visibility_polygon_with_identity_cam() {
+    fn test_visibility_cone_3d_identity_cam() {
         let (vertices, indices) = create_polytope(PolytopeType::EightCell);
         let slice_normal = Vector4::new(0.0, 0.0, 0.0, 1.0);
         let slice_origin = Vector4::zeros();
-        let cross = compute_slice_cross_section(&vertices, &indices, slice_normal, slice_origin);
+        let cs_edges =
+            compute_cross_section_edges(&vertices, &TESSERACT_FACES, slice_normal, slice_origin);
         let map_camera = Camera::new();
         let map_transform = MapViewTransform::new(&map_camera);
-        let proj = StereoProjector::new(
-            egui::Pos2::new(200.0, 200.0),
-            100.0,
-            3.0,
-            ProjectionMode::Perspective,
-        );
-        let near_z = -3.0 + NEAR_MARGIN;
-        let cross_3d: Vec<Vector3<f32>> = cross
-            .iter()
-            .filter_map(|p| {
-                let p3 = map_transform.project_to_3d(*p);
-                if p3.z > near_z {
-                    Some(p3)
-                } else {
-                    None
-                }
-            })
-            .collect();
-        let screen_pts = convex_hull_screen(&cross_3d, &proj);
-        if screen_pts.len() < 3 {
-            return;
-        }
         let scene_camera = Camera::new();
-        let norm_cam = Vector4::zeros();
-        let cam_3d = map_transform.project_to_3d(norm_cam);
-        if cam_3d.z <= near_z {
-            return;
-        }
-        let Some(cam_screen) = proj.project_3d(cam_3d.x, cam_3d.y, cam_3d.z) else {
-            return;
-        };
-        let rect = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(400.0, 400.0));
-        let (tan_x, tan_y) = compute_frustum_half_angles(rect, 3.0);
-        let corner_dirs_local = [
-            Vector3::new(tan_x, tan_y, 1.0),
-            Vector3::new(-tan_x, tan_y, 1.0),
-            Vector3::new(-tan_x, -tan_y, 1.0),
-            Vector3::new(tan_x, -tan_y, 1.0),
-        ];
         let bounds = (
             Vector4::new(-1.0, -1.0, -1.0, -1.0),
             Vector4::new(1.0, 1.0, 1.0, 1.0),
         );
-        let mut frustum_screen = [egui::Pos2::ZERO; 4];
-        let mut all_valid = true;
-        for (i, dir_local) in corner_dirs_local.iter().enumerate() {
-            let dir_4d = scene_camera.project_3d_to_4d(*dir_local);
-            let far_world = scene_camera.position + dir_4d * FRUSTUM_FAR_DISTANCE;
-            let far_tess = normalize_to_tesseract(far_world, &bounds);
-            let far_3d = map_transform.project_to_3d(far_tess);
-            if let Some(fp) = proj.project_3d(far_3d.x, far_3d.y, far_3d.z) {
-                frustum_screen[i] = fp.screen_pos;
-            } else {
-                all_valid = false;
+        let norm_cam = normalize_to_tesseract(scene_camera.position, &bounds);
+        let cam_3d = map_transform.project_to_3d(norm_cam);
+        let near_z = -3.0 + NEAR_MARGIN;
+        if cam_3d.z <= near_z {
+            return;
+        }
+        let poly = build_cross_section_polyhedron(&cs_edges, &map_transform);
+        assert!(poly.vertices.len() >= 3);
+        let view_rect = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(200.0, 400.0));
+        let rays = compute_frustum_rays(
+            &scene_camera,
+            view_rect,
+            StereoSettings::default(),
+            &bounds,
+            &map_transform,
+        );
+        let planes = compute_frustum_planes(&rays, cam_3d);
+        let mut clipped = poly;
+        for (pp, pn) in &planes {
+            clipped = clip_polyhedron_by_plane(&clipped, *pp, *pn);
+            if clipped.vertices.is_empty() {
                 break;
             }
         }
-        assert!(all_valid, "all frustum corners should project to screen");
-        let visibility =
-            clip_polygon_to_frustum_cone(&screen_pts, cam_screen.screen_pos, &frustum_screen);
         assert!(
-            visibility.len() >= 3,
-            "visibility polygon should be non-empty with identity camera, got {} points",
-            visibility.len()
+            clipped.vertices.len() >= 3,
+            "visibility cone should have >= 3 vertices with identity camera, got {}",
+            clipped.vertices.len()
         );
     }
 
     #[test]
-    fn test_visibility_polygon_with_rotated_cam() {
+    fn test_visibility_cone_3d_rotated_cam() {
         let (vertices, indices) = create_polytope(PolytopeType::EightCell);
         let slice_normal = Vector4::new(0.0, 0.0, 0.0, 1.0);
         let slice_origin = Vector4::zeros();
-        let cross = compute_slice_cross_section(&vertices, &indices, slice_normal, slice_origin);
+        let cs_edges =
+            compute_cross_section_edges(&vertices, &TESSERACT_FACES, slice_normal, slice_origin);
         let map_camera = Camera::new();
         let map_transform = MapViewTransform::new(&map_camera);
-        let proj = StereoProjector::new(
-            egui::Pos2::new(200.0, 200.0),
-            100.0,
-            3.0,
-            ProjectionMode::Perspective,
-        );
-        let near_z = -3.0 + NEAR_MARGIN;
-        let cross_3d: Vec<Vector3<f32>> = cross
-            .iter()
-            .filter_map(|p| {
-                let p3 = map_transform.project_to_3d(*p);
-                if p3.z > near_z {
-                    Some(p3)
-                } else {
-                    None
-                }
-            })
-            .collect();
-        let screen_pts = convex_hull_screen(&cross_3d, &proj);
-        if screen_pts.len() < 3 {
-            return;
-        }
         let mut scene_camera = Camera::new();
         scene_camera.rotate(0.5, 0.3);
-        let norm_cam = normalize_to_tesseract(
-            scene_camera.position,
-            &(
-                Vector4::new(-1.0, -1.0, -1.0, -1.0),
-                Vector4::new(1.0, 1.0, 1.0, 1.0),
-            ),
-        );
-        let cam_3d = map_transform.project_to_3d(norm_cam);
-        if cam_3d.z <= near_z {
-            return;
-        }
-        let Some(cam_screen) = proj.project_3d(cam_3d.x, cam_3d.y, cam_3d.z) else {
-            return;
-        };
-        let rect = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(400.0, 400.0));
-        let (tan_x, tan_y) = compute_frustum_half_angles(rect, 3.0);
-        let corner_dirs_local = [
-            Vector3::new(tan_x, tan_y, 1.0),
-            Vector3::new(-tan_x, tan_y, 1.0),
-            Vector3::new(-tan_x, -tan_y, 1.0),
-            Vector3::new(tan_x, -tan_y, 1.0),
-        ];
         let bounds = (
             Vector4::new(-1.0, -1.0, -1.0, -1.0),
             Vector4::new(1.0, 1.0, 1.0, 1.0),
         );
-        let mut frustum_screen = [egui::Pos2::ZERO; 4];
-        let mut all_valid = true;
-        for (i, dir_local) in corner_dirs_local.iter().enumerate() {
-            let dir_4d = scene_camera.project_3d_to_4d(*dir_local);
-            let far_world = scene_camera.position + dir_4d * FRUSTUM_FAR_DISTANCE;
-            let far_tess = normalize_to_tesseract(far_world, &bounds);
-            let far_3d = map_transform.project_to_3d(far_tess);
-            if let Some(fp) = proj.project_3d(far_3d.x, far_3d.y, far_3d.z) {
-                frustum_screen[i] = fp.screen_pos;
-            } else {
-                all_valid = false;
+        let norm_cam = normalize_to_tesseract(scene_camera.position, &bounds);
+        let cam_3d = map_transform.project_to_3d(norm_cam);
+        let near_z = -3.0 + NEAR_MARGIN;
+        if cam_3d.z <= near_z {
+            return;
+        }
+        let poly = build_cross_section_polyhedron(&cs_edges, &map_transform);
+        assert!(poly.vertices.len() >= 3);
+        let view_rect = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(200.0, 400.0));
+        let rays = compute_frustum_rays(
+            &scene_camera,
+            view_rect,
+            StereoSettings::default(),
+            &bounds,
+            &map_transform,
+        );
+        let planes = compute_frustum_planes(&rays, cam_3d);
+        let mut clipped = poly;
+        for (pp, pn) in &planes {
+            clipped = clip_polyhedron_by_plane(&clipped, *pp, *pn);
+            if clipped.vertices.is_empty() {
                 break;
             }
         }
         assert!(
-            all_valid,
-            "all frustum corners should project to screen with rotated camera"
+            clipped.vertices.len() >= 3,
+            "visibility cone should have >= 3 vertices with rotated camera, got {}",
+            clipped.vertices.len()
         );
-        let visibility =
-            clip_polygon_to_frustum_cone(&screen_pts, cam_screen.screen_pos, &frustum_screen);
-        assert!(
-            visibility.len() >= 3,
-            "visibility polygon should be non-empty with rotated camera, got {} points",
-            visibility.len()
-        );
+    }
+
+    fn unit_cube_polyhedron() -> ConvexPolyhedron {
+        let vertices = vec![
+            Vector3::new(-1.0, -1.0, -1.0),
+            Vector3::new(1.0, -1.0, -1.0),
+            Vector3::new(1.0, 1.0, -1.0),
+            Vector3::new(-1.0, 1.0, -1.0),
+            Vector3::new(-1.0, -1.0, 1.0),
+            Vector3::new(1.0, -1.0, 1.0),
+            Vector3::new(1.0, 1.0, 1.0),
+            Vector3::new(-1.0, 1.0, 1.0),
+        ];
+        let edges = vec![
+            [0, 1],
+            [1, 2],
+            [2, 3],
+            [3, 0],
+            [4, 5],
+            [5, 6],
+            [6, 7],
+            [7, 4],
+            [0, 4],
+            [1, 5],
+            [2, 6],
+            [3, 7],
+        ];
+        ConvexPolyhedron { vertices, edges }
     }
 }
