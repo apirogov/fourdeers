@@ -406,7 +406,8 @@ impl MapRenderer {
             // 3. Build 4 frustum corner directions in camera-local 3D:
             //      (±tan_x, ±tan_y, 1)  — un-normalized, but the ratios are what matter.
             //
-            // 4. For each direction: project camera-local 3D → world 4D via `project_3d_to_4d`
+            // 4. For each direction: rotate camera-local → 3D world via q_left,
+            //    then project to world 4D via q_right slice basis.
             //    (which applies the full q_left * v * q_right⁻¹ rotation) → normalize to
             //    tesseract → map 3D → screen. This gives 4 screen-space frustum corners.
             //
@@ -557,7 +558,7 @@ impl MapRenderer {
             egui::Color32::from_rgba_unmultiplied(255, 255, 255, dot_alpha),
         );
 
-        let forward_4d = scene_camera.project_3d_to_4d(Vector3::new(0.0, 0.0, 1.0));
+        let forward_4d = scene_camera.project_camera_3d_to_world_4d(scene_camera.forward_vector());
         let forward_tess = direction_to_tesseract(forward_4d, bounds);
         let forward_3d = map_transform.direction_to_3d(forward_tess);
         let forward_len = forward_3d.norm();
@@ -1099,8 +1100,10 @@ fn compute_frustum_rays(
         ),
     ];
     let mut rays = [Vector3::zeros(); 4];
+    let q_left = scene_camera.rotation_4d.q_left();
     for (i, dir_local) in corners.iter().enumerate() {
-        let dir_4d = scene_camera.project_3d_to_4d(*dir_local);
+        let dir_3d = q_left.transform_vector(dir_local);
+        let dir_4d = scene_camera.project_camera_3d_to_world_4d(dir_3d);
         let dir_tess = direction_to_tesseract(dir_4d, bounds);
         let dir_map_3d = map_transform.direction_to_3d(dir_tess);
         let len = dir_map_3d.norm();
@@ -2457,5 +2460,75 @@ mod tests {
             [3, 7],
         ];
         ConvexPolyhedron { vertices, edges }
+    }
+
+    #[test]
+    fn test_forward_direction_points_at_origin_while_orbiting() {
+        let geometry_bounds = Some((
+            Vector4::new(-1.0, -1.0, -1.0, -1.0),
+            Vector4::new(1.0, 1.0, 1.0, 1.0),
+        ));
+        let map_camera = Camera::new();
+        let map_transform = MapViewTransform::new(&map_camera);
+
+        let orbit_radius = 5.0f32;
+        let steps = 12;
+        for step in 0..steps {
+            let angle = 2.0 * std::f32::consts::PI * step as f32 / steps as f32;
+            let cam_x = orbit_radius * angle.sin();
+            let cam_z = -orbit_radius * angle.cos();
+
+            let mut scene_camera = Camera::new();
+            scene_camera.position = Vector4::new(cam_x, 0.0, cam_z, 0.0);
+            let yaw_to_origin = (-cam_x).atan2(-cam_z);
+            scene_camera.set_yaw_pitch_l(yaw_to_origin, 0.0);
+
+            let waypoints: Vec<CompassWaypoint> = vec![];
+            let bounds = compute_bounds(&scene_camera, &waypoints, geometry_bounds);
+
+            let norm_cam = normalize_to_tesseract(scene_camera.position, &bounds);
+            let cam_3d = map_transform.project_to_3d(norm_cam);
+
+            let norm_origin = normalize_to_tesseract(Vector4::zeros(), &bounds);
+            let origin_3d = map_transform.project_to_3d(norm_origin);
+
+            let to_origin = origin_3d - cam_3d;
+            let to_origin_len = to_origin.norm();
+            if to_origin_len < 1e-6 {
+                continue;
+            }
+            let to_origin_dir = to_origin / to_origin_len;
+
+            let forward_4d =
+                scene_camera.project_camera_3d_to_world_4d(scene_camera.forward_vector());
+            let forward_tess = direction_to_tesseract(forward_4d, &bounds);
+            let forward_3d = map_transform.direction_to_3d(forward_tess);
+            let forward_len = forward_3d.norm();
+            assert!(
+                forward_len > 1e-10,
+                "forward direction should be non-zero at step {}",
+                step
+            );
+            let forward_dir = forward_3d / forward_len;
+
+            let dot = to_origin_dir.dot(&forward_dir);
+            assert!(
+                dot > 0.99,
+                "forward arrow should point at origin at angle {:.1}° (step {}): \
+                 dot={:.6}, to_origin_dir={:?}, forward_dir={:?}, cam=({:.2},{:.2}), \
+                 cam_3d={:?}, origin_3d={:?}, bounds_z=[{:.2},{:.2}]",
+                angle.to_degrees(),
+                step,
+                dot,
+                to_origin_dir,
+                forward_dir,
+                cam_x,
+                cam_z,
+                cam_3d,
+                origin_3d,
+                bounds.0[2],
+                bounds.1[2],
+            );
+        }
     }
 }
