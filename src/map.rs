@@ -44,6 +44,29 @@ const VISIBILITY_DARK_GREEN: egui::Color32 = egui::Color32::from_rgb(15, 70, 15)
 /// Squared distance threshold for merging vertices in polyhedron construction.
 /// sqrt(1e-6) ≈ 0.001 — handles floating-point imprecision from edge-plane intersections.
 const VERTEX_MERGE_EPS_SQ: f32 = 1e-6;
+
+struct VertexDedup {
+    vertices: Vec<Vector3<f32>>,
+}
+
+impl VertexDedup {
+    fn new() -> Self {
+        Self {
+            vertices: Vec::new(),
+        }
+    }
+
+    fn find_or_add(&mut self, v: Vector3<f32>) -> usize {
+        for (i, existing) in self.vertices.iter().enumerate() {
+            if (existing - v).norm_squared() < VERTEX_MERGE_EPS_SQ {
+                return i;
+            }
+        }
+        self.vertices.push(v);
+        self.vertices.len() - 1
+    }
+}
+
 #[cfg(test)]
 const TESSERACT_EDGE_COUNT: usize = 32;
 
@@ -885,27 +908,21 @@ fn build_cross_section_polyhedron(
     cs_edges: &[[Vector4<f32>; 2]],
     map_transform: &MapViewTransform,
 ) -> ConvexPolyhedron {
-    let mut vertices: Vec<Vector3<f32>> = Vec::new();
+    let mut dedup = VertexDedup::new();
     let mut edges: Vec<[usize; 2]> = Vec::new();
-    let mut find_or_add = |v: Vector3<f32>| -> usize {
-        for (i, existing) in vertices.iter().enumerate() {
-            if (existing - v).norm_squared() < VERTEX_MERGE_EPS_SQ {
-                return i;
-            }
-        }
-        vertices.push(v);
-        vertices.len() - 1
-    };
     for [p0_4d, p1_4d] in cs_edges {
         let v0 = map_transform.project_to_3d(*p0_4d);
         let v1 = map_transform.project_to_3d(*p1_4d);
-        let i0 = find_or_add(v0);
-        let i1 = find_or_add(v1);
+        let i0 = dedup.find_or_add(v0);
+        let i1 = dedup.find_or_add(v1);
         if i0 != i1 {
             edges.push([i0, i1]);
         }
     }
-    ConvexPolyhedron { vertices, edges }
+    ConvexPolyhedron {
+        vertices: dedup.vertices,
+        edges,
+    }
 }
 
 fn convex_hull_2d_indexed(points: &[(f32, f32)]) -> Vec<usize> {
@@ -983,24 +1000,15 @@ fn clip_polyhedron_by_plane(
         .map(|v| (v - plane_point).dot(&plane_normal))
         .collect();
     let is_inside = |i: usize| distances[i] >= 0.0;
-    let mut new_verts: Vec<Vector3<f32>> = Vec::new();
+    let mut dedup = VertexDedup::new();
     let mut new_edges: Vec<[usize; 2]> = Vec::new();
-    let mut find_or_add = |v: Vector3<f32>| -> usize {
-        for (i, existing) in new_verts.iter().enumerate() {
-            if (existing - v).norm_squared() < VERTEX_MERGE_EPS_SQ {
-                return i;
-            }
-        }
-        new_verts.push(v);
-        new_verts.len() - 1
-    };
     let mut crossing_points: Vec<Vector3<f32>> = Vec::new();
     for &[i, j] in &poly.edges {
         let ci = is_inside(i);
         let cj = is_inside(j);
         if ci && cj {
-            let ni = find_or_add(poly.vertices[i]);
-            let nj = find_or_add(poly.vertices[j]);
+            let ni = dedup.find_or_add(poly.vertices[i]);
+            let nj = dedup.find_or_add(poly.vertices[j]);
             if ni != nj {
                 new_edges.push([ni, nj]);
             }
@@ -1009,15 +1017,15 @@ fn clip_polyhedron_by_plane(
             let d_j = distances[j];
             let t = d_i / (d_i - d_j);
             let intersection = poly.vertices[i] + (poly.vertices[j] - poly.vertices[i]) * t;
-            let ix = find_or_add(intersection);
+            let ix = dedup.find_or_add(intersection);
             crossing_points.push(intersection);
             if ci {
-                let ni = find_or_add(poly.vertices[i]);
+                let ni = dedup.find_or_add(poly.vertices[i]);
                 if ni != ix {
                     new_edges.push([ni, ix]);
                 }
             } else {
-                let nj = find_or_add(poly.vertices[j]);
+                let nj = dedup.find_or_add(poly.vertices[j]);
                 if nj != ix {
                     new_edges.push([ix, nj]);
                 }
@@ -1044,22 +1052,22 @@ fn clip_polyhedron_by_plane(
             .collect();
         let hull_idx = convex_hull_2d_indexed(&pts_2d);
         for w in hull_idx.windows(2) {
-            let a = find_or_add(crossing_points[w[0]]);
-            let b = find_or_add(crossing_points[w[1]]);
+            let a = dedup.find_or_add(crossing_points[w[0]]);
+            let b = dedup.find_or_add(crossing_points[w[1]]);
             if a != b {
                 new_edges.push([a, b]);
             }
         }
         if hull_idx.len() >= 3 {
-            let a = find_or_add(crossing_points[*hull_idx.last().unwrap()]);
-            let b = find_or_add(crossing_points[hull_idx[0]]);
+            let a = dedup.find_or_add(crossing_points[*hull_idx.last().unwrap()]);
+            let b = dedup.find_or_add(crossing_points[hull_idx[0]]);
             if a != b {
                 new_edges.push([a, b]);
             }
         }
     }
     ConvexPolyhedron {
-        vertices: new_verts,
+        vertices: dedup.vertices,
         edges: new_edges,
     }
 }
