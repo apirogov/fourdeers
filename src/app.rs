@@ -545,20 +545,21 @@ impl FourDeersApp {
 
         let mut close_menu = false;
 
+        let panel_frame = egui::Frame {
+            fill: panel_fill(),
+            corner_radius: egui::CornerRadius::ZERO,
+            stroke: egui::Stroke::NONE,
+            inner_margin: egui::Margin::same(12),
+            ..Default::default()
+        };
+
         egui::Area::new(egui::Id::new("left_menu"))
             .fixed_pos(left_rect.min)
             .show(ui.ctx(), |ui| {
                 ui.set_width(left_rect.width());
                 ui.set_height(left_rect.height());
 
-                egui::Frame {
-                    fill: panel_fill(),
-                    corner_radius: egui::CornerRadius::ZERO,
-                    stroke: egui::Stroke::NONE,
-                    inner_margin: egui::Margin::same(12),
-                    ..Default::default()
-                }
-                .show(ui, |ui| {
+                panel_frame.show(ui, |ui| {
                     ui.horizontal(|ui| {
                         if ui.button("X").on_hover_text("Close menu").clicked() {
                             close_menu = true;
@@ -581,14 +582,7 @@ impl FourDeersApp {
                 ui.set_width(right_rect.width());
                 ui.set_height(right_rect.height());
 
-                egui::Frame {
-                    fill: panel_fill(),
-                    corner_radius: egui::CornerRadius::ZERO,
-                    stroke: egui::Stroke::NONE,
-                    inner_margin: egui::Margin::same(12),
-                    ..Default::default()
-                }
-                .show(ui, |ui| {
+                panel_frame.show(ui, |ui| {
                     egui::ScrollArea::both()
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
