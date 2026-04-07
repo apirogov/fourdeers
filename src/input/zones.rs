@@ -4,6 +4,10 @@ use eframe::egui;
 
 use crate::camera::CameraAction;
 
+/// Maps a tap zone to a camera movement action.
+///
+/// Cardinal zones map to directional moves, diagonal zones to forward/backward/kata/ana.
+/// Returns `None` for `Center` and other non-movement zones.
 pub fn zone_to_movement_action(zone: Zone) -> Option<CameraAction> {
     match zone {
         Zone::North => Some(CameraAction::MoveUp),
@@ -18,13 +22,17 @@ pub fn zone_to_movement_action(zone: Zone) -> Option<CameraAction> {
     }
 }
 
+/// How many zones to divide a view rect into.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum ZoneMode {
+    /// Divide into 4 quadrants (N/E/S/W)
     #[default]
     FourZones,
+    /// Divide into 9 regions (3×3 grid)
     NineZones,
 }
 
+/// A named region within a divided view rect.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Zone {
     North,
@@ -55,10 +63,12 @@ impl std::fmt::Display for Zone {
 }
 
 impl Zone {
+    /// Returns true for N/E/S/W (cardinal directions), false for diagonals and center.
     pub fn is_cardinal(self) -> bool {
         matches!(self, Zone::North | Zone::East | Zone::South | Zone::West)
     }
 
+    /// All 9 zones in grid order (NW, N, NE, W, C, E, SW, S, SE).
     pub fn all() -> [Zone; 9] {
         [
             Zone::NorthWest,
@@ -73,17 +83,20 @@ impl Zone {
         ]
     }
 
+    /// The 4 cardinal zones: N, E, S, W.
     pub fn cardinals() -> [Zone; 4] {
         [Zone::North, Zone::East, Zone::South, Zone::West]
     }
 }
 
+/// Which stereo view half a drag or tap occurred in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DragView {
     Left,
     Right,
 }
 
+/// Result of analyzing a tap within a stereo view rect.
 #[derive(Debug, Clone)]
 pub struct TapAnalysis {
     pub is_left_view: bool,
@@ -94,6 +107,7 @@ pub struct TapAnalysis {
     pub norm_y: f32,
 }
 
+/// Identifies a specific tetrahedron by its view half and zone.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TetraId {
     pub is_left_view: bool,

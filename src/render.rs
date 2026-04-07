@@ -136,6 +136,7 @@ pub fn render_common_menu_half(painter: &egui::Painter, rect: egui::Rect) {
     render_tap_zone_label(painter, rect, Zone::NorthWest, "Menu", None);
 }
 
+/// Draw a filled triangular arrow head pointing in the given direction.
 pub fn draw_arrow_head(
     painter: &egui::Painter,
     tip: egui::Pos2,
@@ -156,6 +157,7 @@ pub fn draw_arrow_head(
     ));
 }
 
+/// Draw text with a single-pixel outline behind it for readability.
 pub fn render_outlined_text(
     painter: &egui::Painter,
     pos: egui::Pos2,
@@ -171,6 +173,7 @@ pub fn render_outlined_text(
 
 const OUTLINE_OFFSET: f32 = 0.5;
 
+/// Draw text with a dual offset outline (±0.5px) for high-contrast readability.
 pub fn render_dual_outlined_text(
     painter: &egui::Painter,
     pos: egui::Pos2,
@@ -272,6 +275,10 @@ impl StereoSettings {
     }
 }
 
+/// Compute the color for a normalized W coordinate.
+///
+/// Positive W fades toward blue, negative W fades toward red, with intensity
+/// controlling how much the green channel is affected.
 pub fn w_to_color(normalized_w: f32, alpha: u8, intensity: f32) -> egui::Color32 {
     if normalized_w >= 0.0 {
         let t = normalized_w;
