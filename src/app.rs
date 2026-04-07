@@ -467,20 +467,14 @@ impl FourDeersApp {
             );
 
             if self.active_view == ActiveView::Compass {
-                let frame_label = match self.compass_frame_mode {
-                    CompassFrameMode::World => "Frame: World",
-                    CompassFrameMode::Camera => "Frame: Camera",
-                };
+                let frame_label = self.compass_frame_mode.display_label();
                 render_tap_zone_label(&left_painter, left_rect, Zone::South, frame_label, None);
                 render_tap_zone_label(&right_painter, right_rect, Zone::South, "Prev", None);
                 render_tap_zone_label(&right_painter, right_rect, Zone::SouthEast, "Next", None);
             }
 
             if self.active_view == ActiveView::Map {
-                let frame_label = match self.map_frame_mode {
-                    CompassFrameMode::World => "Frame: World",
-                    CompassFrameMode::Camera => "Frame: Camera",
-                };
+                let frame_label = self.map_frame_mode.display_label();
                 render_tap_zone_label(&left_painter, left_rect, Zone::South, frame_label, None);
 
                 let labels_label = if self.map_renderer.labels_visible() {

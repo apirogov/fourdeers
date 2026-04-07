@@ -153,8 +153,8 @@ impl MapRenderer {
             camera: Camera::new(),
             tesseract_vertices: vertices,
             tesseract_indices: indices,
-            w_thickness: 2.5,
-            w_color_intensity: 0.35,
+            w_thickness: crate::render::DEFAULT_W_THICKNESS,
+            w_color_intensity: crate::render::DEFAULT_W_COLOR_INTENSITY,
             projection_distance: 3.0,
             labels_visible: false,
             waypoint_tap_zones: Vec::new(),
@@ -232,7 +232,7 @@ impl MapRenderer {
             },
         );
         let (left_rect, right_rect) = split_stereo_views(rect);
-        let scale = rect.height().min(rect.width() * 0.5) * 0.35;
+        let scale = rect.height().min(rect.width() * 0.5) * crate::render::STEREO_SCALE_FACTOR;
         let left_projector = StereoProjector::for_eye(
             left_rect.center(),
             scale,

@@ -11,7 +11,7 @@ use crate::polytopes::Vertex4D;
 use crate::rotation4d::Rotation4D;
 use crate::tetrahedron::{get_tetrahedron_layout, TetrahedronGadget};
 
-const STEREO_SCALE_FACTOR: f32 = 0.35;
+pub const STEREO_SCALE_FACTOR: f32 = 0.35;
 const EDGE_STROKE_WIDTH: f32 = 2.5;
 const EDGE_CLIP_MARGIN: f32 = 50.0;
 const NEAR_PLANE_THRESHOLD: f32 = 0.1;
@@ -207,7 +207,17 @@ impl CompassFrameMode {
             Self::Camera => Self::World,
         }
     }
+
+    pub fn display_label(self) -> &'static str {
+        match self {
+            Self::World => "Frame: World",
+            Self::Camera => "Frame: Camera",
+        }
+    }
 }
+
+pub const DEFAULT_W_THICKNESS: f32 = 2.5;
+pub const DEFAULT_W_COLOR_INTENSITY: f32 = 0.35;
 
 #[derive(Debug, Clone, Copy)]
 pub struct FourDSettings {
@@ -218,8 +228,8 @@ pub struct FourDSettings {
 impl Default for FourDSettings {
     fn default() -> Self {
         Self {
-            w_thickness: 2.5,
-            w_color_intensity: 0.35,
+            w_thickness: DEFAULT_W_THICKNESS,
+            w_color_intensity: DEFAULT_W_COLOR_INTENSITY,
         }
     }
 }
