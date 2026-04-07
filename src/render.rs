@@ -169,6 +169,23 @@ pub fn render_outlined_text(
     painter.text(pos, align, text, font_id, text_color);
 }
 
+const OUTLINE_OFFSET: f32 = 0.5;
+
+pub fn render_dual_outlined_text(
+    painter: &egui::Painter,
+    pos: egui::Pos2,
+    align: egui::Align2,
+    text: &str,
+    font_id: egui::FontId,
+    text_color: egui::Color32,
+    outline_color: egui::Color32,
+) {
+    let offset = egui::Vec2::new(OUTLINE_OFFSET, OUTLINE_OFFSET);
+    painter.text(pos + offset, align, text, font_id.clone(), outline_color);
+    painter.text(pos - offset, align, text, font_id.clone(), outline_color);
+    painter.text(pos, align, text, font_id, text_color);
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ProjectionMode {
     #[default]
@@ -800,28 +817,15 @@ fn render_single_tetrahedron(painter: &egui::Painter, spec: &TetraRenderSpec<'_>
                         let color = crate::tetrahedron::compute_component_color(component, max_mag);
                         let egui_color = color.to_egui_color();
                         let font_id = egui::FontId::proportional(VERTEX_LABEL_FONT_SIZE);
-                        let outline_color = outline_default();
 
-                        painter.text(
-                            screen_pos + egui::Vec2::new(0.5, 0.5),
-                            egui::Align2::CENTER_CENTER,
-                            &vertex.label,
-                            font_id.clone(),
-                            outline_color,
-                        );
-                        painter.text(
-                            screen_pos + egui::Vec2::new(-0.5, -0.5),
-                            egui::Align2::CENTER_CENTER,
-                            &vertex.label,
-                            font_id.clone(),
-                            outline_color,
-                        );
-                        painter.text(
+                        render_dual_outlined_text(
+                            painter,
                             screen_pos,
                             egui::Align2::CENTER_CENTER,
                             &vertex.label,
                             font_id,
                             egui_color,
+                            outline_default(),
                         );
                     }
 
@@ -835,29 +839,15 @@ fn render_single_tetrahedron(painter: &egui::Painter, spec: &TetraRenderSpec<'_>
                             );
                             let value_text = crate::tetrahedron::format_component_value(component);
                             let font_id = egui::FontId::monospace(10.0);
-                            let outline_color = outline_thin();
-                            let text_color = text_highlight();
 
-                            painter.text(
-                                label_pos + egui::Vec2::new(0.5, 0.5),
-                                egui::Align2::CENTER_CENTER,
-                                &value_text,
-                                font_id.clone(),
-                                outline_color,
-                            );
-                            painter.text(
-                                label_pos + egui::Vec2::new(-0.5, -0.5),
-                                egui::Align2::CENTER_CENTER,
-                                &value_text,
-                                font_id.clone(),
-                                outline_color,
-                            );
-                            painter.text(
+                            render_dual_outlined_text(
+                                painter,
                                 label_pos,
                                 egui::Align2::CENTER_CENTER,
                                 &value_text,
                                 font_id,
-                                text_color,
+                                text_highlight(),
+                                outline_thin(),
                             );
                         }
                     }
@@ -912,22 +902,14 @@ fn render_single_tetrahedron(painter: &egui::Painter, spec: &TetraRenderSpec<'_>
     if let Some(label) = spec.base_label {
         let base_pos = egui::Pos2::new(spec.center_x, spec.center_y + BASE_LABEL_OFFSET_Y);
         let font_id = egui::FontId::proportional(BASE_LABEL_FONT_SIZE);
-        let outline_color = egui::Color32::from_rgba_unmultiplied(0, 0, 0, 180);
-        let text_color = label_default();
-
-        painter.text(
-            base_pos + egui::Vec2::new(0.5, 0.5),
-            egui::Align2::CENTER_CENTER,
-            label,
-            font_id.clone(),
-            outline_color,
-        );
-        painter.text(
+        render_outlined_text(
+            painter,
             base_pos,
             egui::Align2::CENTER_CENTER,
             label,
             font_id,
-            text_color,
+            label_default(),
+            egui::Color32::from_rgba_unmultiplied(0, 0, 0, 180),
         );
     }
 }
@@ -999,30 +981,17 @@ pub fn render_tetrahedron_with_projector(
             let label_y = pos.y + normal.y * label_offset;
             if let Some(p) = projector.project_3d(label_x, label_y, pos.z) {
                 let font_id = egui::FontId::proportional(COMPASS_LABEL_FONT_SIZE);
-                let outline_color = outline_default();
 
                 let vertex_label = compass_vertex_label(frame_mode, i, component, &vertex.label);
 
-                painter.text(
-                    p.screen_pos + egui::Vec2::new(0.5, 0.5),
-                    egui::Align2::CENTER_CENTER,
-                    vertex_label,
-                    font_id.clone(),
-                    outline_color,
-                );
-                painter.text(
-                    p.screen_pos + egui::Vec2::new(-0.5, -0.5),
-                    egui::Align2::CENTER_CENTER,
-                    vertex_label,
-                    font_id.clone(),
-                    outline_color,
-                );
-                painter.text(
+                render_dual_outlined_text(
+                    painter,
                     p.screen_pos,
                     egui::Align2::CENTER_CENTER,
                     vertex_label,
                     font_id,
                     egui_color,
+                    outline_default(),
                 );
             }
         }
@@ -1034,22 +1003,15 @@ pub fn render_tetrahedron_with_projector(
             if let Some(label_p) = projector.project_3d(label_x, label_y, pos.z) {
                 let value_text = crate::tetrahedron::format_component_value(component);
                 let font_id = egui::FontId::monospace(COMPASS_VALUE_FONT_SIZE);
-                let outline_color = outline_thin();
-                let text_color = text_highlight();
 
-                painter.text(
-                    label_p.screen_pos + egui::Vec2::new(0.5, 0.5),
-                    egui::Align2::CENTER_CENTER,
-                    &value_text,
-                    font_id.clone(),
-                    outline_color,
-                );
-                painter.text(
+                render_outlined_text(
+                    painter,
                     label_p.screen_pos,
                     egui::Align2::CENTER_CENTER,
                     &value_text,
                     font_id,
-                    text_color,
+                    text_highlight(),
+                    outline_thin(),
                 );
             }
         }

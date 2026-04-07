@@ -784,19 +784,14 @@ fn render_tetrahedron_with_projector(
                         edge_color.b(),
                         (alpha * 120.0) as u8,
                     );
-                    painter.text(
-                        label_p.screen_pos + egui::Vec2::new(0.5, 0.5),
-                        egui::Align2::CENTER_CENTER,
-                        vertex_label,
-                        font_id.clone(),
-                        outline,
-                    );
-                    painter.text(
+                    crate::render::render_outlined_text(
+                        painter,
                         label_p.screen_pos,
                         egui::Align2::CENTER_CENTER,
                         vertex_label,
                         font_id,
                         text_color,
+                        outline,
                     );
                 }
             }
