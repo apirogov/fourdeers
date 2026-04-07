@@ -349,4 +349,58 @@ mod tests {
     fn test_zone_mode_default() {
         assert_eq!(ZoneMode::default(), ZoneMode::FourZones);
     }
+
+    #[test]
+    fn test_zone_to_movement_action_cardinal() {
+        use crate::camera::CameraAction;
+        assert_eq!(
+            zone_to_movement_action(Zone::North),
+            Some(CameraAction::MoveUp)
+        );
+        assert_eq!(
+            zone_to_movement_action(Zone::South),
+            Some(CameraAction::MoveDown)
+        );
+        assert_eq!(
+            zone_to_movement_action(Zone::West),
+            Some(CameraAction::MoveLeft)
+        );
+        assert_eq!(
+            zone_to_movement_action(Zone::East),
+            Some(CameraAction::MoveRight)
+        );
+    }
+
+    #[test]
+    fn test_zone_to_movement_action_diagonal() {
+        use crate::camera::CameraAction;
+        assert_eq!(
+            zone_to_movement_action(Zone::NorthEast),
+            Some(CameraAction::MoveForward)
+        );
+        assert_eq!(
+            zone_to_movement_action(Zone::SouthWest),
+            Some(CameraAction::MoveBackward)
+        );
+        assert_eq!(
+            zone_to_movement_action(Zone::NorthWest),
+            Some(CameraAction::MoveKata)
+        );
+        assert_eq!(
+            zone_to_movement_action(Zone::SouthEast),
+            Some(CameraAction::MoveAna)
+        );
+    }
+
+    #[test]
+    fn test_zone_to_movement_action_none() {
+        assert_eq!(zone_to_movement_action(Zone::Center), None);
+    }
+
+    #[test]
+    fn test_zone_display() {
+        assert_eq!(Zone::North.to_string(), "North");
+        assert_eq!(Zone::SouthEast.to_string(), "SouthEast");
+        assert_eq!(Zone::Center.to_string(), "Center");
+    }
 }

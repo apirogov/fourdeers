@@ -1510,4 +1510,68 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn test_w_to_color_zero_w() {
+        let c = w_to_color(0.0, 255, 0.35);
+        assert_eq!(c.r(), 255);
+        assert_eq!(c.g(), 255);
+        assert_eq!(c.b(), 255);
+        assert_eq!(c.a(), 255);
+    }
+
+    #[test]
+    fn test_w_to_color_positive_w_full() {
+        let c = w_to_color(1.0, 255, 0.35);
+        assert_eq!(c.r(), 0);
+        assert_eq!(c.b(), 255);
+        assert_eq!(c.a(), 255);
+    }
+
+    #[test]
+    fn test_w_to_color_negative_w_full() {
+        let c = w_to_color(-1.0, 255, 0.35);
+        assert_eq!(c.r(), 255);
+        assert_eq!(c.b(), 0);
+        assert_eq!(c.a(), 255);
+    }
+
+    #[test]
+    fn test_w_to_color_alpha_passthrough() {
+        let c = w_to_color(0.0, 128, 0.35);
+        assert_eq!(c.a(), 128);
+    }
+
+    #[test]
+    fn test_w_to_color_positive_w_reduces_red() {
+        let c_half = w_to_color(0.5, 255, 0.35);
+        assert!(c_half.r() < 255);
+        assert!(c_half.r() > 0);
+    }
+
+    #[test]
+    fn test_w_to_color_negative_w_reduces_blue() {
+        let c_half = w_to_color(-0.5, 255, 0.35);
+        assert!(c_half.b() < 255);
+        assert!(c_half.b() > 0);
+    }
+
+    #[test]
+    fn test_w_to_color_intensity_affects_green() {
+        let c_low = w_to_color(0.5, 255, 0.1);
+        let c_high = w_to_color(0.5, 255, 0.9);
+        assert!(c_low.g() > c_high.g());
+    }
+
+    #[test]
+    fn test_compass_frame_mode_display_label() {
+        assert_eq!(CompassFrameMode::World.display_label(), "Frame: World");
+        assert_eq!(CompassFrameMode::Camera.display_label(), "Frame: Camera");
+    }
+
+    #[test]
+    fn test_compass_frame_mode_other() {
+        assert_eq!(CompassFrameMode::World.other(), CompassFrameMode::Camera);
+        assert_eq!(CompassFrameMode::Camera.other(), CompassFrameMode::World);
+    }
 }

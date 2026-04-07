@@ -1018,4 +1018,101 @@ mod tests {
         assert_approx_eq(final_q_right.j, initial_q_right.j, 1e-3);
         assert_approx_eq(final_q_right.k, initial_q_right.k, 1e-3);
     }
+
+    #[test]
+    fn test_get_slice_w_axis_identity() {
+        let camera = Camera::new();
+        let w_axis = camera.get_slice_w_axis();
+        assert_approx_eq(w_axis[0], 0.0, 1e-6);
+        assert_approx_eq(w_axis[1], 0.0, 1e-6);
+        assert_approx_eq(w_axis[2], 0.0, 1e-6);
+        assert_approx_eq(w_axis[3], 1.0, 1e-6);
+    }
+
+    #[test]
+    fn test_get_slice_w_axis_after_4d_rotation() {
+        let mut camera = Camera::new();
+        camera.rotate_4d(1.0, 0.0);
+        let w_axis = camera.get_slice_w_axis();
+        let norm = (w_axis[0] * w_axis[0]
+            + w_axis[1] * w_axis[1]
+            + w_axis[2] * w_axis[2]
+            + w_axis[3] * w_axis[3])
+            .sqrt();
+        assert_approx_eq(norm, 1.0, 1e-4);
+    }
+
+    #[test]
+    fn test_project_3d_to_4d_identity() {
+        let camera = Camera::new();
+        let v3 = Vector3::new(1.0, 2.0, 3.0);
+        let v4 = camera.project_3d_to_4d(v3);
+        assert_approx_eq(v4.x, 1.0, 1e-6);
+        assert_approx_eq(v4.y, 2.0, 1e-6);
+        assert_approx_eq(v4.z, 3.0, 1e-6);
+        assert_approx_eq(v4.w, 0.0, 1e-6);
+    }
+
+    #[test]
+    fn test_project_3d_to_4d_after_4d_rotation() {
+        let mut camera = Camera::new();
+        camera.rotate_4d(200.0, 0.0);
+        let v3 = Vector3::new(1.0, 0.0, 0.0);
+        let v4 = camera.project_3d_to_4d(v3);
+        let norm = (v4.x * v4.x + v4.y * v4.y + v4.z * v4.z + v4.w * v4.w).sqrt();
+        assert_approx_eq(norm, 1.0, 1e-4);
+        assert!(
+            v4.w.abs() > 0.1,
+            "4D rotation should mix x into w, got w={}",
+            v4.w
+        );
+    }
+
+    #[test]
+    fn test_is_slice_tilted_identity() {
+        let camera = Camera::new();
+        assert!(!camera.is_slice_tilted());
+    }
+
+    #[test]
+    fn test_is_slice_tilted_after_4d_rotation() {
+        let mut camera = Camera::new();
+        camera.rotate_4d(1.0, 0.0);
+        assert!(camera.is_slice_tilted());
+    }
+
+    #[test]
+    fn test_get_4d_direction_label_forward_identity() {
+        let camera = Camera::new();
+        let label = camera.get_4d_direction_label(SliceDirection::Forward);
+        assert_eq!(label, "+Z");
+    }
+
+    #[test]
+    fn test_get_4d_direction_label_right_identity() {
+        let camera = Camera::new();
+        let label = camera.get_4d_direction_label(SliceDirection::Right);
+        assert_eq!(label, "+X");
+    }
+
+    #[test]
+    fn test_get_4d_direction_label_up_identity() {
+        let camera = Camera::new();
+        let label = camera.get_4d_direction_label(SliceDirection::Up);
+        assert_eq!(label, "+Y");
+    }
+
+    #[test]
+    fn test_get_4d_direction_label_w_positive_identity() {
+        let camera = Camera::new();
+        let label = camera.get_4d_direction_label(SliceDirection::WPositive);
+        assert_eq!(label, "+W");
+    }
+
+    #[test]
+    fn test_camera_action_display() {
+        assert_eq!(CameraAction::MoveForward.to_string(), "MoveForward");
+        assert_eq!(CameraAction::MoveUp.to_string(), "MoveUp");
+        assert_eq!(CameraAction::MoveKata.to_string(), "MoveKata");
+    }
 }
