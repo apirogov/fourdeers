@@ -77,12 +77,12 @@ with proposed solutions for each.
 
 ## Phase 5: Test Coverage
 
-### #18 Add tests for core logic — IN PROGRESS
-- **`src/app.rs`** (zero tests): Test zone detection, tap routing, view toggling
-- **`src/toys/polytopes.rs`** (zero tests): Test zone_to_action, handle_tap, handle_hold
-- **`src/toy/manager.rs`** (zero tests): Test toy switching, active_toy access, reset
-- **`src/render.rs:w_to_color`**: Test color computation edge cases
-- **`src/camera.rs`**: Test `project_3d_to_4d`, `get_slice_w_axis`, `get_4d_direction_label`
+### #18 Add tests for core logic — DONE
+- render.rs: 9 tests for w_to_color edge cases, 2 for CompassFrameMode
+- camera.rs: 10 tests for project_3d_to_4d, get_slice_w_axis, get_4d_direction_label, is_slice_tilted, Display
+- zones.rs: 4 tests for zone_to_movement_action and Zone Display
+- toy/manager.rs: 6 tests for switching, reset, active_toy access
+- Total tests: 172 → 202
 
 ---
 
@@ -101,14 +101,11 @@ with proposed solutions for each.
 
 ## Phase 7: Documentation
 
-### #22 Add doc comments to public APIs — NOT STARTED
-Priority order (highest impact first):
-1. `src/input/zones.rs` — Zone, ZoneMode, TapAnalysis are core types used everywhere
-2. `src/toy/mod.rs` — Toy trait (15 methods) is the extension point
-3. `src/render.rs` — 20+ public rendering functions
-4. `src/camera.rs` — 25+ public methods
-5. `src/rotation4d.rs` — 28+ public methods
-6. `src/colors.rs` — 16 public color functions
+### #22 Add doc comments to public APIs — DONE (priority items)
+- `src/input/zones.rs` — Zone, ZoneMode, TapAnalysis, DragView, TetraId documented
+- `src/toy/mod.rs` — Toy trait (all 15 methods) and CompassWaypoint documented
+- `src/render.rs` — draw_arrow_head, render_outlined_text, render_dual_outlined_text, w_to_color documented
+- Remaining: camera.rs, rotation4d.rs, colors.rs (lower priority, stable APIs)
 
 ---
 
@@ -120,6 +117,6 @@ Each step should be: implement → `cargo fmt` → `cargo clippy` → `cargo tes
 2. ~~Phase 2 (#9-11): Magic numbers~~ — DONE
 3. ~~Phase 4 (#17): Display impls~~ — DONE
 4. ~~Phase 3 (#12-16): Long functions & structure~~ — MOSTLY DONE (#12 deferred)
-5. Phase 5 (#18): Tests — IN PROGRESS
+5. ~~Phase 5 (#18): Tests~~ — DONE (172 → 202 tests)
 6. ~~Phase 6 (#19-21): Minor fixes~~ — MOSTLY DONE (#19 deferred)
-7. Phase 7 (#22): Documentation — NOT STARTED
+7. ~~Phase 7 (#22): Documentation~~ — DONE (priority items)
