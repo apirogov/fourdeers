@@ -23,7 +23,7 @@ const POSITION_SLIDER_RANGE: std::ops::RangeInclusive<f32> = -10.0..=10.0;
 const W_SLIDER_RANGE: std::ops::RangeInclusive<f32> = -3.0..=3.0;
 
 pub struct PolytopesToy {
-    pub camera: Camera,
+    camera: Camera,
     polytope_type: PolytopeType,
     cached_vertices: Vec<crate::polytopes::Vertex4D>,
     cached_indices: Vec<u16>,
@@ -36,7 +36,7 @@ pub struct PolytopesToy {
     show_controls: bool,
     zone_mode: ZoneMode,
     visualization_rect: Option<egui::Rect>,
-    pub drag_state: DragState,
+    drag_state: DragState,
     tetrahedron_rotations: HashMap<TetraId, UnitQuaternion<f32>>,
     stereo: StereoSettings,
     four_d: FourDSettings,
@@ -320,8 +320,6 @@ impl Toy for PolytopesToy {
                 );
             });
         });
-
-        ui.add_space(4.0);
 
         ui.add_space(4.0);
     }
