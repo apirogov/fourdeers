@@ -245,6 +245,19 @@ pub enum RotationPlane {
     ZW,
 }
 
+impl std::fmt::Display for RotationPlane {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RotationPlane::XY => write!(f, "XY"),
+            RotationPlane::XZ => write!(f, "XZ"),
+            RotationPlane::YZ => write!(f, "YZ"),
+            RotationPlane::XW => write!(f, "XW"),
+            RotationPlane::YW => write!(f, "YW"),
+            RotationPlane::ZW => write!(f, "ZW"),
+        }
+    }
+}
+
 fn plane_axis(plane: RotationPlane) -> Vector3<f32> {
     match plane {
         RotationPlane::XY => Vector3::z_axis().into_inner(),

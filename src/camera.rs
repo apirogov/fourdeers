@@ -367,6 +367,21 @@ pub enum CameraAction {
     MoveAna,
 }
 
+impl std::fmt::Display for CameraAction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CameraAction::MoveForward => write!(f, "MoveForward"),
+            CameraAction::MoveBackward => write!(f, "MoveBackward"),
+            CameraAction::MoveLeft => write!(f, "MoveLeft"),
+            CameraAction::MoveRight => write!(f, "MoveRight"),
+            CameraAction::MoveUp => write!(f, "MoveUp"),
+            CameraAction::MoveDown => write!(f, "MoveDown"),
+            CameraAction::MoveKata => write!(f, "MoveKata"),
+            CameraAction::MoveAna => write!(f, "MoveAna"),
+        }
+    }
+}
+
 fn format_4d_vector(v: [f32; 4]) -> String {
     fn fmt_comp(val: f32) -> String {
         if val.abs() < 0.01 {

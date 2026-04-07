@@ -39,6 +39,19 @@ pub enum PolytopeType {
     HundredTwentyCell,
 }
 
+impl std::fmt::Display for PolytopeType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PolytopeType::FiveCell => write!(f, "5-cell (Pentachoron)"),
+            PolytopeType::EightCell => write!(f, "8-cell (Tesseract)"),
+            PolytopeType::SixteenCell => write!(f, "16-cell"),
+            PolytopeType::TwentyFourCell => write!(f, "24-cell"),
+            PolytopeType::SixHundredCell => write!(f, "600-cell"),
+            PolytopeType::HundredTwentyCell => write!(f, "120-cell"),
+        }
+    }
+}
+
 impl PolytopeType {
     pub fn name(&self) -> &'static str {
         match self {

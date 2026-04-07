@@ -38,6 +38,22 @@ pub enum Zone {
     SouthEast,
 }
 
+impl std::fmt::Display for Zone {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Zone::North => write!(f, "North"),
+            Zone::East => write!(f, "East"),
+            Zone::South => write!(f, "South"),
+            Zone::West => write!(f, "West"),
+            Zone::NorthWest => write!(f, "NorthWest"),
+            Zone::NorthEast => write!(f, "NorthEast"),
+            Zone::Center => write!(f, "Center"),
+            Zone::SouthWest => write!(f, "SouthWest"),
+            Zone::SouthEast => write!(f, "SouthEast"),
+        }
+    }
+}
+
 impl Zone {
     pub fn is_cardinal(self) -> bool {
         matches!(self, Zone::North | Zone::East | Zone::South | Zone::West)
