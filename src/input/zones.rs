@@ -2,6 +2,22 @@
 
 use eframe::egui;
 
+use crate::camera::CameraAction;
+
+pub fn zone_to_movement_action(zone: Zone) -> Option<CameraAction> {
+    match zone {
+        Zone::North => Some(CameraAction::MoveUp),
+        Zone::South => Some(CameraAction::MoveDown),
+        Zone::West => Some(CameraAction::MoveLeft),
+        Zone::East => Some(CameraAction::MoveRight),
+        Zone::NorthEast => Some(CameraAction::MoveForward),
+        Zone::SouthWest => Some(CameraAction::MoveBackward),
+        Zone::NorthWest => Some(CameraAction::MoveKata),
+        Zone::SouthEast => Some(CameraAction::MoveAna),
+        _ => None,
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum ZoneMode {
     #[default]

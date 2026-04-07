@@ -7,8 +7,8 @@ use crate::camera::CameraAction;
 use crate::colors::panel_fill;
 use crate::input::render_zone_debug_overlay;
 use crate::input::{
-    analyze_tap_in_stereo_view_with_modes, get_zone_from_rect, DragView, Zone, ZoneDebugOptions,
-    ZoneMode,
+    analyze_tap_in_stereo_view_with_modes, get_zone_from_rect, zone_to_movement_action, DragView,
+    Zone, ZoneDebugOptions, ZoneMode,
 };
 use crate::map::MapRenderer;
 use crate::render::{
@@ -94,18 +94,10 @@ impl eframe::App for FourDeersApp {
                 self.menu_open = !self.menu_open;
             }
             if i.key_pressed(egui::Key::C) {
-                self.active_view = if self.active_view == ActiveView::Compass {
-                    ActiveView::Main
-                } else {
-                    ActiveView::Compass
-                };
+                self.toggle_view(ActiveView::Compass);
             }
             if i.key_pressed(egui::Key::G) {
-                self.active_view = if self.active_view == ActiveView::Map {
-                    ActiveView::Main
-                } else {
-                    ActiveView::Map
-                };
+                self.toggle_view(ActiveView::Map);
             }
             if self.active_view == ActiveView::Compass {
                 if i.key_pressed(egui::Key::ArrowLeft) {
@@ -711,39 +703,8 @@ impl FourDeersApp {
 
     fn handle_map_keyboard(&mut self, ctx: &egui::Context) {
         let move_speed = MAP_KEYBOARD_SPEED;
-        ctx.input(|i| {
-            if i.key_down(egui::Key::ArrowUp) {
-                self.map_renderer
-                    .apply_action(CameraAction::MoveUp, move_speed);
-            }
-            if i.key_down(egui::Key::ArrowDown) {
-                self.map_renderer
-                    .apply_action(CameraAction::MoveDown, move_speed);
-            }
-            if i.key_down(egui::Key::ArrowLeft) {
-                self.map_renderer
-                    .apply_action(CameraAction::MoveLeft, move_speed);
-            }
-            if i.key_down(egui::Key::ArrowRight) {
-                self.map_renderer
-                    .apply_action(CameraAction::MoveRight, move_speed);
-            }
-            if i.key_down(egui::Key::PageUp) {
-                self.map_renderer
-                    .apply_action(CameraAction::MoveForward, move_speed);
-            }
-            if i.key_down(egui::Key::PageDown) {
-                self.map_renderer
-                    .apply_action(CameraAction::MoveBackward, move_speed);
-            }
-            if i.key_down(egui::Key::Period) {
-                self.map_renderer
-                    .apply_action(CameraAction::MoveKata, move_speed);
-            }
-            if i.key_down(egui::Key::Comma) {
-                self.map_renderer
-                    .apply_action(CameraAction::MoveAna, move_speed);
-            }
+        crate::input::handle_movement_keys(ctx, move_speed, |action, speed| {
+            self.map_renderer.apply_action(action, speed);
         });
     }
 
@@ -762,23 +723,19 @@ impl FourDeersApp {
             return None;
         }
         let zone = get_zone_from_rect(right_rect, pos, ZoneMode::NineZones)?;
-        match zone {
-            Zone::North => Some(CameraAction::MoveUp),
-            Zone::South => Some(CameraAction::MoveDown),
-            Zone::West => Some(CameraAction::MoveLeft),
-            Zone::East => Some(CameraAction::MoveRight),
-            Zone::NorthEast => Some(CameraAction::MoveForward),
-            Zone::SouthWest => Some(CameraAction::MoveBackward),
-            Zone::NorthWest => Some(CameraAction::MoveKata),
-            Zone::SouthEast => Some(CameraAction::MoveAna),
-            _ => None,
-        }
+        zone_to_movement_action(zone)
+    }
+
+    fn toggle_view(&mut self, view: ActiveView) {
+        self.active_view = if self.active_view == view {
+            ActiveView::Main
+        } else {
+            view
+        };
     }
 
     fn handle_tap_zone(&mut self, pos: egui::Pos2) {
-        let vis_rect = self.visualization_rect;
-
-        let Some(visualization_rect) = vis_rect else {
+        let Some(visualization_rect) = self.visualization_rect else {
             return;
         };
 
@@ -786,98 +743,32 @@ impl FourDeersApp {
             return;
         }
 
-        let (left_rect, _) = split_stereo_views(visualization_rect);
-        if left_rect.contains(pos)
-            && get_zone_from_rect(left_rect, pos, ZoneMode::NineZones) == Some(Zone::NorthWest)
-        {
-            self.menu_open = !self.menu_open;
-            return;
-        }
+        let (left_rect, right_rect) = split_stereo_views(visualization_rect);
+        let left_zone = get_zone_from_rect(left_rect, pos, ZoneMode::NineZones);
 
-        if left_rect.contains(pos)
-            && get_zone_from_rect(left_rect, pos, ZoneMode::NineZones) == Some(Zone::West)
-        {
-            self.active_view = if self.active_view == ActiveView::Map {
-                ActiveView::Main
-            } else {
-                ActiveView::Map
-            };
-            return;
-        }
-
-        if left_rect.contains(pos)
-            && get_zone_from_rect(left_rect, pos, ZoneMode::NineZones) == Some(Zone::SouthWest)
-        {
-            self.active_view = if self.active_view == ActiveView::Compass {
-                ActiveView::Main
-            } else {
-                ActiveView::Compass
-            };
-            return;
+        match left_zone {
+            Some(Zone::NorthWest) => {
+                self.menu_open = !self.menu_open;
+                return;
+            }
+            Some(Zone::West) => {
+                self.toggle_view(ActiveView::Map);
+                return;
+            }
+            Some(Zone::SouthWest) => {
+                self.toggle_view(ActiveView::Compass);
+                return;
+            }
+            _ => {}
         }
 
         if self.active_view == ActiveView::Compass {
-            if left_rect.contains(pos)
-                && get_zone_from_rect(left_rect, pos, ZoneMode::NineZones) == Some(Zone::South)
-            {
-                self.toggle_compass_frame_mode();
-                return;
-            }
-
-            let (_, right_rect) = split_stereo_views(visualization_rect);
-            if right_rect.contains(pos) {
-                let zone = get_zone_from_rect(right_rect, pos, ZoneMode::NineZones);
-                if zone == Some(Zone::South) {
-                    self.cycle_compass_waypoint(-1);
-                    return;
-                }
-                if zone == Some(Zone::SouthEast) {
-                    self.cycle_compass_waypoint(1);
-                    return;
-                }
-            }
+            self.handle_compass_tap(left_zone, right_rect, pos);
             return;
         }
 
         if self.active_view == ActiveView::Map {
-            if let Some(wp_index) = self.map_renderer.find_tapped_waypoint(pos) {
-                self.compass_waypoint_index = wp_index;
-                self.active_view = ActiveView::Compass;
-                return;
-            }
-
-            if left_rect.contains(pos)
-                && get_zone_from_rect(left_rect, pos, ZoneMode::NineZones) == Some(Zone::South)
-            {
-                self.toggle_map_frame_mode();
-                return;
-            }
-
-            if left_rect.contains(pos)
-                && get_zone_from_rect(left_rect, pos, ZoneMode::NineZones) == Some(Zone::NorthEast)
-            {
-                self.map_renderer.toggle_labels();
-                return;
-            }
-
-            if left_rect.contains(pos)
-                && get_zone_from_rect(left_rect, pos, ZoneMode::NineZones) == Some(Zone::SouthEast)
-            {
-                self.reset_map_camera();
-                return;
-            }
-
-            let (_, right_rect) = split_stereo_views(visualization_rect);
-            if right_rect.contains(pos) {
-                let zone = get_zone_from_rect(right_rect, pos, ZoneMode::NineZones);
-                if zone == Some(Zone::Center) {
-                    self.map_rotation_3d = !self.map_rotation_3d;
-                    return;
-                }
-            }
-            if let Some(action) = self.map_tap_action(right_rect, pos) {
-                self.map_renderer.apply_action(action, MAP_TAP_SPEED);
-            }
+            self.handle_map_tap(left_zone, right_rect, pos);
             return;
         }
 
@@ -898,5 +789,62 @@ impl FourDeersApp {
         };
 
         self.toy_manager.active_toy_mut().handle_tap(&analysis);
+    }
+
+    fn handle_compass_tap(
+        &mut self,
+        left_zone: Option<Zone>,
+        right_rect: egui::Rect,
+        pos: egui::Pos2,
+    ) {
+        if left_zone == Some(Zone::South) {
+            self.toggle_compass_frame_mode();
+            return;
+        }
+
+        if right_rect.contains(pos) {
+            let zone = get_zone_from_rect(right_rect, pos, ZoneMode::NineZones);
+            if zone == Some(Zone::South) {
+                self.cycle_compass_waypoint(-1);
+            }
+            if zone == Some(Zone::SouthEast) {
+                self.cycle_compass_waypoint(1);
+            }
+        }
+    }
+
+    fn handle_map_tap(&mut self, left_zone: Option<Zone>, right_rect: egui::Rect, pos: egui::Pos2) {
+        if let Some(wp_index) = self.map_renderer.find_tapped_waypoint(pos) {
+            self.compass_waypoint_index = wp_index;
+            self.active_view = ActiveView::Compass;
+            return;
+        }
+
+        match left_zone {
+            Some(Zone::South) => {
+                self.toggle_map_frame_mode();
+                return;
+            }
+            Some(Zone::NorthEast) => {
+                self.map_renderer.toggle_labels();
+                return;
+            }
+            Some(Zone::SouthEast) => {
+                self.reset_map_camera();
+                return;
+            }
+            _ => {}
+        }
+
+        if right_rect.contains(pos) {
+            let zone = get_zone_from_rect(right_rect, pos, ZoneMode::NineZones);
+            if zone == Some(Zone::Center) {
+                self.map_rotation_3d = !self.map_rotation_3d;
+                return;
+            }
+        }
+        if let Some(action) = self.map_tap_action(right_rect, pos) {
+            self.map_renderer.apply_action(action, MAP_TAP_SPEED);
+        }
     }
 }

@@ -702,16 +702,13 @@ fn draw_direction_arrow(
                 egui::Stroke::new(2.0, arrow_color),
             );
             if arrow_vec.length() > head_size {
-                let dir = arrow_vec.normalized();
-                let perp = egui::Vec2::new(-dir.y, dir.x);
-                let base = arrow_end - dir * head_size;
-                let left = base + perp * (head_size * 0.4);
-                let right = base - perp * (head_size * 0.4);
-                painter.add(egui::Shape::convex_polygon(
-                    vec![arrow_end, left, right],
+                crate::render::draw_arrow_head(
+                    painter,
+                    arrow_end,
+                    arrow_vec,
+                    head_size,
                     arrow_color,
-                    egui::Stroke::NONE,
-                ));
+                );
             }
         }
         painter.circle_filled(arrow_start, 2.0, arrow_glow());

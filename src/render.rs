@@ -136,6 +136,39 @@ pub fn render_common_menu_half(painter: &egui::Painter, rect: egui::Rect) {
     render_tap_zone_label(painter, rect, Zone::NorthWest, "Menu", None);
 }
 
+pub fn draw_arrow_head(
+    painter: &egui::Painter,
+    tip: egui::Pos2,
+    direction: egui::Vec2,
+    head_size: f32,
+    color: egui::Color32,
+) {
+    let dir = direction.normalized();
+    let perp = egui::Vec2::new(-dir.y, dir.x);
+    let arrow_base = tip - dir * head_size;
+    let arrow_left = arrow_base + perp * (head_size * ARROW_HEAD_HALF_WIDTH);
+    let arrow_right = arrow_base - perp * (head_size * ARROW_HEAD_HALF_WIDTH);
+
+    painter.add(egui::Shape::convex_polygon(
+        vec![tip, arrow_left, arrow_right],
+        color,
+        egui::Stroke::NONE,
+    ));
+}
+
+pub fn render_outlined_text(
+    painter: &egui::Painter,
+    pos: egui::Pos2,
+    align: egui::Align2,
+    text: &str,
+    font_id: egui::FontId,
+    text_color: egui::Color32,
+    outline_color: egui::Color32,
+) {
+    painter.text(pos, align, text, font_id.clone(), outline_color);
+    painter.text(pos, align, text, font_id, text_color);
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ProjectionMode {
     #[default]
@@ -849,19 +882,13 @@ fn render_single_tetrahedron(painter: &egui::Painter, spec: &TetraRenderSpec<'_>
 
             let arrow_head_size = gadget.arrow_head_size() * ARROW_HEAD_SCALE;
             if arrow_vec.length() > arrow_head_size {
-                let dir = arrow_vec.normalized();
-                let perp = egui::Vec2::new(-dir.y, dir.x);
-
-                let arrow_tip = arrow_end;
-                let arrow_base = arrow_end - dir * arrow_head_size;
-                let arrow_left = arrow_base + perp * (arrow_head_size * ARROW_HEAD_HALF_WIDTH);
-                let arrow_right = arrow_base - perp * (arrow_head_size * ARROW_HEAD_HALF_WIDTH);
-
-                painter.add(egui::Shape::convex_polygon(
-                    vec![arrow_tip, arrow_left, arrow_right],
+                draw_arrow_head(
+                    painter,
+                    arrow_end,
+                    arrow_vec,
+                    arrow_head_size,
                     arrow_primary(),
-                    egui::Stroke::NONE,
-                ));
+                );
             }
         }
 
@@ -1044,19 +1071,13 @@ pub fn render_tetrahedron_with_projector(
 
             let arrow_head_size = gadget.arrow_head_size() * COMPASS_ARROW_HEAD_SCALE;
             if arrow_vec.length() > arrow_head_size {
-                let dir = arrow_vec.normalized();
-                let perp = egui::Vec2::new(-dir.y, dir.x);
-
-                let arrow_tip = arrow_end;
-                let arrow_base = arrow_end - dir * arrow_head_size;
-                let arrow_left = arrow_base + perp * (arrow_head_size * ARROW_HEAD_HALF_WIDTH);
-                let arrow_right = arrow_base - perp * (arrow_head_size * ARROW_HEAD_HALF_WIDTH);
-
-                painter.add(egui::Shape::convex_polygon(
-                    vec![arrow_tip, arrow_left, arrow_right],
+                draw_arrow_head(
+                    painter,
+                    arrow_end,
+                    arrow_vec,
+                    arrow_head_size,
                     arrow_primary(),
-                    egui::Stroke::NONE,
-                ));
+                );
             }
         }
 
@@ -1065,22 +1086,14 @@ pub fn render_tetrahedron_with_projector(
         if let Some(ref label) = gadget.base_label {
             let base_pos = arrow_start + egui::Vec2::new(0.0, BASE_LABEL_OFFSET_Y);
             let font_id = egui::FontId::proportional(BASE_LABEL_FONT_SIZE);
-            let outline_color = outline_default();
-            let text_color = label_default();
-
-            painter.text(
-                base_pos + egui::Vec2::new(0.5, 0.5),
-                egui::Align2::CENTER_CENTER,
-                label,
-                font_id.clone(),
-                outline_color,
-            );
-            painter.text(
+            render_outlined_text(
+                painter,
                 base_pos,
                 egui::Align2::CENTER_CENTER,
                 label,
                 font_id,
-                text_color,
+                label_default(),
+                outline_default(),
             );
         }
 

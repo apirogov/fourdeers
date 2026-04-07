@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use crate::camera::{Camera, CameraAction};
 use crate::colors::label_inactive;
-use crate::input::{DragView, TapAnalysis, TetraId, Zone, ZoneMode};
+use crate::input::{zone_to_movement_action, DragView, TapAnalysis, TetraId, Zone, ZoneMode};
 use crate::polytopes::{create_polytope, PolytopeType};
 use crate::render::{
     draw_background, draw_center_divider, render_stereo_views, render_tap_zone_label,
@@ -103,17 +103,7 @@ impl PolytopesToy {
         if is_left_view {
             None
         } else {
-            match zone {
-                Zone::North => Some(CameraAction::MoveUp),
-                Zone::South => Some(CameraAction::MoveDown),
-                Zone::West => Some(CameraAction::MoveLeft),
-                Zone::East => Some(CameraAction::MoveRight),
-                Zone::NorthEast => Some(CameraAction::MoveForward),
-                Zone::SouthWest => Some(CameraAction::MoveBackward),
-                Zone::NorthWest => Some(CameraAction::MoveKata),
-                Zone::SouthEast => Some(CameraAction::MoveAna),
-                _ => None,
-            }
+            zone_to_movement_action(zone)
         }
     }
 }
@@ -451,31 +441,8 @@ impl Toy for PolytopesToy {
     fn handle_keyboard(&mut self, ctx: &egui::Context) {
         let move_speed = KEYBOARD_MOVE_SPEED;
 
-        ctx.input(|i| {
-            if i.key_down(egui::Key::ArrowUp) {
-                self.apply_camera_action(CameraAction::MoveUp, move_speed);
-            }
-            if i.key_down(egui::Key::ArrowDown) {
-                self.apply_camera_action(CameraAction::MoveDown, move_speed);
-            }
-            if i.key_down(egui::Key::ArrowLeft) {
-                self.apply_camera_action(CameraAction::MoveLeft, move_speed);
-            }
-            if i.key_down(egui::Key::ArrowRight) {
-                self.apply_camera_action(CameraAction::MoveRight, move_speed);
-            }
-            if i.key_down(egui::Key::PageUp) {
-                self.apply_camera_action(CameraAction::MoveForward, move_speed);
-            }
-            if i.key_down(egui::Key::PageDown) {
-                self.apply_camera_action(CameraAction::MoveBackward, move_speed);
-            }
-            if i.key_down(egui::Key::Period) {
-                self.apply_camera_action(CameraAction::MoveKata, move_speed);
-            }
-            if i.key_down(egui::Key::Comma) {
-                self.apply_camera_action(CameraAction::MoveAna, move_speed);
-            }
+        crate::input::handle_movement_keys(ctx, move_speed, |action, speed| {
+            self.apply_camera_action(action, speed);
         });
     }
 
