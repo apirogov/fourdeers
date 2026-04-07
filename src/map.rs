@@ -960,6 +960,12 @@ fn convex_hull_2d_indexed(points: &[(f32, f32)]) -> Vec<usize> {
     hull
 }
 
+fn convex_hull_2d(pts: &[egui::Pos2]) -> Vec<egui::Pos2> {
+    let coords: Vec<(f32, f32)> = pts.iter().map(|p| (p.x, p.y)).collect();
+    let indices = convex_hull_2d_indexed(&coords);
+    indices.into_iter().map(|i| pts[i]).collect()
+}
+
 fn clip_polyhedron_by_plane(
     poly: &ConvexPolyhedron,
     plane_point: Vector3<f32>,
@@ -1354,53 +1360,7 @@ fn convex_hull_screen(pts_3d: &[Vector3<f32>], projector: &StereoProjector) -> V
         .collect();
     convex_hull_2d(&pts_2d)
 }
-fn convex_hull_2d(pts: &[egui::Pos2]) -> Vec<egui::Pos2> {
-    let n = pts.len();
-    if n < 3 {
-        return pts.to_vec();
-    }
-    let mut start = 0;
-    for i in 1..n {
-        if pts[i].x < pts[start].x || (pts[i].x == pts[start].x && pts[i].y < pts[start].y) {
-            start = i;
-        }
-    }
-    let mut hull = Vec::new();
-    let mut current = start;
-    loop {
-        hull.push(pts[current]);
-        let mut next = 0;
-        for i in 0..n {
-            if i == current {
-                continue;
-            }
-            if next == current {
-                next = i;
-                continue;
-            }
-            let oc = pts[i] - pts[current];
-            let on = pts[next] - pts[current];
-            let cross = oc.x * on.y - oc.y * on.x;
-            if cross > 0.0 {
-                next = i;
-            } else if cross.abs() < 1e-10 {
-                let d_i = oc.x * oc.x + oc.y * oc.y;
-                let d_n = on.x * on.x + on.y * on.y;
-                if d_i > d_n {
-                    next = i;
-                }
-            }
-        }
-        current = next;
-        if current == start {
-            break;
-        }
-        if hull.len() > n {
-            break;
-        }
-    }
-    hull
-}
+
 #[cfg(test)]
 mod tests {
     use super::*;
