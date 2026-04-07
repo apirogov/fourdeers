@@ -516,17 +516,17 @@ impl MapRenderer {
             };
             let dist = (wp.position - scene_camera.position).norm();
             let dist_label = format!("({})", format_magnitude(dist));
-            render_tetrahedron_with_projector(
+            render_tetrahedron_with_projector(&TetraRenderParams {
                 painter,
-                &gadget,
+                gadget: &gadget,
                 projector,
                 frame_mode,
                 edge_color,
                 alpha,
-                s3d,
-                Some(&dist_label),
-                self.labels_visible,
-            );
+                center_3d: s3d,
+                distance_label: Some(&dist_label),
+                labels_visible: self.labels_visible,
+            });
             {
                 let dot_color = egui::Color32::from_rgba_unmultiplied(
                     edge_color.r(),
@@ -563,17 +563,17 @@ impl MapRenderer {
         let Some(center_screen) = projector.project_3d(s3d.x, s3d.y, s3d.z) else {
             return;
         };
-        render_tetrahedron_with_projector(
+        render_tetrahedron_with_projector(&TetraRenderParams {
             painter,
-            &gadget,
+            gadget: &gadget,
             projector,
             frame_mode,
             edge_color,
             alpha,
-            s3d,
-            None,
-            self.labels_visible,
-        );
+            center_3d: s3d,
+            distance_label: None,
+            labels_visible: self.labels_visible,
+        });
         let dot_alpha = (alpha * 255.0) as u8;
         painter.circle_filled(
             center_screen.screen_pos,
@@ -738,18 +738,28 @@ fn draw_direction_arrow(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-fn render_tetrahedron_with_projector(
-    painter: &egui::Painter,
-    gadget: &TetrahedronGadget,
-    projector: &StereoProjector,
+struct TetraRenderParams<'a> {
+    painter: &'a egui::Painter,
+    gadget: &'a TetrahedronGadget,
+    projector: &'a StereoProjector,
     frame_mode: CompassFrameMode,
     edge_color: egui::Color32,
     alpha: f32,
     center_3d: Vector3<f32>,
-    distance_label: Option<&str>,
+    distance_label: Option<&'a str>,
     labels_visible: bool,
-) {
+}
+
+#[allow(clippy::too_many_arguments)]
+fn render_tetrahedron_with_projector(params: &TetraRenderParams) {
+    let painter = params.painter;
+    let gadget = params.gadget;
+    let projector = params.projector;
+    let frame_mode = params.frame_mode;
+    let edge_color = params.edge_color;
+    let alpha = params.alpha;
+    let center_3d = params.center_3d;
+    let labels_visible = params.labels_visible;
     let edge_stroke_color = egui::Color32::from_rgba_unmultiplied(
         edge_color.r(),
         edge_color.g(),
@@ -846,7 +856,7 @@ fn render_tetrahedron_with_projector(
             );
         }
     }
-    if let Some(dist) = distance_label {
+    if let Some(dist) = params.distance_label {
         if let Some(base_p) = origin_screen {
             let a = (alpha * 200.0) as u8;
             painter.text(
