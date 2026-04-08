@@ -161,8 +161,8 @@ pub struct VectorArrow {
 /// Complete tetrahedron visualization data
 #[derive(Debug, Clone)]
 pub struct TetrahedronGadget {
-    pub vertices: Vec<TetrahedronVertex>,
-    pub edges: Vec<TetrahedronEdge>,
+    pub vertices: [TetrahedronVertex; 4],
+    pub edges: [TetrahedronEdge; 6],
     pub vector_arrow: VectorArrow,
     pub center: Pos3D,
     pub scale: f32,
@@ -294,31 +294,26 @@ impl TetrahedronGadget {
     fn compute_vertices_with_rotation(
         scale: f32,
         rotation: &UnitQuaternion<f32>,
-    ) -> Vec<TetrahedronVertex> {
+    ) -> [TetrahedronVertex; 4] {
         let base_positions = get_tetrahedron_vertices(scale);
-
         let labels = ["X", "Y", "Z", "W"];
         let axes = ['X', 'Y', 'Z', 'W'];
 
-        base_positions
-            .iter()
-            .zip(labels.iter())
-            .zip(axes.iter())
-            .map(|((pos, label), axis)| {
-                let rotated_pos = pos.rotate_by_quaternion(rotation);
-                let normal = pos.normalize().rotate_by_quaternion(rotation);
-                TetrahedronVertex {
-                    position: rotated_pos,
-                    normal,
-                    label: label.to_string(),
-                    axis_4d: *axis,
-                }
-            })
-            .collect()
+        std::array::from_fn(|i| {
+            let pos = base_positions[i];
+            let rotated_pos = pos.rotate_by_quaternion(rotation);
+            let normal = pos.normalize().rotate_by_quaternion(rotation);
+            TetrahedronVertex {
+                position: rotated_pos,
+                normal,
+                label: labels[i].to_string(),
+                axis_4d: axes[i],
+            }
+        })
     }
 
-    fn compute_edges() -> Vec<TetrahedronEdge> {
-        vec![
+    fn compute_edges() -> [TetrahedronEdge; 6] {
+        [
             TetrahedronEdge {
                 vertex_indices: [0, 1],
             },
