@@ -9,13 +9,13 @@ pub fn start() {
     console_error_panic_hook::set_once();
 
     let canvas = web_sys::window()
-        .unwrap()
+        .expect("running in browser with window object")
         .document()
-        .unwrap()
+        .expect("window has document")
         .get_element_by_id(CANVAS_ELEMENT_ID)
-        .unwrap()
+        .expect("canvas element exists in DOM")
         .dyn_into::<web_sys::HtmlCanvasElement>()
-        .unwrap();
+        .expect("element is an HtmlCanvasElement");
 
     let web_options = eframe::WebOptions::default();
 

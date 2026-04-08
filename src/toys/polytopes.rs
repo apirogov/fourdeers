@@ -5,7 +5,7 @@ use nalgebra::{UnitQuaternion, Vector4};
 use std::collections::HashMap;
 
 use crate::camera::{Camera, CameraAction};
-use crate::colors::label_inactive;
+use crate::colors::LABEL_INACTIVE;
 use crate::input::{zone_to_movement_action, DragView, TapAnalysis, TetraId, Zone, ZoneMode};
 use crate::polytopes::{create_polytope, PolytopeType};
 use crate::render::{
@@ -382,7 +382,7 @@ impl Toy for PolytopesToy {
             "Rot:3D"
         };
         // Indicator in top-right of right view (gray since not interactive)
-        let gray = Some(label_inactive());
+        let gray = Some(LABEL_INACTIVE);
         render_tap_zone_label(painter, rect, Zone::NorthEast, rot_label, gray);
     }
 

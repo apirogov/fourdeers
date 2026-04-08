@@ -4,7 +4,7 @@ use eframe::egui;
 use nalgebra::{UnitQuaternion, Vector3, Vector4};
 
 use crate::camera::CameraAction;
-use crate::colors::panel_fill;
+use crate::colors::PANEL_FILL;
 use crate::input::render_zone_debug_overlay;
 use crate::input::{
     analyze_tap_in_stereo_view_with_modes, get_zone_from_rect, zone_to_movement_action, DragView,
@@ -504,7 +504,7 @@ impl FourDeersApp {
                     right_rect,
                     Zone::NorthEast,
                     rot_label,
-                    Some(crate::colors::label_inactive()),
+                    Some(crate::colors::LABEL_INACTIVE),
                 );
             }
 
@@ -549,7 +549,7 @@ impl FourDeersApp {
         let mut close_menu = false;
 
         let panel_frame = egui::Frame {
-            fill: panel_fill(),
+            fill: PANEL_FILL,
             corner_radius: egui::CornerRadius::ZERO,
             stroke: egui::Stroke::NONE,
             inner_margin: egui::Margin::same(12),

@@ -77,7 +77,7 @@ pub fn render_stereo_views(
 }
 
 pub fn draw_background(ui: &mut egui::Ui, rect: egui::Rect) {
-    ui.painter().rect_filled(rect, 0.0, viewport_bg());
+    ui.painter().rect_filled(rect, 0.0, VIEWPORT_BG);
 }
 
 pub fn draw_center_divider(ui: &mut egui::Ui, rect: egui::Rect) {
@@ -125,8 +125,8 @@ pub fn render_tap_zone_label(
     };
 
     let font_id = egui::FontId::proportional(TAP_LABEL_FONT_SIZE);
-    let outline_color = outline_default();
-    let text_color = text_color.unwrap_or_else(label_default);
+    let outline_color = OUTLINE_DEFAULT;
+    let text_color = text_color.unwrap_or(LABEL_DEFAULT);
 
     painter.text(label_pos, align, label, font_id.clone(), outline_color);
     painter.text(label_pos, align, label, font_id, text_color);
@@ -665,7 +665,7 @@ impl<'a> TesseractRenderContext<'a> {
                 egui::Align2::CENTER_CENTER,
                 text,
                 egui::FontId::proportional(10.0),
-                egui::Color32::from_rgba_unmultiplied(200, 200, 200, 150),
+                crate::colors::TEXT_DIM,
             );
         }
     }
@@ -812,7 +812,7 @@ fn render_single_tetrahedron(painter: &egui::Painter, spec: &TetraRenderSpec<'_>
         if let (Some(p0), Some(p1)) = (p0, p1) {
             painter.line_segment(
                 [egui::Pos2::new(p0.0, p0.1), egui::Pos2::new(p1.0, p1.1)],
-                egui::Stroke::new(TETRA_EDGE_STROKE, object_tint_positive()),
+                egui::Stroke::new(TETRA_EDGE_STROKE, OBJECT_TINT_POSITIVE),
             );
         }
     }
@@ -843,7 +843,7 @@ fn render_single_tetrahedron(painter: &egui::Painter, spec: &TetraRenderSpec<'_>
                             &vertex.label,
                             font_id,
                             egui_color,
-                            outline_default(),
+                            OUTLINE_DEFAULT,
                         );
                     }
 
@@ -864,8 +864,8 @@ fn render_single_tetrahedron(painter: &egui::Painter, spec: &TetraRenderSpec<'_>
                                 egui::Align2::CENTER_CENTER,
                                 &value_text,
                                 font_id,
-                                text_highlight(),
-                                outline_thin(),
+                                TEXT_HIGHLIGHT,
+                                OUTLINE_THIN,
                             );
                         }
                     }
@@ -885,7 +885,7 @@ fn render_single_tetrahedron(painter: &egui::Painter, spec: &TetraRenderSpec<'_>
         if arrow_vec.length() > 1e-3 {
             painter.line_segment(
                 [center, arrow_end],
-                egui::Stroke::new(ARROW_STROKE_WIDTH, arrow_primary()),
+                egui::Stroke::new(ARROW_STROKE_WIDTH, ARROW_PRIMARY),
             );
 
             let arrow_head_size = gadget.arrow_head_size() * ARROW_HEAD_SCALE;
@@ -895,12 +895,12 @@ fn render_single_tetrahedron(painter: &egui::Painter, spec: &TetraRenderSpec<'_>
                     arrow_end,
                     arrow_vec,
                     arrow_head_size,
-                    arrow_primary(),
+                    ARROW_PRIMARY,
                 );
             }
         }
 
-        painter.circle_filled(center, 2.0, arrow_glow());
+        painter.circle_filled(center, 2.0, ARROW_GLOW);
 
         if let Some(ref label) = gadget.tip_label() {
             let tip_offset = egui::Vec2::new(0.0, -12.0);
@@ -910,10 +910,10 @@ fn render_single_tetrahedron(painter: &egui::Painter, spec: &TetraRenderSpec<'_>
                 egui::Align2::CENTER_BOTTOM,
                 label,
                 egui::FontId::proportional(MAGNITUDE_LABEL_FONT_SIZE),
-                arrow_tip(),
+                ARROW_TIP,
             );
         } else if arrow_vec.length() > 1e-3 {
-            painter.circle_filled(arrow_end, 3.0, arrow_primary());
+            painter.circle_filled(arrow_end, 3.0, ARROW_PRIMARY);
         }
     }
 
@@ -926,8 +926,8 @@ fn render_single_tetrahedron(painter: &egui::Painter, spec: &TetraRenderSpec<'_>
             egui::Align2::CENTER_CENTER,
             label,
             font_id,
-            label_default(),
-            egui::Color32::from_rgba_unmultiplied(0, 0, 0, 180),
+            LABEL_DEFAULT,
+            OUTLINE_DEFAULT,
         );
     }
 }
@@ -981,7 +981,7 @@ pub fn render_tetrahedron_with_projector(
         if let (Some(p0), Some(p1)) = (p0, p1) {
             painter.line_segment(
                 [p0.screen_pos, p1.screen_pos],
-                egui::Stroke::new(ARROW_STROKE_WIDTH, object_tint_negative()),
+                egui::Stroke::new(ARROW_STROKE_WIDTH, OBJECT_TINT_NEGATIVE),
             );
         }
     }
@@ -1010,7 +1010,7 @@ pub fn render_tetrahedron_with_projector(
                     vertex_label,
                     font_id,
                     egui_color,
-                    outline_default(),
+                    OUTLINE_DEFAULT,
                 );
             }
         }
@@ -1029,8 +1029,8 @@ pub fn render_tetrahedron_with_projector(
                     egui::Align2::CENTER_CENTER,
                     &value_text,
                     font_id,
-                    text_highlight(),
-                    outline_thin(),
+                    TEXT_HIGHLIGHT,
+                    OUTLINE_THIN,
                 );
             }
         }
@@ -1047,7 +1047,7 @@ pub fn render_tetrahedron_with_projector(
         if arrow_vec.length() > 1e-3 {
             painter.line_segment(
                 [arrow_start, arrow_end],
-                egui::Stroke::new(COMPASS_ARROW_STROKE_WIDTH, arrow_primary()),
+                egui::Stroke::new(COMPASS_ARROW_STROKE_WIDTH, ARROW_PRIMARY),
             );
 
             let arrow_head_size = gadget.arrow_head_size() * COMPASS_ARROW_HEAD_SCALE;
@@ -1057,12 +1057,12 @@ pub fn render_tetrahedron_with_projector(
                     arrow_end,
                     arrow_vec,
                     arrow_head_size,
-                    arrow_primary(),
+                    ARROW_PRIMARY,
                 );
             }
         }
 
-        painter.circle_filled(arrow_start, 3.0, arrow_glow());
+        painter.circle_filled(arrow_start, 3.0, ARROW_GLOW);
 
         if let Some(ref label) = gadget.base_label {
             let base_pos = arrow_start + egui::Vec2::new(0.0, BASE_LABEL_OFFSET_Y);
@@ -1073,8 +1073,8 @@ pub fn render_tetrahedron_with_projector(
                 egui::Align2::CENTER_CENTER,
                 label,
                 font_id,
-                label_default(),
-                outline_default(),
+                LABEL_DEFAULT,
+                OUTLINE_DEFAULT,
             );
         }
 
@@ -1086,10 +1086,10 @@ pub fn render_tetrahedron_with_projector(
                 egui::Align2::CENTER_BOTTOM,
                 label,
                 egui::FontId::proportional(12.0),
-                arrow_tip(),
+                ARROW_TIP,
             );
         } else if arrow_vec.length() > 1e-3 {
-            painter.circle_filled(arrow_end, 4.0, arrow_primary());
+            painter.circle_filled(arrow_end, 4.0, ARROW_PRIMARY);
         }
     }
 }

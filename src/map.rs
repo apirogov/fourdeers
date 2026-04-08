@@ -120,17 +120,6 @@ fn edge_axis(vertices: &[crate::polytopes::Vertex4D], i0: usize, i1: usize) -> O
     diff_axis
 }
 
-/// Semi-transparent fill for the slice cross-section polygon.
-fn slice_green_fill() -> egui::Color32 {
-    egui::Color32::from_rgba_unmultiplied(60, 180, 60, 40)
-}
-
-/// Fill color for the visibility cone — darker green and more opaque than
-/// `slice_green_fill()` (60,180,60,alpha=40) to stand out against the cross-section.
-fn visibility_dark_green_fill() -> egui::Color32 {
-    egui::Color32::from_rgba_unmultiplied(15, 70, 15, 100)
-}
-
 pub struct MapRenderer {
     camera: Camera,
     tesseract_vertices: Vec<crate::polytopes::Vertex4D>,
@@ -359,7 +348,7 @@ impl MapRenderer {
                 egui::Align2::CENTER_CENTER,
                 ch.to_string(),
                 font_id.clone(),
-                egui::Color32::from_rgb(255, 230, 50),
+                crate::colors::AXIS_LABEL_YELLOW,
             );
         }
     }
@@ -412,7 +401,7 @@ impl MapRenderer {
         if screen_pts.len() >= 3 {
             painter.add(egui::Shape::convex_polygon(
                 screen_pts.clone(),
-                slice_green_fill(),
+                crate::colors::SLICE_GREEN_FILL,
                 egui::Stroke::new(1.5, SLICE_GREEN),
             ));
 
@@ -467,7 +456,7 @@ impl MapRenderer {
                         if vis_screen.len() >= 3 {
                             painter.add(egui::Shape::convex_polygon(
                                 vis_screen,
-                                visibility_dark_green_fill(),
+                                crate::colors::VISIBILITY_DARK_GREEN_FILL,
                                 egui::Stroke::new(1.0, VISIBILITY_DARK_GREEN),
                             ));
                         }
@@ -588,15 +577,7 @@ impl MapRenderer {
         if forward_len > 1e-10 {
             let forward_dir = forward_3d / forward_len;
             let tip_3d = s3d + forward_dir * FORWARD_ARROW_LENGTH;
-            draw_direction_arrow(
-                painter,
-                projector,
-                s3d,
-                tip_3d,
-                arrow_forward(),
-                alpha,
-                10.0,
-            );
+            draw_direction_arrow(painter, projector, s3d, tip_3d, ARROW_FORWARD, alpha, 10.0);
         }
     }
     fn compute_waypoint_tap_zones(
@@ -638,7 +619,7 @@ impl MapRenderer {
             let dist_left = (tap_pos - left_pos).length();
             let dist_right = (tap_pos - right_pos).length();
             let dist = dist_left.min(dist_right);
-            if dist <= radius && (best.is_none() || dist < best.unwrap().1) {
+            if dist <= radius && best.is_none_or(|(_, d)| dist < d) {
                 best = Some((wp_index, dist));
             }
         }
@@ -734,7 +715,7 @@ fn draw_direction_arrow(
                 );
             }
         }
-        painter.circle_filled(arrow_start, 2.0, arrow_glow());
+        painter.circle_filled(arrow_start, 2.0, ARROW_GLOW);
     }
 }
 
@@ -769,12 +750,12 @@ fn render_tetrahedron_with_projector(params: &TetraRenderParams) {
     for edge in &gadget.edges {
         let v0 = gadget
             .get_vertex_3d(edge.vertex_indices[0])
-            .unwrap()
+            .expect("edge vertex index out of bounds")
             .to_vector3()
             + center_3d;
         let v1 = gadget
             .get_vertex_3d(edge.vertex_indices[1])
-            .unwrap()
+            .expect("edge vertex index out of bounds")
             .to_vector3()
             + center_3d;
         if let (Some(p0), Some(p1)) = (
@@ -838,7 +819,7 @@ fn render_tetrahedron_with_projector(params: &TetraRenderParams) {
         projector,
         center_3d,
         arrow,
-        arrow_primary(),
+        ARROW_PRIMARY,
         alpha,
         head_size,
     );
@@ -1069,7 +1050,8 @@ fn clip_polyhedron_by_plane(
             }
         }
         if hull_idx.len() >= 3 {
-            let a = dedup.find_or_add(crossing_points[*hull_idx.last().unwrap()]);
+            let a = dedup
+                .find_or_add(crossing_points[*hull_idx.last().expect("hull has >= 3 elements")]);
             let b = dedup.find_or_add(crossing_points[hull_idx[0]]);
             if a != b {
                 new_edges.push([a, b]);
