@@ -37,6 +37,18 @@ const EDGE_STROKE_WIDTH: f32 = 2.5;
 const TAP_RADIUS_MULTIPLIER: f32 = 5.0;
 const TAP_RADIUS_MIN: f32 = 15.0;
 const TAP_RADIUS_MAX: f32 = 50.0;
+
+const MAP_ARROW_HEAD_SCALE: f32 = 15.0;
+const MAP_WAYPOINT_DOT_RADIUS: f32 = 3.0;
+const MAP_CAMERA_DOT_RADIUS: f32 = 3.0;
+const MAP_AXIS_FONT_SIZE: f32 = 8.0;
+const MAP_AXIS_LABEL_OFFSET_Y: f32 = 8.0;
+const MAP_VERTEX_FONT_SIZE: f32 = 10.0;
+const MAP_EDGE_LABEL_OFFSET: egui::Vec2 = egui::Vec2::new(4.0, -6.0);
+const MAP_TIP_FONT_SIZE: f32 = 9.0;
+const MAP_TIP_LABEL_OFFSET_Y: f32 = -12.0;
+const MAP_DISTANCE_FONT_SIZE: f32 = 8.0;
+const MAP_DISTANCE_LABEL_OFFSET_Y: f32 = 12.0;
 /// Stroke color for the visibility cone overlay — darker than SLICE_GREEN (80,200,80) so the
 /// cone is visually distinct from the cross-section outline.
 const VISIBILITY_DARK_GREEN: egui::Color32 = egui::Color32::from_rgb(15, 70, 15);
@@ -291,14 +303,14 @@ impl MapRenderer {
                 continue;
             };
             let vertex = &self.tesseract_vertices[i];
-            let font_id = egui::FontId::monospace(8.0);
+            let font_id = egui::FontId::monospace(MAP_AXIS_FONT_SIZE);
             for (ax, &ch) in AXIS_CHARS.iter().enumerate() {
                 let component = vertex.position[ax];
                 let color = compute_component_color(component, 1.0);
                 let egui_color = color.to_egui_color();
                 let offset_x = (ax as f32 - 1.5) * 7.0;
                 painter.text(
-                    p.screen_pos + egui::Vec2::new(offset_x, 8.0),
+                    p.screen_pos + egui::Vec2::new(offset_x, MAP_AXIS_LABEL_OFFSET_Y),
                     egui::Align2::CENTER_CENTER,
                     ch.to_string(),
                     font_id.clone(),
@@ -307,7 +319,7 @@ impl MapRenderer {
             }
             let normalized_w = (tv.w / w_half).clamp(-1.0, 1.0);
             let dot_color = crate::render::w_to_color(normalized_w, 180, self.w_color_intensity);
-            painter.circle_filled(p.screen_pos, 3.0, dot_color);
+            painter.circle_filled(p.screen_pos, MAP_WAYPOINT_DOT_RADIUS, dot_color);
         }
     }
     fn render_edge_labels(
@@ -316,7 +328,7 @@ impl MapRenderer {
         projector: &StereoProjector,
         transformed: &[crate::render::TransformedVertex],
     ) {
-        let font_id = egui::FontId::monospace(7.0);
+        let font_id = egui::FontId::monospace(MAP_AXIS_FONT_SIZE);
         let near_plane = self.projection_distance;
         for chunk in self.tesseract_indices.chunks(2) {
             if chunk.len() != 2 {
@@ -341,7 +353,7 @@ impl MapRenderer {
             let Some(ax) = edge_axis(&self.tesseract_vertices, i0, i1) else {
                 continue;
             };
-            let mid = (s0.screen_pos + s1.screen_pos.to_vec2()) * 0.5 + egui::Vec2::new(4.0, -6.0);
+            let mid = (s0.screen_pos + s1.screen_pos.to_vec2()) * 0.5 + MAP_EDGE_LABEL_OFFSET;
             let ch = AXIS_CHARS[ax];
             painter.text(
                 mid,
@@ -523,7 +535,7 @@ impl MapRenderer {
                     edge_color.b(),
                     crate::colors::to_u8(alpha * 200.0),
                 );
-                painter.circle_filled(center_screen.screen_pos, 3.0, dot_color);
+                painter.circle_filled(center_screen.screen_pos, MAP_CAMERA_DOT_RADIUS, dot_color);
             }
         }
     }
@@ -788,7 +800,7 @@ fn render_tetrahedron_with_projector(params: &TetraRenderParams) {
                         component,
                         &vertex.label,
                     );
-                    let font_id = egui::FontId::monospace(10.0);
+                    let font_id = egui::FontId::monospace(MAP_VERTEX_FONT_SIZE);
                     let a = crate::colors::to_u8(alpha * 230.0);
                     let text_color =
                         egui::Color32::from_rgba_unmultiplied(color.r, color.g, color.b, a);
@@ -813,7 +825,7 @@ fn render_tetrahedron_with_projector(params: &TetraRenderParams) {
     }
 
     let arrow = gadget.arrow_position().to_vector3() + center_3d;
-    let head_size = gadget.arrow_head_size() * 15.0;
+    let head_size = gadget.arrow_head_size() * MAP_ARROW_HEAD_SCALE;
     draw_direction_arrow(
         painter,
         projector,
@@ -829,10 +841,10 @@ fn render_tetrahedron_with_projector(params: &TetraRenderParams) {
         if let Some(tip_p) = arrow_screen {
             let a = crate::colors::to_u8(alpha * 230.0);
             painter.text(
-                tip_p.screen_pos + egui::Vec2::new(0.0, -12.0),
+                tip_p.screen_pos + egui::Vec2::new(0.0, MAP_TIP_LABEL_OFFSET_Y),
                 egui::Align2::CENTER_BOTTOM,
                 label,
-                egui::FontId::proportional(9.0),
+                egui::FontId::proportional(MAP_TIP_FONT_SIZE),
                 egui::Color32::from_rgba_unmultiplied(255, 180, 80, a),
             );
         }
@@ -841,10 +853,10 @@ fn render_tetrahedron_with_projector(params: &TetraRenderParams) {
         if let Some(base_p) = origin_screen {
             let a = crate::colors::to_u8(alpha * 200.0);
             painter.text(
-                base_p.screen_pos + egui::Vec2::new(0.0, 12.0),
+                base_p.screen_pos + egui::Vec2::new(0.0, MAP_DISTANCE_LABEL_OFFSET_Y),
                 egui::Align2::CENTER_TOP,
                 dist,
-                egui::FontId::proportional(8.0),
+                egui::FontId::proportional(MAP_DISTANCE_FONT_SIZE),
                 egui::Color32::from_rgba_unmultiplied(200, 200, 220, a),
             );
         }
