@@ -1,4 +1,4 @@
-//! Native entry point for FourDeers
+//! Native entry point for `FourDeers`
 
 const DEFAULT_WINDOW_WIDTH: f32 = 1200.0;
 const DEFAULT_WINDOW_HEIGHT: f32 = 800.0;

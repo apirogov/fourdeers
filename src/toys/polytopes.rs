@@ -50,6 +50,7 @@ impl Default for PolytopesToy {
 }
 
 impl PolytopesToy {
+    #[must_use]
     pub fn new() -> Self {
         let polytope_type = PolytopeType::EightCell;
         let (cached_vertices, cached_indices) = create_polytope(polytope_type);
@@ -251,11 +252,11 @@ impl PolytopesToy {
 }
 
 impl Toy for PolytopesToy {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Polytopes"
     }
 
-    fn id(&self) -> &str {
+    fn id(&self) -> &'static str {
         "polytopes"
     }
 

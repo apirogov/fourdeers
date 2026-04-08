@@ -17,6 +17,7 @@ impl Default for DebugScratchpadToy {
 }
 
 impl DebugScratchpadToy {
+    #[must_use]
     pub const fn new() -> Self {
         Self {
             visualization_rect: None,
@@ -25,11 +26,11 @@ impl DebugScratchpadToy {
 }
 
 impl Toy for DebugScratchpadToy {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "DebugScratchpad"
     }
 
-    fn id(&self) -> &str {
+    fn id(&self) -> &'static str {
         "debug_scratchpad"
     }
 

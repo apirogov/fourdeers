@@ -9,6 +9,7 @@ use egui::Color32;
 /// Clamp a float to `0..=255` and convert to `u8` for color channel construction.
 #[inline]
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+#[must_use]
 pub const fn to_u8(v: f32) -> u8 {
     if v < 0.0 {
         0

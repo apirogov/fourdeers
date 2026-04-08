@@ -5,7 +5,10 @@ use nalgebra::UnitQuaternion;
 use std::collections::HashMap;
 
 use crate::camera::Camera;
-use crate::colors::*;
+use crate::colors::{
+    ARROW_GLOW, ARROW_PRIMARY, ARROW_TIP, LABEL_DEFAULT, OBJECT_TINT_NEGATIVE,
+    OBJECT_TINT_POSITIVE, OUTLINE_DEFAULT, OUTLINE_THIN, TEXT_HIGHLIGHT, VIEWPORT_BG,
+};
 use crate::input::{TetraId, Zone};
 use crate::polytopes::Vertex4D;
 use crate::rotation4d::Rotation4D;
@@ -30,6 +33,7 @@ const BASE_LABEL_FONT_SIZE: f32 = 11.0;
 const BASE_LABEL_OFFSET_Y: f32 = 18.0;
 const TAP_LABEL_FONT_SIZE: f32 = 11.0;
 
+#[must_use]
 pub fn split_stereo_views(rect: egui::Rect) -> (egui::Rect, egui::Rect) {
     let left_rect = egui::Rect {
         min: rect.min,
@@ -204,6 +208,7 @@ pub enum CompassFrameMode {
 }
 
 impl CompassFrameMode {
+    #[must_use]
     pub const fn other(self) -> Self {
         match self {
             Self::World => Self::Camera,
@@ -211,6 +216,7 @@ impl CompassFrameMode {
         }
     }
 
+    #[must_use]
     pub const fn display_label(self) -> &'static str {
         match self {
             Self::World => "Frame: World",
@@ -255,20 +261,24 @@ impl Default for StereoSettings {
 }
 
 impl StereoSettings {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
+    #[must_use]
     pub const fn with_eye_separation(mut self, separation: f32) -> Self {
         self.eye_separation = separation;
         self
     }
 
+    #[must_use]
     pub const fn with_projection_distance(mut self, distance: f32) -> Self {
         self.projection_distance = distance;
         self
     }
 
+    #[must_use]
     pub const fn with_projection_mode(mut self, mode: ProjectionMode) -> Self {
         self.projection_mode = mode;
         self
@@ -279,6 +289,7 @@ impl StereoSettings {
 ///
 /// Positive W fades toward blue, negative W fades toward red, with intensity
 /// controlling how much the green channel is affected.
+#[must_use]
 pub fn w_to_color(normalized_w: f32, alpha: u8, intensity: f32) -> egui::Color32 {
     if normalized_w >= 0.0 {
         let t = normalized_w;
@@ -311,6 +322,7 @@ pub struct ProjectedPoint {
 }
 
 impl StereoProjector {
+    #[must_use]
     pub const fn new(
         center: egui::Pos2,
         scale: f32,
@@ -326,6 +338,7 @@ impl StereoProjector {
         }
     }
 
+    #[must_use]
     pub fn for_eye(
         center: egui::Pos2,
         scale: f32,
@@ -343,14 +356,17 @@ impl StereoProjector {
         }
     }
 
+    #[must_use]
     pub const fn center(&self) -> egui::Pos2 {
         self.center
     }
 
+    #[must_use]
     pub const fn scale(&self) -> f32 {
         self.scale
     }
 
+    #[must_use]
     pub const fn with_center(&self, center: egui::Pos2) -> Self {
         Self {
             center,
@@ -361,6 +377,7 @@ impl StereoProjector {
         }
     }
 
+    #[must_use]
     pub const fn with_scale(&self, scale: f32) -> Self {
         Self {
             center: self.center,
@@ -371,6 +388,7 @@ impl StereoProjector {
         }
     }
 
+    #[must_use]
     pub fn project_3d(&self, x: f32, y: f32, z: f32) -> Option<ProjectedPoint> {
         let x_shifted = x - self.eye_offset;
 
@@ -446,6 +464,7 @@ pub struct TransformedVertex {
 }
 
 impl<'a> TesseractRenderContext<'a> {
+    #[must_use]
     pub fn from_config(
         vertices: &'a [Vertex4D],
         indices: &'a [u16],
@@ -502,6 +521,7 @@ impl<'a> TesseractRenderContext<'a> {
         }
     }
 
+    #[must_use]
     pub fn transform_vertices(&self) -> Vec<TransformedVertex> {
         self.vertices
             .iter()
@@ -525,6 +545,7 @@ impl<'a> TesseractRenderContext<'a> {
             .collect()
     }
 
+    #[allow(clippy::similar_names)]
     pub fn render_edges(
         &self,
         painter: &egui::Painter,
@@ -575,7 +596,7 @@ impl<'a> TesseractRenderContext<'a> {
                     return None;
                 }
 
-                let w_avg = (t0.w + t1.w) / 2.0;
+                let w_avg = f32::midpoint(t0.w, t1.w);
                 let alpha = if t0.in_slice && t1.in_slice { 255 } else { 100 };
 
                 let normalized_w = (w_avg / self.w_half).clamp(-1.0, 1.0);
@@ -818,7 +839,7 @@ fn render_single_tetrahedron(painter: &egui::Painter, spec: &TetraRenderSpec<'_>
     }
 
     if spec.show_captions || spec.show_magnitudes {
-        let component_mags: [f32; 4] = gadget.component_values.map(|v| v.abs());
+        let component_mags: [f32; 4] = gadget.component_values.map(f32::abs);
         let max_mag = component_mags.iter().copied().fold(0.0f32, f32::max);
 
         for (i, vertex) in gadget.vertices.iter().enumerate() {
@@ -986,7 +1007,7 @@ pub fn render_tetrahedron_with_projector(
         }
     }
 
-    let component_mags: [f32; 4] = gadget.component_values.map(|v| v.abs());
+    let component_mags: [f32; 4] = gadget.component_values.map(f32::abs);
     let max_mag = component_mags.iter().copied().fold(0.0f32, f32::max);
 
     for (i, vertex) in gadget.vertices.iter().enumerate() {
@@ -1094,6 +1115,7 @@ pub fn render_tetrahedron_with_projector(
     }
 }
 
+#[must_use]
 pub fn compass_vertex_label(
     frame_mode: CompassFrameMode,
     component_index: usize,

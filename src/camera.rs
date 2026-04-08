@@ -43,7 +43,7 @@ pub struct Camera {
 
     pub rotation_4d: Rotation4D,
 
-    /// Cached yaw angle (rotation around Y axis) for q_left - in radians.
+    /// Cached yaw angle (rotation around Y axis) for `q_left` - in radians.
     /// Cached to avoid quaternion-to-Euler conversion instability that causes UI slider glitching.
     yaw_l: f32,
     pitch_l: f32,
@@ -65,6 +65,7 @@ impl Default for Camera {
 }
 
 impl Camera {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -80,6 +81,7 @@ impl Camera {
 
     /// Forward vector in world space (direction camera is looking)
     /// +Z is forward, +X is right, +Y is up
+    #[must_use]
     pub fn forward_vector(&self) -> Vector3<f32> {
         self.rotation_4d
             .q_left()
@@ -87,6 +89,7 @@ impl Camera {
     }
 
     /// Right vector in world space
+    #[must_use]
     pub fn right_vector(&self) -> Vector3<f32> {
         self.rotation_4d
             .q_left()
@@ -94,6 +97,7 @@ impl Camera {
     }
 
     /// Up vector in world space
+    #[must_use]
     pub fn up_vector(&self) -> Vector3<f32> {
         self.rotation_4d
             .q_left()
@@ -111,9 +115,9 @@ impl Camera {
         ) * speed;
     }
 
-    /// Rotate camera by delta mouse movement (3D mode - affects q_left)
-    /// delta_x: horizontal movement (positive = drag right)
-    /// delta_y: vertical movement (positive = drag down)
+    /// Rotate camera by delta mouse movement (3D mode - affects `q_left`)
+    /// `delta_x`: horizontal movement (positive = drag right)
+    /// `delta_y`: vertical movement (positive = drag down)
     ///
     /// Standard FPS controls:
     /// - Drag right -> look right (world appears to move left)
@@ -139,6 +143,7 @@ impl Camera {
     /// Rotate 4D camera slice orientation (affects `q_right` only).
     ///
     /// This tilts the 3D slice in 4D. It should not change in-slice look frame (`q_left`).
+    #[allow(clippy::similar_names)]
     pub fn rotate_4d(&mut self, delta_x: f32, delta_y: f32) {
         // XW plane for horizontal (like XZ in 3D), YW plane for vertical (like YZ in 3D)
         // Match 3D pattern: yaw * old * pitch
@@ -156,17 +161,19 @@ impl Camera {
         self.pitch_r += delta_y * ROTATION_SENSITIVITY;
     }
 
-    /// Get yaw angle (rotation around Y axis) in radians - for q_left
+    /// Get yaw angle (rotation around Y axis) in radians - for `q_left`
+    #[must_use]
     pub const fn yaw_l(&self) -> f32 {
         self.yaw_l
     }
 
-    /// Get pitch angle (rotation around X axis) in radians - for q_left
+    /// Get pitch angle (rotation around X axis) in radians - for `q_left`
+    #[must_use]
     pub const fn pitch_l(&self) -> f32 {
         self.pitch_l
     }
 
-    /// Set q_left (3D orientation) from yaw and pitch angles
+    /// Set `q_left` (3D orientation) from yaw and pitch angles
     pub fn set_yaw_pitch_l(&mut self, yaw: f32, pitch: f32) {
         let yaw_rot = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), yaw);
         let pitch_rot = UnitQuaternion::from_axis_angle(&Vector3::x_axis(), pitch);
@@ -175,13 +182,13 @@ impl Camera {
         self.pitch_l = pitch;
     }
 
-    /// Set yaw only for q_left, preserving current pitch
+    /// Set yaw only for `q_left`, preserving current pitch
     pub fn set_yaw_l(&mut self, yaw: f32) {
         self.set_yaw_pitch_l_internal(yaw, self.pitch_l);
         self.yaw_l = yaw;
     }
 
-    /// Set pitch only for q_left, preserving current yaw
+    /// Set pitch only for `q_left`, preserving current yaw
     pub fn set_pitch_l(&mut self, pitch: f32) {
         self.set_yaw_pitch_l_internal(self.yaw_l, pitch);
         self.pitch_l = pitch;
@@ -193,42 +200,48 @@ impl Camera {
         self.rotation_4d = Rotation4D::new(yaw_rot * pitch_rot, *self.rotation_4d.q_right());
     }
 
-    /// Get yaw angle for q_right (4D rotation in XW plane)
+    /// Get yaw angle for `q_right` (4D rotation in XW plane)
+    #[must_use]
     pub const fn yaw_r(&self) -> f32 {
         self.yaw_r
     }
 
-    /// Get pitch angle for q_right (4D rotation in YW plane)
+    /// Get pitch angle for `q_right` (4D rotation in YW plane)
+    #[must_use]
     pub const fn pitch_r(&self) -> f32 {
         self.pitch_r
     }
 
-    /// Set yaw only for q_right, preserving current pitch
+    /// Set yaw only for `q_right`, preserving current pitch
     pub fn set_yaw_r(&mut self, yaw: f32) {
         let pitch = self.pitch_r;
         self.rotation_4d.set_q_right_from_yaw_pitch(yaw, pitch);
         self.yaw_r = yaw;
     }
 
-    /// Set pitch only for q_right, preserving current yaw
+    /// Set pitch only for `q_right`, preserving current yaw
     pub fn set_pitch_r(&mut self, pitch: f32) {
         let yaw = self.yaw_r;
         self.rotation_4d.set_q_right_from_yaw_pitch(yaw, pitch);
         self.pitch_r = pitch;
     }
 
+    #[must_use]
     pub fn basis_4d(&self) -> [[f32; 4]; 4] {
         self.rotation_4d.basis_vectors()
     }
 
+    #[must_use]
     pub fn slice_w_axis(&self) -> [f32; 4] {
         self.rotation_4d.basis_w()
     }
 
+    #[must_use]
     pub fn is_slice_tilted(&self) -> bool {
         !self.rotation_4d.is_pure_3d()
     }
 
+    #[must_use]
     pub fn direction_label_4d(&self, direction: SliceDirection) -> String {
         let basis = self.rotation_4d.basis_vectors();
         let v = match direction {
@@ -244,6 +257,7 @@ impl Camera {
         format_4d_vector(v)
     }
 
+    #[must_use]
     pub fn project_3d_to_4d(&self, v3: Vector3<f32>) -> Vector4<f32> {
         let basis_4d = self.rotation_4d.basis_vectors();
         Vector4::new(
@@ -258,6 +272,7 @@ impl Camera {
     ///
     /// This is the key bridge between in-slice movement (`q_left`) and tilted-slice world motion
     /// (`q_right`).
+    #[must_use]
     pub fn project_camera_3d_to_world_4d(&self, v3: Vector3<f32>) -> Vector4<f32> {
         let slice_rotation =
             Rotation4D::new(UnitQuaternion::identity(), *self.rotation_4d.q_right());
@@ -287,6 +302,7 @@ impl Camera {
     }
 
     /// Converts a world-space 4D direction into camera-frame components (R/U/F/K).
+    #[must_use]
     pub fn world_vector_to_camera_frame(&self, world_vector: Vector4<f32>) -> Vector4<f32> {
         let (right, up, forward, w_axis) = self.camera_world_axes();
         Vector4::new(

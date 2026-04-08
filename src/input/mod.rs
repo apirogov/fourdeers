@@ -1,7 +1,7 @@
 //! Input handling for stereoscopic view tap zones.
 //!
 //! Provides shared keyboard movement handling for camera actions,
-//! mapping arrow keys and PageUp/PageDown/Period/Comma to standard CameraAction variants.
+//! mapping arrow keys and PageUp/PageDown/Period/Comma to standard `CameraAction` variants.
 
 use eframe::egui;
 

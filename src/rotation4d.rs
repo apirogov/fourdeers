@@ -51,6 +51,7 @@ impl Default for Rotation4D {
 }
 
 impl Rotation4D {
+    #[must_use]
     pub fn identity() -> Self {
         Self {
             q_left: UnitQuaternion::identity(),
@@ -58,18 +59,22 @@ impl Rotation4D {
         }
     }
 
+    #[must_use]
     pub const fn new(q_left: UnitQuaternion<f32>, q_right: UnitQuaternion<f32>) -> Self {
         Self { q_left, q_right }
     }
 
+    #[must_use]
     pub const fn q_left(&self) -> &UnitQuaternion<f32> {
         &self.q_left
     }
 
+    #[must_use]
     pub const fn q_right(&self) -> &UnitQuaternion<f32> {
         &self.q_right
     }
 
+    #[must_use]
     pub fn q_left_yaw_pitch(&self) -> (f32, f32) {
         quaternion_to_yaw_pitch(self.q_left())
     }
@@ -78,6 +83,7 @@ impl Rotation4D {
         self.q_left = quaternion_from_yaw_pitch(yaw, pitch);
     }
 
+    #[must_use]
     pub fn q_right_yaw_pitch(&self) -> (f32, f32) {
         quaternion_to_yaw_pitch_4d(self.q_right())
     }
@@ -87,6 +93,7 @@ impl Rotation4D {
     }
 
     /// Returns the inverse rotation.
+    #[must_use]
     pub fn inverse(&self) -> Self {
         Self {
             q_left: self.q_left.inverse(),
@@ -94,8 +101,9 @@ impl Rotation4D {
         }
     }
 
-    /// Returns inverse of q_right only, with identity for q_left.
+    /// Returns inverse of `q_right` only, with identity for `q_left`.
     /// Used for camera transformations.
+    #[must_use]
     pub fn inverse_q_right_only(&self) -> Self {
         Self {
             q_left: UnitQuaternion::identity(),
@@ -109,6 +117,7 @@ impl Rotation4D {
     /// `L = other.L * self.L`, `R = other.R * self.R`.
     ///
     /// This order is subtle and easy to break during refactors.
+    #[must_use]
     pub fn then(&self, other: &Self) -> Self {
         Self {
             q_left: other.q_left * self.q_left,
@@ -116,6 +125,7 @@ impl Rotation4D {
         }
     }
 
+    #[must_use]
     pub fn rotate_point(&self, p: [f32; 4]) -> [f32; 4] {
         let v_quat = quat_from_4d(p);
         let q_right_inv = self.q_right.inverse();
@@ -123,12 +133,14 @@ impl Rotation4D {
         quat_to_4d(&rotated)
     }
 
+    #[must_use]
     pub fn rotate_vector(&self, v: Vector4<f32>) -> Vector4<f32> {
         let arr = [v.x, v.y, v.z, v.w];
         let rotated = self.rotate_point(arr);
         Vector4::new(rotated[0], rotated[1], rotated[2], rotated[3])
     }
 
+    #[must_use]
     pub fn basis_vectors(&self) -> [[f32; 4]; 4] {
         [
             self.rotate_point([1.0, 0.0, 0.0, 0.0]),
@@ -138,6 +150,7 @@ impl Rotation4D {
         ]
     }
 
+    #[must_use]
     pub fn to_matrix(&self) -> Matrix4<f32> {
         let b = self.basis_vectors();
         Matrix4::from_columns(&[
@@ -148,18 +161,22 @@ impl Rotation4D {
         ])
     }
 
+    #[must_use]
     pub fn basis_x(&self) -> [f32; 4] {
         self.rotate_point([1.0, 0.0, 0.0, 0.0])
     }
 
+    #[must_use]
     pub fn basis_y(&self) -> [f32; 4] {
         self.rotate_point([0.0, 1.0, 0.0, 0.0])
     }
 
+    #[must_use]
     pub fn basis_z(&self) -> [f32; 4] {
         self.rotate_point([0.0, 0.0, 1.0, 0.0])
     }
 
+    #[must_use]
     pub fn basis_w(&self) -> [f32; 4] {
         self.rotate_point([0.0, 0.0, 0.0, 1.0])
     }
@@ -167,6 +184,7 @@ impl Rotation4D {
     /// Builds a mathematically exact simple rotation in one coordinate plane.
     ///
     /// The plane mapping is fixed to satisfy the current right-handed sign conventions and tests.
+    #[must_use]
     pub fn from_plane_angle(plane: RotationPlane, angle: f32) -> Self {
         let axis = plane_axis(plane);
         let unit_axis = nalgebra::Unit::new_normalize(axis);
@@ -188,6 +206,8 @@ impl Rotation4D {
     /// `XY -> XZ -> YZ -> XW -> YW -> ZW`.
     ///
     /// Order matters because SO(4) rotations do not generally commute.
+    #[must_use]
+    #[allow(clippy::similar_names)]
     pub fn from_6_plane_angles(xy: f32, xz: f32, yz: f32, xw: f32, yw: f32, zw: f32) -> Self {
         let q_xy = Self::from_plane_angle(RotationPlane::XY, xy);
         let q_xz = Self::from_plane_angle(RotationPlane::XZ, xz);
@@ -203,6 +223,7 @@ impl Rotation4D {
             .then(&q_zw)
     }
 
+    #[must_use]
     pub fn from_axis_angle_3d(axis: Vector3<f32>, angle: f32) -> Self {
         let axis_normalized = axis.normalize();
         let q =
@@ -213,6 +234,7 @@ impl Rotation4D {
         }
     }
 
+    #[must_use]
     pub const fn from_3d_rotation(q: &UnitQuaternion<f32>) -> Self {
         Self {
             q_left: *q,
@@ -220,11 +242,13 @@ impl Rotation4D {
         }
     }
 
+    #[must_use]
     pub fn basis_w_component(&self) -> [f32; 4] {
         let basis = self.basis_vectors();
         [basis[0][3], basis[1][3], basis[2][3], basis[3][3]]
     }
 
+    #[must_use]
     pub fn is_pure_3d(&self) -> bool {
         let w_components = self.basis_w_component();
         let eps = 1e-6;
@@ -608,6 +632,7 @@ mod tests {
     }
 }
 
+#[must_use]
 pub fn quaternion_to_yaw_pitch(q: &UnitQuaternion<f32>) -> (f32, f32) {
     let forward = q * Vector3::new(0.0, 0.0, 1.0);
     let yaw = forward.x.atan2(forward.z);
@@ -616,12 +641,14 @@ pub fn quaternion_to_yaw_pitch(q: &UnitQuaternion<f32>) -> (f32, f32) {
     (yaw, pitch)
 }
 
+#[must_use]
 pub fn quaternion_from_yaw_pitch(yaw: f32, pitch: f32) -> UnitQuaternion<f32> {
     let yaw_rot = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), yaw);
     let pitch_rot = UnitQuaternion::from_axis_angle(&Vector3::x_axis(), pitch);
     yaw_rot * pitch_rot
 }
 
+#[must_use]
 pub fn quaternion_to_yaw_pitch_4d(q: &UnitQuaternion<f32>) -> (f32, f32) {
     // For XW plane rotation: how much has X rotated toward W?
     // For YW plane rotation: how much has Y rotated toward W?
@@ -637,6 +664,7 @@ pub fn quaternion_to_yaw_pitch_4d(q: &UnitQuaternion<f32>) -> (f32, f32) {
     (yaw, pitch)
 }
 
+#[must_use]
 pub fn quaternion_from_yaw_pitch_4d(yaw: f32, pitch: f32) -> UnitQuaternion<f32> {
     // XW plane for yaw (horizontal), YW plane for pitch (vertical)
     let yaw_rot = Rotation4D::from_plane_angle(RotationPlane::XW, yaw);

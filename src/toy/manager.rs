@@ -10,6 +10,7 @@ pub struct ToyManager {
 }
 
 impl ToyManager {
+    #[must_use]
     pub fn new() -> Self {
         let toys = super::registry::create_all_toys();
         let active_toy_id = "polytopes".to_string();
@@ -20,17 +21,28 @@ impl ToyManager {
         }
     }
 
+    /// Returns the currently active toy.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the active toy ID does not correspond to a registered toy.
+    #[must_use]
     pub fn active_toy(&self) -> &dyn Toy {
         self.toys
             .get(&self.active_toy_id)
-            .map(|t| t.as_ref())
+            .map(std::convert::AsRef::as_ref)
             .expect("Active toy should always exist")
     }
 
+    /// Returns the currently active toy as a mutable reference.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the active toy ID does not correspond to a registered toy.
     pub fn active_toy_mut(&mut self) -> &mut dyn Toy {
         self.toys
             .get_mut(&self.active_toy_id)
-            .map(|t| t.as_mut())
+            .map(std::convert::AsMut::as_mut)
             .expect("Active toy should always exist")
     }
 
@@ -46,6 +58,7 @@ impl ToyManager {
         }
     }
 
+    #[must_use]
     pub fn toy_list(&self) -> Vec<(&str, &str)> {
         super::registry::toy_ids()
             .into_iter()
@@ -56,10 +69,12 @@ impl ToyManager {
             .collect()
     }
 
+    #[must_use]
     pub fn active_toy_id(&self) -> &str {
         &self.active_toy_id
     }
 
+    #[must_use]
     pub fn active_toy_name(&self) -> &str {
         self.active_toy().name()
     }

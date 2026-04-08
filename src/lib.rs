@@ -1,4 +1,4 @@
-//! FourDeers - Stereoscopic 4D Visualization
+//! `FourDeers` - Stereoscopic 4D Visualization
 
 pub mod app;
 pub mod camera;

@@ -109,6 +109,7 @@ pub struct DragState {
 }
 
 impl DragState {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }

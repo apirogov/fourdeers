@@ -16,6 +16,7 @@ use crate::render::{
     render_tap_zone_label, split_stereo_views, CompassFrameMode, FourDSettings, ProjectionMode,
     StereoSettings,
 };
+use crate::tetrahedron::{format_magnitude, magnitude_4d, TetrahedronGadget};
 use crate::toy::{CompassWaypoint, ToyManager};
 
 const DRAG_THRESHOLD: f32 = 10.0;
@@ -64,6 +65,7 @@ pub struct FourDeersApp {
 }
 
 impl FourDeersApp {
+    #[must_use]
     pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
         Self {
             toy_manager: ToyManager::new(),
@@ -139,6 +141,7 @@ impl FourDeersApp {
     }
 
     #[allow(clippy::cast_possible_truncation)]
+    #[allow(clippy::cast_possible_wrap)]
     fn cycle_compass_waypoint(&mut self, direction: i32) {
         let waypoints = self.toy_manager.active_toy().compass_waypoints();
         if waypoints.is_empty() {
@@ -192,7 +195,6 @@ impl FourDeersApp {
             }
         }
 
-        use crate::tetrahedron::{format_magnitude, magnitude_4d, TetrahedronGadget};
         let magnitude_label = format_magnitude(magnitude_4d(vector_4d));
         let gadget = TetrahedronGadget::from_4d_vector_with_quaternion(
             vector_4d,
@@ -368,7 +370,7 @@ impl FourDeersApp {
             if let Some(visualization_rect) = vis_rect {
                 if visualization_rect.contains(pos) {
                     let (_, right_rect) = split_stereo_views(visualization_rect);
-                    if let Some(action) = self.map_tap_action(right_rect, pos) {
+                    if let Some(action) = Self::map_tap_action(right_rect, pos) {
                         self.map_renderer.apply_action(action, MAP_HOLD_SPEED);
                     }
                 }
@@ -459,15 +461,15 @@ impl FourDeersApp {
 
             if self.settings.show_debug {
                 let options = ZoneDebugOptions::default();
-                let left_mode = if self.active_view != ActiveView::Main {
-                    ZoneMode::NineZones
-                } else {
+                let left_mode = if self.active_view == ActiveView::Main {
                     self.toy_manager.active_toy().zone_mode_for_view(true)
-                };
-                let right_mode = if self.active_view != ActiveView::Main {
-                    ZoneMode::NineZones
                 } else {
+                    ZoneMode::NineZones
+                };
+                let right_mode = if self.active_view == ActiveView::Main {
                     self.toy_manager.active_toy().zone_mode_for_view(false)
+                } else {
+                    ZoneMode::NineZones
                 };
                 render_zone_debug_overlay(&left_painter, left_rect, left_mode, &options);
                 render_zone_debug_overlay(&right_painter, right_rect, right_mode, &options);
@@ -722,7 +724,7 @@ impl FourDeersApp {
         }
     }
 
-    fn map_tap_action(&self, right_rect: egui::Rect, pos: egui::Pos2) -> Option<CameraAction> {
+    fn map_tap_action(right_rect: egui::Rect, pos: egui::Pos2) -> Option<CameraAction> {
         if !right_rect.contains(pos) {
             return None;
         }
@@ -847,7 +849,7 @@ impl FourDeersApp {
                 return;
             }
         }
-        if let Some(action) = self.map_tap_action(right_rect, pos) {
+        if let Some(action) = Self::map_tap_action(right_rect, pos) {
             self.map_renderer.apply_action(action, MAP_TAP_SPEED);
         }
     }

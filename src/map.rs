@@ -14,7 +14,7 @@ use eframe::egui;
 use nalgebra::{UnitQuaternion, Vector3, Vector4};
 
 use crate::camera::Camera;
-use crate::colors::*;
+use crate::colors::{ARROW_FORWARD, ARROW_GLOW, ARROW_PRIMARY};
 use crate::polytopes::{create_polytope, PolytopeType};
 use crate::render::{
     draw_background, draw_center_divider, render_stereo_views, split_stereo_views,
@@ -49,7 +49,7 @@ const MAP_TIP_FONT_SIZE: f32 = 9.0;
 const MAP_TIP_LABEL_OFFSET_Y: f32 = -12.0;
 const MAP_DISTANCE_FONT_SIZE: f32 = 8.0;
 const MAP_DISTANCE_LABEL_OFFSET_Y: f32 = 12.0;
-/// Stroke color for the visibility cone overlay — darker than SLICE_GREEN (80,200,80) so the
+/// Stroke color for the visibility cone overlay — darker than `SLICE_GREEN` (80,200,80) so the
 /// cone is visually distinct from the cross-section outline.
 const VISIBILITY_DARK_GREEN: egui::Color32 = egui::Color32::from_rgb(15, 70, 15);
 
@@ -148,6 +148,7 @@ impl Default for MapRenderer {
     }
 }
 impl MapRenderer {
+    #[must_use]
     pub fn new() -> Self {
         let (vertices, indices) = create_polytope(PolytopeType::EightCell);
         Self {
@@ -161,12 +162,14 @@ impl MapRenderer {
             waypoint_tap_zones: Vec::new(),
         }
     }
+    #[must_use]
     pub const fn camera(&self) -> &Camera {
         &self.camera
     }
     pub const fn toggle_labels(&mut self) {
         self.labels_visible = !self.labels_visible;
     }
+    #[must_use]
     pub const fn labels_visible(&self) -> bool {
         self.labels_visible
     }
@@ -285,6 +288,7 @@ impl MapRenderer {
             self.render_edge_labels(painter, projector, &transformed);
         }
     }
+    #[allow(clippy::cast_precision_loss)]
     fn render_vertex_labels(
         &self,
         painter: &egui::Painter,
@@ -625,6 +629,7 @@ impl MapRenderer {
                 .push((left_p.screen_pos, right_p.screen_pos, tap_radius, idx));
         }
     }
+    #[must_use]
     pub fn find_tapped_waypoint(&self, tap_pos: egui::Pos2) -> Option<usize> {
         let mut best: Option<(usize, f32)> = None;
         for &(left_pos, right_pos, radius, wp_index) in &self.waypoint_tap_zones {
@@ -781,7 +786,7 @@ fn render_tetrahedron_with_projector(params: &TetraRenderParams) {
         }
     }
     if labels_visible {
-        let component_mags: [f32; 4] = gadget.component_values.map(|v| v.abs());
+        let component_mags: [f32; 4] = gadget.component_values.map(f32::abs);
         let max_mag = component_mags.iter().copied().fold(0.0f32, f32::max);
         for (i, vertex) in gadget.vertices.iter().enumerate() {
             let component = gadget.component_values[i];
@@ -928,6 +933,8 @@ fn build_cross_section_polyhedron(
     }
 }
 
+#[allow(clippy::float_cmp)]
+#[allow(clippy::similar_names)]
 fn convex_hull_2d_indexed(points: &[(f32, f32)]) -> Vec<usize> {
     let n = points.len();
     if n < 3 {
@@ -1146,6 +1153,7 @@ fn compute_frustum_planes(
     }
     planes
 }
+#[must_use]
 pub fn compute_bounds(
     scene_camera: &Camera,
     waypoints: &[CompassWaypoint],
@@ -1178,6 +1186,7 @@ pub fn compute_bounds(
     }
     (min, max)
 }
+#[must_use]
 pub fn normalize_to_tesseract(
     pos: Vector4<f32>,
     bounds: &(Vector4<f32>, Vector4<f32>),
@@ -1233,10 +1242,10 @@ fn clip_segment_to_screen(
         }
         let t = (near_z - s0.z) / dz;
         let clipped = s0 + (s1 - s0) * t;
-        if !in0 {
-            s0 = clipped;
-        } else {
+        if in0 {
             s1 = clipped;
+        } else {
+            s0 = clipped;
         }
     }
     let sp0 = projector.project_3d(s0.x, s0.y, s0.z)?;

@@ -21,6 +21,7 @@ pub struct Vertex4D {
 }
 
 impl Vertex4D {
+    #[must_use]
     pub const fn new(x: f32, y: f32, z: f32, w: f32) -> Self {
         Self {
             position: [x, y, z, w],
@@ -53,6 +54,7 @@ impl std::fmt::Display for PolytopeType {
 }
 
 impl PolytopeType {
+    #[must_use]
     pub const fn short_name(&self) -> &'static str {
         match self {
             PolytopeType::FiveCell => "5-cell",
@@ -64,6 +66,7 @@ impl PolytopeType {
         }
     }
 
+    #[must_use]
     pub const fn vertex_count(&self) -> usize {
         match self {
             PolytopeType::FiveCell => 5,
@@ -75,6 +78,7 @@ impl PolytopeType {
         }
     }
 
+    #[must_use]
     pub const fn edge_count(&self) -> usize {
         match self {
             PolytopeType::FiveCell => 10,
@@ -86,6 +90,7 @@ impl PolytopeType {
         }
     }
 
+    #[must_use]
     pub const fn all() -> [PolytopeType; 6] {
         [
             PolytopeType::FiveCell,
@@ -98,6 +103,7 @@ impl PolytopeType {
     }
 }
 
+#[must_use]
 pub fn create_polytope(kind: PolytopeType) -> (Vec<Vertex4D>, Vec<u16>) {
     match kind {
         PolytopeType::FiveCell => create_5_cell(),

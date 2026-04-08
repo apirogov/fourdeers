@@ -7,6 +7,7 @@ use std::collections::HashMap;
 
 use super::Toy;
 
+#[must_use]
 pub fn create_all_toys() -> HashMap<String, Box<dyn Toy>> {
     let mut toys = HashMap::new();
 
@@ -25,10 +26,12 @@ pub fn create_all_toys() -> HashMap<String, Box<dyn Toy>> {
     toys
 }
 
+#[must_use]
 pub fn toy_ids() -> Vec<&'static str> {
     vec!["polytopes", "debug_scratchpad"]
 }
 
+#[must_use]
 pub fn toy_name_by_id(id: &str) -> Option<&'static str> {
     match id {
         "polytopes" => Some("Polytopes"),

@@ -27,30 +27,36 @@ impl Default for ZoneDebugOptions {
 }
 
 impl ZoneDebugOptions {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
+    #[must_use]
     pub const fn show_boundaries(mut self, show: bool) -> Self {
         self.show_boundaries = show;
         self
     }
 
+    #[must_use]
     pub const fn show_labels(mut self, show: bool) -> Self {
         self.show_labels = show;
         self
     }
 
+    #[must_use]
     pub const fn boundary_color(mut self, color: egui::Color32) -> Self {
         self.boundary_color = color;
         self
     }
 
+    #[must_use]
     pub const fn label_color(mut self, color: egui::Color32) -> Self {
         self.label_color = color;
         self
     }
 
+    #[must_use]
     pub const fn label_font_size(mut self, size: f32) -> Self {
         self.label_font_size = size;
         self

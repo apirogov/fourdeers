@@ -8,6 +8,7 @@ use crate::camera::CameraAction;
 ///
 /// Cardinal zones map to directional moves, diagonal zones to forward/backward/kata/ana.
 /// Returns `None` for `Center` and other non-movement zones.
+#[must_use]
 pub const fn zone_to_movement_action(zone: Zone) -> Option<CameraAction> {
     match zone {
         Zone::North => Some(CameraAction::MoveUp),
@@ -18,7 +19,7 @@ pub const fn zone_to_movement_action(zone: Zone) -> Option<CameraAction> {
         Zone::SouthWest => Some(CameraAction::MoveBackward),
         Zone::NorthWest => Some(CameraAction::MoveKata),
         Zone::SouthEast => Some(CameraAction::MoveAna),
-        _ => None,
+        Zone::Center => None,
     }
 }
 
@@ -64,11 +65,13 @@ impl std::fmt::Display for Zone {
 
 impl Zone {
     /// Returns true for N/E/S/W (cardinal directions), false for diagonals and center.
+    #[must_use]
     pub const fn is_cardinal(self) -> bool {
         matches!(self, Zone::North | Zone::East | Zone::South | Zone::West)
     }
 
     /// All 9 zones in grid order (NW, N, NE, W, C, E, SW, S, SE).
+    #[must_use]
     pub const fn all() -> [Zone; 9] {
         [
             Zone::NorthWest,
@@ -84,6 +87,7 @@ impl Zone {
     }
 
     /// The 4 cardinal zones: N, E, S, W.
+    #[must_use]
     pub const fn cardinals() -> [Zone; 4] {
         [Zone::North, Zone::East, Zone::South, Zone::West]
     }
@@ -114,6 +118,7 @@ pub struct TetraId {
     pub zone: Zone,
 }
 
+#[must_use]
 pub fn analyze_tap_in_stereo_view_with_modes(
     visualization_rect: egui::Rect,
     tap_pos: egui::Pos2,
@@ -160,6 +165,7 @@ pub fn analyze_tap_in_stereo_view_with_modes(
     })
 }
 
+#[must_use]
 pub fn get_zone_from_rect(rect: egui::Rect, point: egui::Pos2, mode: ZoneMode) -> Option<Zone> {
     if !rect.contains(point) {
         return None;
@@ -176,16 +182,16 @@ pub fn get_zone_from_rect(rect: egui::Rect, point: egui::Pos2, mode: ZoneMode) -
     let norm_y = (point.y - rect.min.y) / height;
 
     match mode {
-        ZoneMode::FourZones => get_zone_4way(norm_x, norm_y),
-        ZoneMode::NineZones => get_zone_9way(norm_x, norm_y),
+        ZoneMode::FourZones => Some(get_zone_4way(norm_x, norm_y)),
+        ZoneMode::NineZones => Some(get_zone_9way(norm_x, norm_y)),
     }
 }
 
-fn get_zone_4way(norm_x: f32, norm_y: f32) -> Option<Zone> {
+fn get_zone_4way(norm_x: f32, norm_y: f32) -> Zone {
     let above_nw_se = norm_y < 1.0 - norm_x;
     let above_ne_sw = norm_y < norm_x;
 
-    let zone = if above_nw_se && above_ne_sw {
+    if above_nw_se && above_ne_sw {
         Zone::North
     } else if !above_nw_se && !above_ne_sw {
         Zone::South
@@ -193,12 +199,10 @@ fn get_zone_4way(norm_x: f32, norm_y: f32) -> Option<Zone> {
         Zone::West
     } else {
         Zone::East
-    };
-
-    Some(zone)
+    }
 }
 
-fn get_zone_9way(norm_x: f32, norm_y: f32) -> Option<Zone> {
+fn get_zone_9way(norm_x: f32, norm_y: f32) -> Zone {
     let third_x = 1.0 / 3.0;
     let third_y = 1.0 / 3.0;
 
@@ -218,7 +222,7 @@ fn get_zone_9way(norm_x: f32, norm_y: f32) -> Option<Zone> {
         2
     };
 
-    let zone = match (row, col) {
+    match (row, col) {
         (0, 0) => Zone::NorthWest,
         (0, 1) => Zone::North,
         (0, 2) => Zone::NorthEast,
@@ -229,9 +233,7 @@ fn get_zone_9way(norm_x: f32, norm_y: f32) -> Option<Zone> {
         (2, 1) => Zone::South,
         (2, 2) => Zone::SouthEast,
         _ => unreachable!(),
-    };
-
-    Some(zone)
+    }
 }
 
 #[cfg(test)]

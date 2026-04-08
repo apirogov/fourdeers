@@ -12,6 +12,7 @@ use crate::input::Zone;
 /// Square root of 3 - used to convert between scale and vertex coordinates
 const SQRT_3: f32 = 1.732_050_8;
 
+#[must_use]
 pub fn magnitude_4d(v: Vector4<f32>) -> f32 {
     (v.x.powi(2) + v.y.powi(2) + v.z.powi(2) + v.w.powi(2)).sqrt()
 }
@@ -52,6 +53,7 @@ pub struct TetrahedronLayout {
 }
 
 /// Compute tetrahedron layout based on view rect dimensions
+#[must_use]
 pub fn get_tetrahedron_layout(view_rect: egui::Rect) -> TetrahedronLayout {
     let longer_side = view_rect.width().max(view_rect.height());
     TetrahedronLayout {
@@ -69,32 +71,39 @@ pub struct Pos3D {
 }
 
 impl Pos3D {
+    #[must_use]
     pub const fn new(x: f32, y: f32, z: f32) -> Self {
         Self { x, y, z }
     }
 
+    #[must_use]
     pub const fn from_array(arr: [f32; 3]) -> Self {
         Self::new(arr[0], arr[1], arr[2])
     }
 
+    #[must_use]
     pub const fn to_array(&self) -> [f32; 3] {
         [self.x, self.y, self.z]
     }
 
+    #[must_use]
     pub const fn to_vector3(&self) -> Vector3<f32> {
         Vector3::new(self.x, self.y, self.z)
     }
 
+    #[must_use]
     pub fn from_vector3(v: &Vector3<f32>) -> Self {
         Self::new(v.x, v.y, v.z)
     }
 
+    #[must_use]
     pub fn rotate_by_quaternion(&self, rotation: &UnitQuaternion<f32>) -> Self {
         let v = self.to_vector3();
         let rotated = rotation.transform_vector(&v);
         Self::from_vector3(&rotated)
     }
 
+    #[must_use]
     pub fn rotate_xy(&self, angle: f32) -> Self {
         let cos_a = angle.cos();
         let sin_a = angle.sin();
@@ -105,6 +114,7 @@ impl Pos3D {
         )
     }
 
+    #[must_use]
     pub fn rotate_xz(&self, angle: f32) -> Self {
         let cos_a = angle.cos();
         let sin_a = angle.sin();
@@ -115,6 +125,7 @@ impl Pos3D {
         )
     }
 
+    #[must_use]
     pub fn normalize(&self) -> Self {
         let len = (self.x * self.x + self.y * self.y + self.z * self.z).sqrt();
         if len < 1e-6 {
@@ -162,14 +173,17 @@ pub struct TetrahedronGadget {
 }
 
 impl TetrahedronGadget {
+    #[must_use]
     pub fn from_4d_vector(vector_4d: Vector4<f32>) -> Self {
         Self::from_4d_vector_with_quaternion(vector_4d, UnitQuaternion::identity(), 1.0)
     }
 
+    #[must_use]
     pub fn from_4d_vector_with_scale(vector_4d: Vector4<f32>, scale: f32) -> Self {
         Self::from_4d_vector_with_quaternion(vector_4d, UnitQuaternion::identity(), scale)
     }
 
+    #[must_use]
     pub fn from_4d_vector_with_quaternion(
         vector_4d: Vector4<f32>,
         rotation: UnitQuaternion<f32>,
@@ -196,16 +210,19 @@ impl TetrahedronGadget {
         }
     }
 
+    #[must_use]
     pub fn with_tip_label(mut self, label: impl Into<String>) -> Self {
         self.tip_label = Some(label.into());
         self
     }
 
+    #[must_use]
     pub fn with_base_label(mut self, label: impl Into<String>) -> Self {
         self.base_label = Some(label.into());
         self
     }
 
+    #[must_use]
     pub fn with_auto_magnitude_label(mut self) -> Self {
         if (self.vector_magnitude - 1.0).abs() > 0.01 {
             self.tip_label = Some(format_magnitude(self.vector_magnitude));
@@ -213,6 +230,7 @@ impl TetrahedronGadget {
         self
     }
 
+    #[must_use]
     pub fn for_zone(
         vector_4d: Vector4<f32>,
         zone: Zone,
@@ -227,7 +245,7 @@ impl TetrahedronGadget {
     fn compute_base_rotation_for_zone(vector_4d: &Vector4<f32>, zone: Zone) -> UnitQuaternion<f32> {
         let arrow_dir = compute_weighted_direction_3d(*vector_4d);
         let target = match zone {
-            Zone::North => Vector3::new(0.0, 1.0, 0.0),
+            Zone::North | Zone::Center => Vector3::new(0.0, 1.0, 0.0),
             Zone::South => Vector3::new(0.0, -1.0, 0.0),
             Zone::East => Vector3::new(1.0, 0.0, 0.0),
             Zone::West => Vector3::new(-1.0, 0.0, 0.0),
@@ -235,7 +253,6 @@ impl TetrahedronGadget {
             Zone::NorthWest => Vector3::new(-1.0, 1.0, 0.0).normalize(),
             Zone::SouthEast => Vector3::new(1.0, -1.0, 0.0).normalize(),
             Zone::SouthWest => Vector3::new(-1.0, -1.0, 0.0).normalize(),
-            Zone::Center => Vector3::new(0.0, 1.0, 0.0),
         };
 
         let current = arrow_dir.to_vector3();
@@ -374,26 +391,32 @@ impl TetrahedronGadget {
         }
     }
 
+    #[must_use]
     pub fn get_vertex_3d(&self, vertex_index: usize) -> Option<&Pos3D> {
         self.vertices.get(vertex_index).map(|v| &v.position)
     }
 
+    #[must_use]
     pub fn get_vertex_normal(&self, vertex_index: usize) -> Option<&Pos3D> {
         self.vertices.get(vertex_index).map(|v| &v.normal)
     }
 
+    #[must_use]
     pub const fn arrow_position(&self) -> &Pos3D {
         &self.vector_arrow.end_position
     }
 
+    #[must_use]
     pub const fn arrow_head_size(&self) -> f32 {
         self.vector_arrow.arrow_head_size
     }
 
+    #[must_use]
     pub const fn tip_label(&self) -> Option<&String> {
         self.tip_label.as_ref()
     }
 
+    #[must_use]
     pub const fn base_label(&self) -> Option<&String> {
         self.base_label.as_ref()
     }
@@ -426,6 +449,7 @@ fn compute_weighted_direction_3d(vector_4d: Vector4<f32>) -> Pos3D {
     Pos3D::new(pos_x, pos_y, pos_z)
 }
 
+#[must_use]
 pub fn normalize_4d_vector(v: Vector4<f32>) -> Vector4<f32> {
     let norm = magnitude_4d(v);
     if norm < 1e-6 {
@@ -435,6 +459,7 @@ pub fn normalize_4d_vector(v: Vector4<f32>) -> Vector4<f32> {
     }
 }
 
+#[must_use]
 pub fn compute_weighted_direction(vector_4d: Vector4<f32>) -> Pos3D {
     let normalized = normalize_4d_vector(vector_4d);
     let gadget = TetrahedronGadget::from_4d_vector(normalized);
@@ -450,11 +475,13 @@ pub struct ComponentColor {
 }
 
 impl ComponentColor {
+    #[must_use]
     pub fn to_egui_color(self) -> egui::Color32 {
         egui::Color32::from_rgba_unmultiplied(self.r, self.g, self.b, self.a)
     }
 }
 
+#[must_use]
 pub fn compute_component_color(component: f32, max_abs: f32) -> ComponentColor {
     const EPSILON: f32 = 1e-6;
 
@@ -484,6 +511,7 @@ pub fn compute_component_color(component: f32, max_abs: f32) -> ComponentColor {
     }
 }
 
+#[must_use]
 pub fn format_component_value(value: f32) -> String {
     if value.abs() < 1e-6 {
         "0.00".to_string()
@@ -496,6 +524,7 @@ pub fn format_component_value(value: f32) -> String {
     }
 }
 
+#[must_use]
 pub fn format_magnitude(magnitude: f32) -> String {
     format_component_value(magnitude)
 }
