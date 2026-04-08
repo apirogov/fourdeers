@@ -69,19 +69,19 @@ pub struct Pos3D {
 }
 
 impl Pos3D {
-    pub fn new(x: f32, y: f32, z: f32) -> Self {
+    pub const fn new(x: f32, y: f32, z: f32) -> Self {
         Self { x, y, z }
     }
 
-    pub fn from_array(arr: [f32; 3]) -> Self {
+    pub const fn from_array(arr: [f32; 3]) -> Self {
         Self::new(arr[0], arr[1], arr[2])
     }
 
-    pub fn to_array(&self) -> [f32; 3] {
+    pub const fn to_array(&self) -> [f32; 3] {
         [self.x, self.y, self.z]
     }
 
-    pub fn to_vector3(&self) -> Vector3<f32> {
+    pub const fn to_vector3(&self) -> Vector3<f32> {
         Vector3::new(self.x, self.y, self.z)
     }
 
@@ -382,19 +382,19 @@ impl TetrahedronGadget {
         self.vertices.get(vertex_index).map(|v| &v.normal)
     }
 
-    pub fn arrow_position(&self) -> &Pos3D {
+    pub const fn arrow_position(&self) -> &Pos3D {
         &self.vector_arrow.end_position
     }
 
-    pub fn arrow_head_size(&self) -> f32 {
+    pub const fn arrow_head_size(&self) -> f32 {
         self.vector_arrow.arrow_head_size
     }
 
-    pub fn tip_label(&self) -> Option<&String> {
+    pub const fn tip_label(&self) -> Option<&String> {
         self.tip_label.as_ref()
     }
 
-    pub fn base_label(&self) -> Option<&String> {
+    pub const fn base_label(&self) -> Option<&String> {
         self.base_label.as_ref()
     }
 }
@@ -471,15 +471,15 @@ pub fn compute_component_color(component: f32, max_abs: f32) -> ComponentColor {
 
     if component > 0.0 {
         let intensity = relative_strength;
-        let r = (255.0 * (1.0 - intensity * 0.8)) as u8;
-        let g = (255.0 * (1.0 - intensity * 0.5)) as u8;
+        let r = crate::colors::to_u8(255.0 * (1.0 - intensity * 0.8));
+        let g = crate::colors::to_u8(255.0 * (1.0 - intensity * 0.5));
         let b = 255;
         ComponentColor { r, g, b, a: 230 }
     } else {
         let intensity = relative_strength;
         let r = 255;
-        let g = (255.0 * (1.0 - intensity * 0.6)) as u8;
-        let b = (255.0 * (1.0 - intensity * 0.6)) as u8;
+        let g = crate::colors::to_u8(255.0 * (1.0 - intensity * 0.6));
+        let b = crate::colors::to_u8(255.0 * (1.0 - intensity * 0.6));
         ComponentColor { r, g, b, a: 230 }
     }
 }
@@ -488,11 +488,11 @@ pub fn format_component_value(value: f32) -> String {
     if value.abs() < 1e-6 {
         "0.00".to_string()
     } else if value.abs() >= 100.0 {
-        format!("{:.0}", value)
+        format!("{value:.0}")
     } else if value.abs() >= 10.0 {
-        format!("{:.1}", value)
+        format!("{value:.1}")
     } else {
-        format!("{:.2}", value)
+        format!("{value:.2}")
     }
 }
 

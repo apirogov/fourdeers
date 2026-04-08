@@ -19,6 +19,6 @@ fn main() {
         .unwrap_or_else(|| "unknown".to_string());
 
     // Set cargo env variables
-    println!("cargo:rustc-env=GIT_COMMIT_HASH={}", commit_hash);
-    println!("cargo:rustc-env=BUILD_TIME={}", build_time);
+    println!("cargo:rustc-env=GIT_COMMIT_HASH={commit_hash}");
+    println!("cargo:rustc-env=BUILD_TIME={build_time}");
 }

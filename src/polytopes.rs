@@ -21,7 +21,7 @@ pub struct Vertex4D {
 }
 
 impl Vertex4D {
-    pub fn new(x: f32, y: f32, z: f32, w: f32) -> Self {
+    pub const fn new(x: f32, y: f32, z: f32, w: f32) -> Self {
         Self {
             position: [x, y, z, w],
         }
@@ -53,7 +53,7 @@ impl std::fmt::Display for PolytopeType {
 }
 
 impl PolytopeType {
-    pub fn name(&self) -> &'static str {
+    pub const fn name(&self) -> &'static str {
         match self {
             PolytopeType::FiveCell => "5-cell (Pentachoron)",
             PolytopeType::EightCell => "8-cell (Tesseract)",
@@ -64,7 +64,7 @@ impl PolytopeType {
         }
     }
 
-    pub fn short_name(&self) -> &'static str {
+    pub const fn short_name(&self) -> &'static str {
         match self {
             PolytopeType::FiveCell => "5-cell",
             PolytopeType::EightCell => "tesseract",
@@ -75,7 +75,7 @@ impl PolytopeType {
         }
     }
 
-    pub fn vertex_count(&self) -> usize {
+    pub const fn vertex_count(&self) -> usize {
         match self {
             PolytopeType::FiveCell => 5,
             PolytopeType::EightCell => 16,
@@ -86,7 +86,7 @@ impl PolytopeType {
         }
     }
 
-    pub fn edge_count(&self) -> usize {
+    pub const fn edge_count(&self) -> usize {
         match self {
             PolytopeType::FiveCell => 10,
             PolytopeType::EightCell => 32,
@@ -97,7 +97,7 @@ impl PolytopeType {
         }
     }
 
-    pub fn all() -> [PolytopeType; 6] {
+    pub const fn all() -> [PolytopeType; 6] {
         [
             PolytopeType::FiveCell,
             PolytopeType::EightCell,

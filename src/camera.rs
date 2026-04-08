@@ -157,12 +157,12 @@ impl Camera {
     }
 
     /// Get yaw angle (rotation around Y axis) in radians - for q_left
-    pub fn yaw_l(&self) -> f32 {
+    pub const fn yaw_l(&self) -> f32 {
         self.yaw_l
     }
 
     /// Get pitch angle (rotation around X axis) in radians - for q_left
-    pub fn pitch_l(&self) -> f32 {
+    pub const fn pitch_l(&self) -> f32 {
         self.pitch_l
     }
 
@@ -194,12 +194,12 @@ impl Camera {
     }
 
     /// Get yaw angle for q_right (4D rotation in XW plane)
-    pub fn yaw_r(&self) -> f32 {
+    pub const fn yaw_r(&self) -> f32 {
         self.yaw_r
     }
 
     /// Get pitch angle for q_right (4D rotation in YW plane)
-    pub fn pitch_r(&self) -> f32 {
+    pub const fn pitch_r(&self) -> f32 {
         self.pitch_r
     }
 
@@ -391,7 +391,7 @@ fn format_4d_vector(v: [f32; 4]) -> String {
         } else if (val + 1.0).abs() < 0.01 {
             "-".to_string()
         } else {
-            format!("{:+.2}", val)
+            format!("{val:+.2}")
         }
     }
     let parts: Vec<String> = [
@@ -402,7 +402,7 @@ fn format_4d_vector(v: [f32; 4]) -> String {
     ]
     .iter()
     .filter(|(comp, _)| !comp.is_empty())
-    .map(|(comp, axis)| format!("{}{}", comp, axis))
+    .map(|(comp, axis)| format!("{comp}{axis}"))
     .collect();
     if parts.is_empty() {
         "0".to_string()

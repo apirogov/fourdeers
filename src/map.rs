@@ -50,7 +50,7 @@ struct VertexDedup {
 }
 
 impl VertexDedup {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self {
             vertices: Vec::new(),
         }
@@ -160,13 +160,13 @@ impl MapRenderer {
             waypoint_tap_zones: Vec::new(),
         }
     }
-    pub fn camera(&self) -> &Camera {
+    pub const fn camera(&self) -> &Camera {
         &self.camera
     }
-    pub fn toggle_labels(&mut self) {
+    pub const fn toggle_labels(&mut self) {
         self.labels_visible = !self.labels_visible;
     }
-    pub fn labels_visible(&self) -> bool {
+    pub const fn labels_visible(&self) -> bool {
         self.labels_visible
     }
     pub fn apply_action(&mut self, action: crate::camera::CameraAction, speed: f32) {
@@ -532,7 +532,7 @@ impl MapRenderer {
                     edge_color.r(),
                     edge_color.g(),
                     edge_color.b(),
-                    (alpha * 200.0) as u8,
+                    crate::colors::to_u8(alpha * 200.0),
                 );
                 painter.circle_filled(center_screen.screen_pos, 3.0, dot_color);
             }
@@ -574,7 +574,7 @@ impl MapRenderer {
             distance_label: None,
             labels_visible: self.labels_visible,
         });
-        let dot_alpha = (alpha * 255.0) as u8;
+        let dot_alpha = crate::colors::to_u8(alpha * 255.0);
         painter.circle_filled(
             center_screen.screen_pos,
             4.0,
@@ -648,16 +648,16 @@ impl MapRenderer {
 
 fn lerp_color(a: egui::Color32, b: egui::Color32, t: f32) -> egui::Color32 {
     let t = t.clamp(0.0, 1.0);
-    let ar = a.r() as f32;
-    let ag = a.g() as f32;
-    let ab = a.b() as f32;
-    let br = b.r() as f32;
-    let bg = b.g() as f32;
-    let bb = b.b() as f32;
+    let ar = f32::from(a.r());
+    let ag = f32::from(a.g());
+    let ab = f32::from(a.b());
+    let br = f32::from(b.r());
+    let bg = f32::from(b.g());
+    let bb = f32::from(b.b());
     egui::Color32::from_rgb(
-        (ar + (br - ar) * t) as u8,
-        (ag + (bg - ag) * t) as u8,
-        (ab + (bb - ab) * t) as u8,
+        crate::colors::to_u8(ar + (br - ar) * t),
+        crate::colors::to_u8(ag + (bg - ag) * t),
+        crate::colors::to_u8(ab + (bb - ab) * t),
     )
 }
 
@@ -717,7 +717,7 @@ fn draw_direction_arrow(
         let arrow_start = origin_p.screen_pos;
         let arrow_vec = arrow_end - arrow_start;
         if arrow_vec.length() > 2.0 {
-            let a = (alpha * 255.0) as u8;
+            let a = crate::colors::to_u8(alpha * 255.0);
             let arrow_color =
                 egui::Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), a);
             painter.line_segment(
@@ -750,7 +750,7 @@ struct TetraRenderParams<'a> {
     labels_visible: bool,
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 fn render_tetrahedron_with_projector(params: &TetraRenderParams) {
     let painter = params.painter;
     let gadget = params.gadget;
@@ -764,7 +764,7 @@ fn render_tetrahedron_with_projector(params: &TetraRenderParams) {
         edge_color.r(),
         edge_color.g(),
         edge_color.b(),
-        (alpha * 200.0) as u8,
+        crate::colors::to_u8(alpha * 200.0),
     );
     for edge in &gadget.edges {
         let v0 = gadget
@@ -789,7 +789,7 @@ fn render_tetrahedron_with_projector(params: &TetraRenderParams) {
     }
     if labels_visible {
         let component_mags: [f32; 4] = gadget.component_values.map(|v| v.abs());
-        let max_mag = component_mags.iter().cloned().fold(0.0f32, f32::max);
+        let max_mag = component_mags.iter().copied().fold(0.0f32, f32::max);
         for (i, vertex) in gadget.vertices.iter().enumerate() {
             let component = gadget.component_values[i];
             let color = compute_component_color(component, max_mag);
@@ -808,14 +808,14 @@ fn render_tetrahedron_with_projector(params: &TetraRenderParams) {
                         &vertex.label,
                     );
                     let font_id = egui::FontId::monospace(10.0);
-                    let a = (alpha * 230.0) as u8;
+                    let a = crate::colors::to_u8(alpha * 230.0);
                     let text_color =
                         egui::Color32::from_rgba_unmultiplied(color.r, color.g, color.b, a);
                     let outline = egui::Color32::from_rgba_unmultiplied(
                         edge_color.r(),
                         edge_color.g(),
                         edge_color.b(),
-                        (alpha * 120.0) as u8,
+                        crate::colors::to_u8(alpha * 120.0),
                     );
                     crate::render::render_outlined_text(
                         painter,
@@ -846,7 +846,7 @@ fn render_tetrahedron_with_projector(params: &TetraRenderParams) {
     let origin_screen = projector.project_3d(center_3d.x, center_3d.y, center_3d.z);
     if let Some(ref label) = gadget.tip_label {
         if let Some(tip_p) = arrow_screen {
-            let a = (alpha * 230.0) as u8;
+            let a = crate::colors::to_u8(alpha * 230.0);
             painter.text(
                 tip_p.screen_pos + egui::Vec2::new(0.0, -12.0),
                 egui::Align2::CENTER_BOTTOM,
@@ -858,7 +858,7 @@ fn render_tetrahedron_with_projector(params: &TetraRenderParams) {
     }
     if let Some(dist) = params.distance_label {
         if let Some(base_p) = origin_screen {
-            let a = (alpha * 200.0) as u8;
+            let a = crate::colors::to_u8(alpha * 200.0);
             painter.text(
                 base_p.screen_pos + egui::Vec2::new(0.0, 12.0),
                 egui::Align2::CENTER_TOP,
@@ -1215,7 +1215,7 @@ fn direction_to_tesseract(
     }
     result
 }
-fn vertex_to_4d(v: &crate::polytopes::Vertex4D) -> Vector4<f32> {
+const fn vertex_to_4d(v: &crate::polytopes::Vertex4D) -> Vector4<f32> {
     Vector4::new(v.position[0], v.position[1], v.position[2], v.position[3])
 }
 fn clip_segment_to_screen(

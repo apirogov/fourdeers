@@ -204,14 +204,14 @@ pub enum CompassFrameMode {
 }
 
 impl CompassFrameMode {
-    pub fn other(self) -> Self {
+    pub const fn other(self) -> Self {
         match self {
             Self::World => Self::Camera,
             Self::Camera => Self::World,
         }
     }
 
-    pub fn display_label(self) -> &'static str {
+    pub const fn display_label(self) -> &'static str {
         match self {
             Self::World => "Frame: World",
             Self::Camera => "Frame: Camera",
@@ -259,17 +259,17 @@ impl StereoSettings {
         Self::default()
     }
 
-    pub fn with_eye_separation(mut self, separation: f32) -> Self {
+    pub const fn with_eye_separation(mut self, separation: f32) -> Self {
         self.eye_separation = separation;
         self
     }
 
-    pub fn with_projection_distance(mut self, distance: f32) -> Self {
+    pub const fn with_projection_distance(mut self, distance: f32) -> Self {
         self.projection_distance = distance;
         self
     }
 
-    pub fn with_projection_mode(mut self, mode: ProjectionMode) -> Self {
+    pub const fn with_projection_mode(mut self, mode: ProjectionMode) -> Self {
         self.projection_mode = mode;
         self
     }
@@ -282,15 +282,15 @@ impl StereoSettings {
 pub fn w_to_color(normalized_w: f32, alpha: u8, intensity: f32) -> egui::Color32 {
     if normalized_w >= 0.0 {
         let t = normalized_w;
-        let r = (255.0 * (1.0 - t)) as u8;
-        let g = (255.0 * (1.0 - t * intensity)) as u8;
-        let b = (255.0 * (1.0 - t) + 255.0 * t) as u8;
+        let r = crate::colors::to_u8(255.0 * (1.0 - t));
+        let g = crate::colors::to_u8(255.0 * (1.0 - t * intensity));
+        let b = crate::colors::to_u8(255.0 * (1.0 - t) + 255.0 * t);
         egui::Color32::from_rgba_unmultiplied(r, g, b, alpha)
     } else {
         let t = -normalized_w;
         let r = 255u8;
-        let g = (255.0 * (1.0 - t * intensity)) as u8;
-        let b = (255.0 * (1.0 - t)) as u8;
+        let g = crate::colors::to_u8(255.0 * (1.0 - t * intensity));
+        let b = crate::colors::to_u8(255.0 * (1.0 - t));
         egui::Color32::from_rgba_unmultiplied(r, g, b, alpha)
     }
 }
@@ -311,7 +311,7 @@ pub struct ProjectedPoint {
 }
 
 impl StereoProjector {
-    pub fn new(
+    pub const fn new(
         center: egui::Pos2,
         scale: f32,
         projection_distance: f32,
@@ -343,15 +343,15 @@ impl StereoProjector {
         }
     }
 
-    pub fn center(&self) -> egui::Pos2 {
+    pub const fn center(&self) -> egui::Pos2 {
         self.center
     }
 
-    pub fn scale(&self) -> f32 {
+    pub const fn scale(&self) -> f32 {
         self.scale
     }
 
-    pub fn with_center(&self, center: egui::Pos2) -> Self {
+    pub const fn with_center(&self, center: egui::Pos2) -> Self {
         Self {
             center,
             scale: self.scale,
@@ -361,7 +361,7 @@ impl StereoProjector {
         }
     }
 
-    pub fn with_scale(&self, scale: f32) -> Self {
+    pub const fn with_scale(&self, scale: f32) -> Self {
         Self {
             center: self.center,
             scale,
@@ -659,7 +659,7 @@ impl<'a> TesseractRenderContext<'a> {
 
         for (symbol, vector, action, x, y) in labels {
             let pos = egui::Pos2::new(x, y);
-            let text = format!("{}\n{}\n{}", symbol, action, vector);
+            let text = format!("{symbol}\n{action}\n{vector}");
             painter.text(
                 pos,
                 egui::Align2::CENTER_CENTER,
@@ -766,7 +766,7 @@ impl<'a> TesseractRenderContext<'a> {
     }
 }
 
-fn zone_to_direction_label(zone: Zone) -> &'static str {
+const fn zone_to_direction_label(zone: Zone) -> &'static str {
     match zone {
         Zone::North => "U",
         Zone::South => "D",
@@ -780,6 +780,7 @@ fn zone_to_direction_label(zone: Zone) -> &'static str {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn render_single_tetrahedron(painter: &egui::Painter, spec: &TetraRenderSpec<'_>) {
     let gadget =
         TetrahedronGadget::for_zone(spec.vector_4d, spec.zone, spec.user_rotation, spec.scale);
@@ -818,7 +819,7 @@ fn render_single_tetrahedron(painter: &egui::Painter, spec: &TetraRenderSpec<'_>
 
     if spec.show_captions || spec.show_magnitudes {
         let component_mags: [f32; 4] = gadget.component_values.map(|v| v.abs());
-        let max_mag = component_mags.iter().cloned().fold(0.0f32, f32::max);
+        let max_mag = component_mags.iter().copied().fold(0.0f32, f32::max);
 
         for (i, vertex) in gadget.vertices.iter().enumerate() {
             let component = gadget.component_values[i];
@@ -943,11 +944,11 @@ fn format_4d_vector_compact(v: [f32; 4]) -> String {
         .filter(|(val, _)| val.abs() >= 0.05)
         .map(|(val, axis)| {
             if (val - 1.0).abs() < 0.05 {
-                format!("+{}", axis)
+                format!("+{axis}")
             } else if (val + 1.0).abs() < 0.05 {
-                format!("-{}", axis)
+                format!("-{axis}")
             } else {
-                format!("{:+.1}{}", val, axis)
+                format!("{val:+.1}{axis}")
             }
         })
         .collect();
@@ -959,6 +960,7 @@ fn format_4d_vector_compact(v: [f32; 4]) -> String {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 pub fn render_tetrahedron_with_projector(
     painter: &egui::Painter,
     gadget: &TetrahedronGadget,
@@ -985,7 +987,7 @@ pub fn render_tetrahedron_with_projector(
     }
 
     let component_mags: [f32; 4] = gadget.component_values.map(|v| v.abs());
-    let max_mag = component_mags.iter().cloned().fold(0.0f32, f32::max);
+    let max_mag = component_mags.iter().copied().fold(0.0f32, f32::max);
 
     for (i, vertex) in gadget.vertices.iter().enumerate() {
         let component = gadget.component_values[i];

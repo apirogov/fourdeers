@@ -113,7 +113,7 @@ impl DragState {
         Self::default()
     }
 
-    pub fn clear(&mut self) {
+    pub const fn clear(&mut self) {
         self.drag_view = None;
     }
 }

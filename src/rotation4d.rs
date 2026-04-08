@@ -58,15 +58,15 @@ impl Rotation4D {
         }
     }
 
-    pub fn new(q_left: UnitQuaternion<f32>, q_right: UnitQuaternion<f32>) -> Self {
+    pub const fn new(q_left: UnitQuaternion<f32>, q_right: UnitQuaternion<f32>) -> Self {
         Self { q_left, q_right }
     }
 
-    pub fn q_left(&self) -> &UnitQuaternion<f32> {
+    pub const fn q_left(&self) -> &UnitQuaternion<f32> {
         &self.q_left
     }
 
-    pub fn q_right(&self) -> &UnitQuaternion<f32> {
+    pub const fn q_right(&self) -> &UnitQuaternion<f32> {
         &self.q_right
     }
 
@@ -213,7 +213,7 @@ impl Rotation4D {
         }
     }
 
-    pub fn from_3d_rotation(q: &UnitQuaternion<f32>) -> Self {
+    pub const fn from_3d_rotation(q: &UnitQuaternion<f32>) -> Self {
         Self {
             q_left: *q,
             q_right: *q,
@@ -269,14 +269,14 @@ fn plane_axis(plane: RotationPlane) -> Vector3<f32> {
     }
 }
 
-fn plane_includes_w(plane: RotationPlane) -> bool {
+const fn plane_includes_w(plane: RotationPlane) -> bool {
     matches!(
         plane,
         RotationPlane::XW | RotationPlane::YW | RotationPlane::ZW
     )
 }
 
-fn quat_from_4d(p: [f32; 4]) -> nalgebra::Quaternion<f32> {
+const fn quat_from_4d(p: [f32; 4]) -> nalgebra::Quaternion<f32> {
     nalgebra::Quaternion::new(p[3], p[0], p[1], p[2])
 }
 

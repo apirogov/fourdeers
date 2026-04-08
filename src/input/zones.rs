@@ -8,7 +8,7 @@ use crate::camera::CameraAction;
 ///
 /// Cardinal zones map to directional moves, diagonal zones to forward/backward/kata/ana.
 /// Returns `None` for `Center` and other non-movement zones.
-pub fn zone_to_movement_action(zone: Zone) -> Option<CameraAction> {
+pub const fn zone_to_movement_action(zone: Zone) -> Option<CameraAction> {
     match zone {
         Zone::North => Some(CameraAction::MoveUp),
         Zone::South => Some(CameraAction::MoveDown),
@@ -64,12 +64,12 @@ impl std::fmt::Display for Zone {
 
 impl Zone {
     /// Returns true for N/E/S/W (cardinal directions), false for diagonals and center.
-    pub fn is_cardinal(self) -> bool {
+    pub const fn is_cardinal(self) -> bool {
         matches!(self, Zone::North | Zone::East | Zone::South | Zone::West)
     }
 
     /// All 9 zones in grid order (NW, N, NE, W, C, E, SW, S, SE).
-    pub fn all() -> [Zone; 9] {
+    pub const fn all() -> [Zone; 9] {
         [
             Zone::NorthWest,
             Zone::North,
@@ -84,7 +84,7 @@ impl Zone {
     }
 
     /// The 4 cardinal zones: N, E, S, W.
-    pub fn cardinals() -> [Zone; 4] {
+    pub const fn cardinals() -> [Zone; 4] {
         [Zone::North, Zone::East, Zone::South, Zone::West]
     }
 }

@@ -138,6 +138,7 @@ impl FourDeersApp {
         Some(waypoints[self.compass_waypoint_index].clone())
     }
 
+    #[allow(clippy::cast_possible_truncation)]
     fn cycle_compass_waypoint(&mut self, direction: i32) {
         let waypoints = self.toy_manager.active_toy().compass_waypoints();
         if waypoints.is_empty() {
@@ -149,10 +150,12 @@ impl FourDeersApp {
         self.compass_waypoint_index = (idx + direction).rem_euclid(len) as usize;
     }
 
+    #[allow(clippy::missing_const_for_fn)]
     fn toggle_compass_frame_mode(&mut self) {
         self.compass_frame_mode = self.compass_frame_mode.other();
     }
 
+    #[allow(clippy::missing_const_for_fn)]
     fn toggle_map_frame_mode(&mut self) {
         self.map_frame_mode = self.map_frame_mode.other();
     }
@@ -654,12 +657,12 @@ impl FourDeersApp {
         let build_time = env!("BUILD_TIME");
         let short_hash = &commit_hash[..commit_hash.len().min(8)];
         ui.label(
-            egui::RichText::new(format!("Commit: {}", short_hash))
+            egui::RichText::new(format!("Commit: {short_hash}"))
                 .size(12.0)
                 .color(egui::Color32::GRAY),
         );
         ui.label(
-            egui::RichText::new(format!("Built: {}", build_time))
+            egui::RichText::new(format!("Built: {build_time}"))
                 .size(12.0)
                 .color(egui::Color32::GRAY),
         );

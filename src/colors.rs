@@ -2,17 +2,30 @@
 
 use egui::Color32;
 
+/// Clamp a float to `0..=255` and convert to `u8` for color channel construction.
+#[inline]
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+pub const fn to_u8(v: f32) -> u8 {
+    if v < 0.0 {
+        0
+    } else if v > 255.0 {
+        255
+    } else {
+        v as u8
+    }
+}
+
 // ============================================================================
 // UI / Labels
 // ============================================================================
 
 #[inline]
-pub fn label_default() -> Color32 {
+pub const fn label_default() -> Color32 {
     Color32::from_rgb(255, 180, 80)
 }
 
 #[inline]
-pub fn label_inactive() -> Color32 {
+pub const fn label_inactive() -> Color32 {
     Color32::from_rgb(180, 180, 180)
 }
 
@@ -35,7 +48,7 @@ pub fn text_dim() -> Color32 {
 // ============================================================================
 
 #[inline]
-pub fn arrow_primary() -> Color32 {
+pub const fn arrow_primary() -> Color32 {
     Color32::from_rgb(255, 150, 50)
 }
 
@@ -45,12 +58,12 @@ pub fn arrow_glow() -> Color32 {
 }
 
 #[inline]
-pub fn arrow_tip() -> Color32 {
+pub const fn arrow_tip() -> Color32 {
     Color32::from_rgb(255, 200, 100)
 }
 
 #[inline]
-pub fn arrow_forward() -> Color32 {
+pub const fn arrow_forward() -> Color32 {
     Color32::from_rgb(100, 220, 255)
 }
 
@@ -73,12 +86,12 @@ pub fn object_tint_negative() -> Color32 {
 // ============================================================================
 
 #[inline]
-pub fn viewport_bg() -> Color32 {
+pub const fn viewport_bg() -> Color32 {
     Color32::from_rgb(30, 30, 40)
 }
 
 #[inline]
-pub fn panel_fill() -> Color32 {
+pub const fn panel_fill() -> Color32 {
     Color32::from_rgb(35, 35, 45)
 }
 

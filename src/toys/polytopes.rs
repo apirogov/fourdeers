@@ -79,7 +79,7 @@ impl PolytopesToy {
         self.tetrahedron_rotations.clear();
     }
 
-    fn reset_rotation_angles(&mut self) {
+    const fn reset_rotation_angles(&mut self) {
         self.rot_xy = 0.0;
         self.rot_xz = 0.0;
         self.rot_yz = 0.0;
@@ -99,7 +99,7 @@ impl PolytopesToy {
         self.camera.apply_action(action, speed);
     }
 
-    fn zone_to_action(zone: Zone, is_left_view: bool) -> Option<CameraAction> {
+    const fn zone_to_action(zone: Zone, is_left_view: bool) -> Option<CameraAction> {
         if is_left_view {
             None
         } else {

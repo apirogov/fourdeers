@@ -17,7 +17,7 @@ impl Default for DebugScratchpadToy {
 }
 
 impl DebugScratchpadToy {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             visualization_rect: None,
         }
