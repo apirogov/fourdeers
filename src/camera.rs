@@ -217,11 +217,11 @@ impl Camera {
         self.pitch_r = pitch;
     }
 
-    pub fn get_4d_basis(&self) -> [[f32; 4]; 4] {
+    pub fn basis_4d(&self) -> [[f32; 4]; 4] {
         self.rotation_4d.basis_vectors()
     }
 
-    pub fn get_slice_w_axis(&self) -> [f32; 4] {
+    pub fn slice_w_axis(&self) -> [f32; 4] {
         self.rotation_4d.basis_w()
     }
 
@@ -229,7 +229,7 @@ impl Camera {
         !self.rotation_4d.is_pure_3d()
     }
 
-    pub fn get_4d_direction_label(&self, direction: SliceDirection) -> String {
+    pub fn direction_label_4d(&self, direction: SliceDirection) -> String {
         let basis = self.rotation_4d.basis_vectors();
         let v = match direction {
             SliceDirection::Forward => basis[2],
@@ -1020,9 +1020,9 @@ mod tests {
     }
 
     #[test]
-    fn test_get_slice_w_axis_identity() {
+    fn test_slice_w_axis_identity() {
         let camera = Camera::new();
-        let w_axis = camera.get_slice_w_axis();
+        let w_axis = camera.slice_w_axis();
         assert_approx_eq(w_axis[0], 0.0, 1e-6);
         assert_approx_eq(w_axis[1], 0.0, 1e-6);
         assert_approx_eq(w_axis[2], 0.0, 1e-6);
@@ -1030,10 +1030,10 @@ mod tests {
     }
 
     #[test]
-    fn test_get_slice_w_axis_after_4d_rotation() {
+    fn test_slice_w_axis_after_4d_rotation() {
         let mut camera = Camera::new();
         camera.rotate_4d(1.0, 0.0);
-        let w_axis = camera.get_slice_w_axis();
+        let w_axis = camera.slice_w_axis();
         let norm = (w_axis[0] * w_axis[0]
             + w_axis[1] * w_axis[1]
             + w_axis[2] * w_axis[2]
@@ -1082,30 +1082,30 @@ mod tests {
     }
 
     #[test]
-    fn test_get_4d_direction_label_forward_identity() {
+    fn test_direction_label_4d_forward_identity() {
         let camera = Camera::new();
-        let label = camera.get_4d_direction_label(SliceDirection::Forward);
+        let label = camera.direction_label_4d(SliceDirection::Forward);
         assert_eq!(label, "+Z");
     }
 
     #[test]
-    fn test_get_4d_direction_label_right_identity() {
+    fn test_direction_label_4d_right_identity() {
         let camera = Camera::new();
-        let label = camera.get_4d_direction_label(SliceDirection::Right);
+        let label = camera.direction_label_4d(SliceDirection::Right);
         assert_eq!(label, "+X");
     }
 
     #[test]
-    fn test_get_4d_direction_label_up_identity() {
+    fn test_direction_label_4d_up_identity() {
         let camera = Camera::new();
-        let label = camera.get_4d_direction_label(SliceDirection::Up);
+        let label = camera.direction_label_4d(SliceDirection::Up);
         assert_eq!(label, "+Y");
     }
 
     #[test]
-    fn test_get_4d_direction_label_w_positive_identity() {
+    fn test_direction_label_4d_w_positive_identity() {
         let camera = Camera::new();
-        let label = camera.get_4d_direction_label(SliceDirection::WPositive);
+        let label = camera.direction_label_4d(SliceDirection::WPositive);
         assert_eq!(label, "+W");
     }
 

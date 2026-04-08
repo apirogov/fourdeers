@@ -270,10 +270,10 @@ impl Toy for PolytopesToy {
 
         let prev_type = self.polytope_type;
         egui::ComboBox::from_label("")
-            .selected_text(self.polytope_type.name())
+            .selected_text(self.polytope_type.to_string())
             .show_ui(ui, |ui| {
                 for poly_type in PolytopeType::all() {
-                    ui.selectable_value(&mut self.polytope_type, poly_type, poly_type.name());
+                    ui.selectable_value(&mut self.polytope_type, poly_type, poly_type.to_string());
                 }
             });
         if self.polytope_type != prev_type {

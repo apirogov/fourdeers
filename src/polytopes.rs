@@ -53,17 +53,6 @@ impl std::fmt::Display for PolytopeType {
 }
 
 impl PolytopeType {
-    pub const fn name(&self) -> &'static str {
-        match self {
-            PolytopeType::FiveCell => "5-cell (Pentachoron)",
-            PolytopeType::EightCell => "8-cell (Tesseract)",
-            PolytopeType::SixteenCell => "16-cell",
-            PolytopeType::TwentyFourCell => "24-cell",
-            PolytopeType::SixHundredCell => "600-cell",
-            PolytopeType::HundredTwentyCell => "120-cell",
-        }
-    }
-
     pub const fn short_name(&self) -> &'static str {
         match self {
             PolytopeType::FiveCell => "5-cell",

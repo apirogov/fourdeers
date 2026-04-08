@@ -70,7 +70,7 @@ impl Rotation4D {
         &self.q_right
     }
 
-    pub fn get_q_left_as_yaw_pitch(&self) -> (f32, f32) {
+    pub fn q_left_yaw_pitch(&self) -> (f32, f32) {
         quaternion_to_yaw_pitch(self.q_left())
     }
 
@@ -78,7 +78,7 @@ impl Rotation4D {
         self.q_left = quaternion_from_yaw_pitch(yaw, pitch);
     }
 
-    pub fn get_q_right_as_yaw_pitch(&self) -> (f32, f32) {
+    pub fn q_right_yaw_pitch(&self) -> (f32, f32) {
         quaternion_to_yaw_pitch_4d(self.q_right())
     }
 
@@ -220,13 +220,13 @@ impl Rotation4D {
         }
     }
 
-    pub fn get_w_component_of_basis(&self) -> [f32; 4] {
+    pub fn basis_w_component(&self) -> [f32; 4] {
         let basis = self.basis_vectors();
         [basis[0][3], basis[1][3], basis[2][3], basis[3][3]]
     }
 
     pub fn is_pure_3d(&self) -> bool {
-        let w_components = self.get_w_component_of_basis();
+        let w_components = self.basis_w_component();
         let eps = 1e-6;
         w_components[0].abs() < eps
             && w_components[1].abs() < eps
@@ -732,7 +732,7 @@ mod yaw_pitch_tests {
 
         assert!(*rot.q_right() != q_right_before, "q_right should change");
 
-        let (yaw_l, pitch_l) = rot.get_q_left_as_yaw_pitch();
+        let (yaw_l, pitch_l) = rot.q_left_yaw_pitch();
         assert!(yaw_l.abs() > 0.1, "yaw_l should be nonzero");
         assert!(pitch_l.abs() > 0.1, "pitch_l should be nonzero");
     }
