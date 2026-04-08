@@ -1770,11 +1770,6 @@ mod tests {
     #[test]
     fn test_style_for_point_at_camera_is_in_slab() {
         let cam = Camera::new();
-        let bounds = (
-            Vector4::new(-1.0, -1.0, -1.0, -1.0),
-            Vector4::new(1.0, 1.0, 1.0, 1.0),
-        );
-        let map_cam = Camera::new();
         let info = SliceInfo::new(&cam, 2.5);
         let (color, alpha) = info.style_for_point(cam.position);
         assert_eq!(color, SLICE_GREEN);
@@ -1784,11 +1779,6 @@ mod tests {
     #[test]
     fn test_style_for_point_in_slab_small_w_offset() {
         let cam = Camera::new();
-        let bounds = (
-            Vector4::new(-1.0, -1.0, -1.0, -1.0),
-            Vector4::new(1.0, 1.0, 1.0, 1.0),
-        );
-        let map_cam = Camera::new();
         let info = SliceInfo::new(&cam, 2.5);
         let pos_nearby = cam.position + Vector4::new(0.0, 0.0, 0.0, 0.5);
         let (color, alpha) = info.style_for_point(pos_nearby);
@@ -1799,11 +1789,6 @@ mod tests {
     #[test]
     fn test_style_for_point_near_slab_lerps() {
         let cam = Camera::new();
-        let bounds = (
-            Vector4::new(-1.0, -1.0, -1.0, -1.0),
-            Vector4::new(1.0, 1.0, 1.0, 1.0),
-        );
-        let map_cam = Camera::new();
         let info = SliceInfo::new(&cam, 2.5);
         let w_half = 1.25;
         let pos_near = cam.position + Vector4::new(0.0, 0.0, 0.0, w_half + 0.5 * w_half);
@@ -1820,11 +1805,6 @@ mod tests {
     #[test]
     fn test_style_for_point_far_from_slab() {
         let cam = Camera::new();
-        let bounds = (
-            Vector4::new(-1.0, -1.0, -1.0, -1.0),
-            Vector4::new(1.0, 1.0, 1.0, 1.0),
-        );
-        let map_cam = Camera::new();
         let info = SliceInfo::new(&cam, 2.5);
         let pos_far = cam.position + Vector4::new(0.0, 0.0, 0.0, 20.0);
         let (color, alpha) = info.style_for_point(pos_far);
@@ -1835,11 +1815,6 @@ mod tests {
     #[test]
     fn test_style_for_point_far_negative_w() {
         let cam = Camera::new();
-        let bounds = (
-            Vector4::new(-1.0, -1.0, -1.0, -1.0),
-            Vector4::new(1.0, 1.0, 1.0, 1.0),
-        );
-        let map_cam = Camera::new();
         let info = SliceInfo::new(&cam, 2.5);
         let pos_far_neg = cam.position + Vector4::new(0.0, 0.0, 0.0, -20.0);
         let (color, alpha) = info.style_for_point(pos_far_neg);
@@ -1850,11 +1825,6 @@ mod tests {
     #[test]
     fn test_style_for_point_boundary_at_w_half() {
         let cam = Camera::new();
-        let bounds = (
-            Vector4::new(-1.0, -1.0, -1.0, -1.0),
-            Vector4::new(1.0, 1.0, 1.0, 1.0),
-        );
-        let map_cam = Camera::new();
         let w_thickness = 2.5;
         let info = SliceInfo::new(&cam, w_thickness);
         let w_half = w_thickness * 0.5;
@@ -1867,11 +1837,6 @@ mod tests {
     #[test]
     fn test_style_for_point_boundary_at_2w_half() {
         let cam = Camera::new();
-        let bounds = (
-            Vector4::new(-1.0, -1.0, -1.0, -1.0),
-            Vector4::new(1.0, 1.0, 1.0, 1.0),
-        );
-        let map_cam = Camera::new();
         let w_thickness = 2.5;
         let info = SliceInfo::new(&cam, w_thickness);
         let w_half = w_thickness * 0.5;
@@ -1885,11 +1850,6 @@ mod tests {
     fn test_style_for_point_with_tilted_slice() {
         let mut cam = Camera::new();
         cam.rotation_4d = Rotation4D::from_6_plane_angles(0.0, 0.0, 0.0, 0.5, 0.0, 0.0);
-        let bounds = (
-            Vector4::new(-1.0, -1.0, -1.0, -1.0),
-            Vector4::new(1.0, 1.0, 1.0, 1.0),
-        );
-        let map_cam = Camera::new();
         let info = SliceInfo::new(&cam, 2.5);
         let (color, alpha) = info.style_for_point(cam.position);
         assert_eq!(color, SLICE_GREEN);
@@ -1903,11 +1863,6 @@ mod tests {
     #[test]
     fn test_style_for_point_lerp_is_continuous() {
         let cam = Camera::new();
-        let bounds = (
-            Vector4::new(-1.0, -1.0, -1.0, -1.0),
-            Vector4::new(1.0, 1.0, 1.0, 1.0),
-        );
-        let map_cam = Camera::new();
         let w_thickness = 2.5;
         let info = SliceInfo::new(&cam, w_thickness);
         let w_half = w_thickness * 0.5;

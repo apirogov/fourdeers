@@ -254,7 +254,7 @@ impl Camera {
             SliceDirection::WPositive => basis[3],
             SliceDirection::WNegative => [-basis[3][0], -basis[3][1], -basis[3][2], -basis[3][3]],
         };
-        format_4d_vector(v)
+        format_4d_vector(v, 0.01, 2)
     }
 
     #[must_use]
@@ -398,28 +398,24 @@ impl std::fmt::Display for CameraAction {
     }
 }
 
-fn format_4d_vector(v: [f32; 4]) -> String {
-    fn fmt_comp(val: f32) -> String {
-        if val.abs() < 0.01 {
-            String::new()
-        } else if (val - 1.0).abs() < 0.01 {
-            "+".to_string()
-        } else if (val + 1.0).abs() < 0.01 {
-            "-".to_string()
-        } else {
-            format!("{val:+.2}")
-        }
-    }
-    let parts: Vec<String> = [
-        (fmt_comp(v[0]), "X"),
-        (fmt_comp(v[1]), "Y"),
-        (fmt_comp(v[2]), "Z"),
-        (fmt_comp(v[3]), "W"),
-    ]
-    .iter()
-    .filter(|(comp, _)| !comp.is_empty())
-    .map(|(comp, axis)| format!("{comp}{axis}"))
-    .collect();
+#[must_use]
+pub fn format_4d_vector(v: [f32; 4], threshold: f32, precision: usize) -> String {
+    let components: [(f32, &str); 4] = [(v[0], "X"), (v[1], "Y"), (v[2], "Z"), (v[3], "W")];
+
+    let parts: Vec<String> = components
+        .iter()
+        .filter(|(val, _)| val.abs() >= threshold)
+        .map(|(val, axis)| {
+            if (val - 1.0).abs() < threshold {
+                format!("+{axis}")
+            } else if (val + 1.0).abs() < threshold {
+                format!("-{axis}")
+            } else {
+                format!("{val:+.precision$}{axis}")
+            }
+        })
+        .collect();
+
     if parts.is_empty() {
         "0".to_string()
     } else {

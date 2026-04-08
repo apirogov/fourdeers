@@ -4,7 +4,7 @@ use eframe::egui;
 use nalgebra::UnitQuaternion;
 use std::collections::HashMap;
 
-use crate::camera::Camera;
+use crate::camera::{format_4d_vector, Camera};
 use crate::colors::{
     ARROW_GLOW, ARROW_PRIMARY, ARROW_TIP, LABEL_DEFAULT, OBJECT_TINT_NEGATIVE,
     OBJECT_TINT_POSITIVE, OUTLINE_DEFAULT, OUTLINE_THIN, TEXT_HIGHLIGHT, VIEWPORT_BG,
@@ -32,6 +32,12 @@ const COMPASS_VALUE_FONT_SIZE: f32 = 11.0;
 const BASE_LABEL_FONT_SIZE: f32 = 11.0;
 const BASE_LABEL_OFFSET_Y: f32 = 18.0;
 const TAP_LABEL_FONT_SIZE: f32 = 11.0;
+const ARROW_ORIGIN_DOT_RADIUS: f32 = 2.0;
+const ARROW_END_DOT_RADIUS: f32 = 3.0;
+const COMPASS_ARROW_END_DOT_RADIUS: f32 = 4.0;
+const TIP_LABEL_OFFSET_Y: f32 = 12.0;
+const COMPASS_TIP_LABEL_OFFSET_Y: f32 = 15.0;
+const COMPASS_TIP_FONT_SIZE: f32 = 12.0;
 
 #[must_use]
 pub fn split_stereo_views(rect: egui::Rect) -> (egui::Rect, egui::Rect) {
@@ -622,56 +628,56 @@ impl<'a> TesseractRenderContext<'a> {
         let labels: Vec<(&str, String, &str, f32, f32)> = vec![
             (
                 "↑",
-                format_4d_vector_compact(basis[1]),
+                format_4d_vector(basis[1], 0.05, 1),
                 "Up",
                 view_rect.center().x,
                 view_rect.min.y + offset * 0.5,
             ),
             (
                 "↓",
-                format_4d_vector_compact(neg_vec(basis[1])),
+                format_4d_vector(neg_vec(basis[1]), 0.05, 1),
                 "Down",
                 view_rect.center().x,
                 view_rect.max.y - offset * 0.7,
             ),
             (
                 "←",
-                format_4d_vector_compact(neg_vec(basis[0])),
+                format_4d_vector(neg_vec(basis[0]), 0.05, 1),
                 "Left",
                 view_rect.min.x + offset * 0.5,
                 view_rect.center().y,
             ),
             (
                 "→",
-                format_4d_vector_compact(basis[0]),
+                format_4d_vector(basis[0], 0.05, 1),
                 "Right",
                 view_rect.max.x - offset * 0.4,
                 view_rect.center().y,
             ),
             (
                 "↗",
-                format_4d_vector_compact(basis[2]),
+                format_4d_vector(basis[2], 0.05, 1),
                 "Fwd",
                 view_rect.min.x + third_w * 2.5,
                 view_rect.min.y + third_h * 0.5,
             ),
             (
                 "↙",
-                format_4d_vector_compact(neg_vec(basis[2])),
+                format_4d_vector(neg_vec(basis[2]), 0.05, 1),
                 "Back",
                 view_rect.min.x + third_w * 0.5,
                 view_rect.min.y + third_h * 2.5,
             ),
             (
                 "↖",
-                format_4d_vector_compact(basis[3]),
+                format_4d_vector(basis[3], 0.05, 1),
                 "Kata",
                 view_rect.min.x + third_w * 0.5,
                 view_rect.min.y + third_h * 0.5,
             ),
             (
                 "↘",
-                format_4d_vector_compact(neg_vec(basis[3])),
+                format_4d_vector(neg_vec(basis[3]), 0.05, 1),
                 "Ana",
                 view_rect.min.x + third_w * 2.5,
                 view_rect.min.y + third_h * 2.5,
@@ -921,10 +927,10 @@ fn render_single_tetrahedron(painter: &egui::Painter, spec: &TetraRenderSpec<'_>
             }
         }
 
-        painter.circle_filled(center, 2.0, ARROW_GLOW);
+        painter.circle_filled(center, ARROW_ORIGIN_DOT_RADIUS, ARROW_GLOW);
 
         if let Some(ref label) = gadget.tip_label() {
-            let tip_offset = egui::Vec2::new(0.0, -12.0);
+            let tip_offset = egui::Vec2::new(0.0, -TIP_LABEL_OFFSET_Y);
             let label_pos = arrow_end + tip_offset;
             painter.text(
                 label_pos,
@@ -934,7 +940,7 @@ fn render_single_tetrahedron(painter: &egui::Painter, spec: &TetraRenderSpec<'_>
                 ARROW_TIP,
             );
         } else if arrow_vec.length() > 1e-3 {
-            painter.circle_filled(arrow_end, 3.0, ARROW_PRIMARY);
+            painter.circle_filled(arrow_end, ARROW_END_DOT_RADIUS, ARROW_PRIMARY);
         }
     }
 
@@ -955,30 +961,6 @@ fn render_single_tetrahedron(painter: &egui::Painter, spec: &TetraRenderSpec<'_>
 
 fn neg_vec(v: [f32; 4]) -> [f32; 4] {
     [-v[0], -v[1], -v[2], -v[3]]
-}
-
-fn format_4d_vector_compact(v: [f32; 4]) -> String {
-    let components: [(f32, &str); 4] = [(v[0], "X"), (v[1], "Y"), (v[2], "Z"), (v[3], "W")];
-
-    let parts: Vec<String> = components
-        .iter()
-        .filter(|(val, _)| val.abs() >= 0.05)
-        .map(|(val, axis)| {
-            if (val - 1.0).abs() < 0.05 {
-                format!("+{axis}")
-            } else if (val + 1.0).abs() < 0.05 {
-                format!("-{axis}")
-            } else {
-                format!("{val:+.1}{axis}")
-            }
-        })
-        .collect();
-
-    if parts.is_empty() {
-        "0".to_string()
-    } else {
-        parts.join(" ")
-    }
 }
 
 #[allow(clippy::too_many_lines)]
@@ -1083,7 +1065,7 @@ pub fn render_tetrahedron_with_projector(
             }
         }
 
-        painter.circle_filled(arrow_start, 3.0, ARROW_GLOW);
+        painter.circle_filled(arrow_start, ARROW_END_DOT_RADIUS, ARROW_GLOW);
 
         if let Some(ref label) = gadget.base_label {
             let base_pos = arrow_start + egui::Vec2::new(0.0, BASE_LABEL_OFFSET_Y);
@@ -1100,17 +1082,17 @@ pub fn render_tetrahedron_with_projector(
         }
 
         if let Some(ref label) = gadget.tip_label {
-            let tip_offset = egui::Vec2::new(0.0, -15.0);
+            let tip_offset = egui::Vec2::new(0.0, -COMPASS_TIP_LABEL_OFFSET_Y);
             let label_pos = arrow_end + tip_offset;
             painter.text(
                 label_pos,
                 egui::Align2::CENTER_BOTTOM,
                 label,
-                egui::FontId::proportional(12.0),
+                egui::FontId::proportional(COMPASS_TIP_FONT_SIZE),
                 ARROW_TIP,
             );
         } else if arrow_vec.length() > 1e-3 {
-            painter.circle_filled(arrow_end, 4.0, ARROW_PRIMARY);
+            painter.circle_filled(arrow_end, COMPASS_ARROW_END_DOT_RADIUS, ARROW_PRIMARY);
         }
     }
 }
