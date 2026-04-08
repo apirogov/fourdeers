@@ -17,32 +17,16 @@ pub fn magnitude_4d(v: Vector4<f32>) -> f32 {
     (v.x.powi(2) + v.y.powi(2) + v.z.powi(2) + v.w.powi(2)).sqrt()
 }
 
-const TETRAHEDRON_BASE_VERTICES: [Pos3D; 4] = [
-    Pos3D {
-        x: 1.0,
-        y: 1.0,
-        z: 1.0,
-    },
-    Pos3D {
-        x: -1.0,
-        y: -1.0,
-        z: 1.0,
-    },
-    Pos3D {
-        x: -1.0,
-        y: 1.0,
-        z: -1.0,
-    },
-    Pos3D {
-        x: 1.0,
-        y: -1.0,
-        z: -1.0,
-    },
+const TETRAHEDRON_BASE_VERTICES: [[f32; 3]; 4] = [
+    [1.0, 1.0, 1.0],
+    [-1.0, -1.0, 1.0],
+    [-1.0, 1.0, -1.0],
+    [1.0, -1.0, -1.0],
 ];
 
-fn get_tetrahedron_vertices(scale: f32) -> [Pos3D; 4] {
+fn get_tetrahedron_vertices(scale: f32) -> [Vector3<f32>; 4] {
     let s = scale / SQRT_3;
-    TETRAHEDRON_BASE_VERTICES.map(|v| Pos3D::new(v.x * s, v.y * s, v.z * s))
+    TETRAHEDRON_BASE_VERTICES.map(|[x, y, z]| Vector3::new(x * s, y * s, z * s))
 }
 
 /// Layout parameters for tetrahedron rendering, proportional to view size
@@ -62,85 +46,11 @@ pub fn get_tetrahedron_layout(view_rect: egui::Rect) -> TetrahedronLayout {
     }
 }
 
-/// 3D position in screen space
-#[derive(Debug, Clone, Copy)]
-pub struct Pos3D {
-    pub x: f32,
-    pub y: f32,
-    pub z: f32,
-}
-
-impl Pos3D {
-    #[must_use]
-    pub const fn new(x: f32, y: f32, z: f32) -> Self {
-        Self { x, y, z }
-    }
-
-    #[must_use]
-    pub const fn from_array(arr: [f32; 3]) -> Self {
-        Self::new(arr[0], arr[1], arr[2])
-    }
-
-    #[must_use]
-    pub const fn to_array(&self) -> [f32; 3] {
-        [self.x, self.y, self.z]
-    }
-
-    #[must_use]
-    pub const fn to_vector3(&self) -> Vector3<f32> {
-        Vector3::new(self.x, self.y, self.z)
-    }
-
-    #[must_use]
-    pub fn from_vector3(v: &Vector3<f32>) -> Self {
-        Self::new(v.x, v.y, v.z)
-    }
-
-    #[must_use]
-    pub fn rotate_by_quaternion(&self, rotation: &UnitQuaternion<f32>) -> Self {
-        let v = self.to_vector3();
-        let rotated = rotation.transform_vector(&v);
-        Self::from_vector3(&rotated)
-    }
-
-    #[must_use]
-    pub fn rotate_xy(&self, angle: f32) -> Self {
-        let cos_a = angle.cos();
-        let sin_a = angle.sin();
-        Self::new(
-            self.x * cos_a - self.y * sin_a,
-            self.x * sin_a + self.y * cos_a,
-            self.z,
-        )
-    }
-
-    #[must_use]
-    pub fn rotate_xz(&self, angle: f32) -> Self {
-        let cos_a = angle.cos();
-        let sin_a = angle.sin();
-        Self::new(
-            self.x * cos_a + self.z * sin_a,
-            self.y,
-            -self.x * sin_a + self.z * cos_a,
-        )
-    }
-
-    #[must_use]
-    pub fn normalize(&self) -> Self {
-        let len = (self.x * self.x + self.y * self.y + self.z * self.z).sqrt();
-        if len < 1e-6 {
-            Self::new(0.0, 0.0, 0.0)
-        } else {
-            Self::new(self.x / len, self.y / len, self.z / len)
-        }
-    }
-}
-
 /// A vertex of the tetrahedron with label information
 #[derive(Debug, Clone)]
 pub struct TetrahedronVertex {
-    pub position: Pos3D,
-    pub normal: Pos3D,
+    pub position: Vector3<f32>,
+    pub normal: Vector3<f32>,
     pub label: String,
     pub axis_4d: char,
 }
@@ -154,7 +64,7 @@ pub struct TetrahedronEdge {
 /// Vector arrow from center pointing in weighted direction
 #[derive(Debug, Clone)]
 pub struct VectorArrow {
-    pub end_position: Pos3D,
+    pub end_position: Vector3<f32>,
     pub arrow_head_size: f32,
 }
 
@@ -164,7 +74,7 @@ pub struct TetrahedronGadget {
     pub vertices: [TetrahedronVertex; 4],
     pub edges: [TetrahedronEdge; 6],
     pub vector_arrow: VectorArrow,
-    pub center: Pos3D,
+    pub center: Vector3<f32>,
     pub scale: f32,
     pub tip_label: Option<String>,
     pub base_label: Option<String>,
@@ -189,7 +99,7 @@ impl TetrahedronGadget {
         rotation: UnitQuaternion<f32>,
         scale: f32,
     ) -> Self {
-        let center = Pos3D::new(0.0, 0.0, 0.0);
+        let center = Vector3::zeros();
         let vertices = Self::compute_vertices_with_rotation(scale, &rotation);
         let edges = Self::compute_edges();
         let vector_arrow = Self::compute_vector_arrow(vector_4d, scale, &rotation);
@@ -255,7 +165,7 @@ impl TetrahedronGadget {
             Zone::SouthWest => Vector3::new(-1.0, -1.0, 0.0).normalize(),
         };
 
-        let current = arrow_dir.to_vector3();
+        let current = arrow_dir;
         let current_len = current.magnitude();
         if current_len < 1e-6 {
             return UnitQuaternion::identity();
@@ -301,8 +211,8 @@ impl TetrahedronGadget {
 
         std::array::from_fn(|i| {
             let pos = base_positions[i];
-            let rotated_pos = pos.rotate_by_quaternion(rotation);
-            let normal = pos.normalize().rotate_by_quaternion(rotation);
+            let rotated_pos = rotation.transform_vector(&pos);
+            let normal = rotation.transform_vector(&pos.normalize());
             TetrahedronVertex {
                 position: rotated_pos,
                 normal,
@@ -346,7 +256,7 @@ impl TetrahedronGadget {
 
         if norm < 1e-6 {
             return VectorArrow {
-                end_position: Pos3D::new(0.0, 0.0, 0.0),
+                end_position: Vector3::zeros(),
                 arrow_head_size: 0.0,
             };
         }
@@ -362,42 +272,37 @@ impl TetrahedronGadget {
 
         if abs_sum < 1e-6 {
             return VectorArrow {
-                end_position: Pos3D::new(0.0, 0.0, 0.0),
+                end_position: Vector3::zeros(),
                 arrow_head_size,
             };
         }
 
         let base_vertices = get_tetrahedron_vertices(scale);
 
-        let mut pos_x = 0.0f32;
-        let mut pos_y = 0.0f32;
-        let mut pos_z = 0.0f32;
-
+        let mut end = Vector3::zeros();
         for (i, &weight) in weights.iter().enumerate() {
-            let rotated = base_vertices[i].rotate_by_quaternion(rotation);
-            pos_x += rotated.x * weight;
-            pos_y += rotated.y * weight;
-            pos_z += rotated.z * weight;
+            let rotated = rotation.transform_vector(&base_vertices[i]);
+            end += rotated * weight;
         }
 
         VectorArrow {
-            end_position: Pos3D::new(pos_x, pos_y, pos_z),
+            end_position: end,
             arrow_head_size,
         }
     }
 
     #[must_use]
-    pub fn get_vertex_3d(&self, vertex_index: usize) -> Option<&Pos3D> {
+    pub fn get_vertex_3d(&self, vertex_index: usize) -> Option<&Vector3<f32>> {
         self.vertices.get(vertex_index).map(|v| &v.position)
     }
 
     #[must_use]
-    pub fn get_vertex_normal(&self, vertex_index: usize) -> Option<&Pos3D> {
+    pub fn get_vertex_normal(&self, vertex_index: usize) -> Option<&Vector3<f32>> {
         self.vertices.get(vertex_index).map(|v| &v.normal)
     }
 
     #[must_use]
-    pub const fn arrow_position(&self) -> &Pos3D {
+    pub fn arrow_position(&self) -> &Vector3<f32> {
         &self.vector_arrow.end_position
     }
 
@@ -417,10 +322,10 @@ impl TetrahedronGadget {
     }
 }
 
-fn compute_weighted_direction_3d(vector_4d: Vector4<f32>) -> Pos3D {
+fn compute_weighted_direction_3d(vector_4d: Vector4<f32>) -> Vector3<f32> {
     let norm = magnitude_4d(vector_4d);
     if norm < 1e-6 {
-        return Pos3D::new(0.0, 0.0, 0.0);
+        return Vector3::zeros();
     }
 
     let normalized = vector_4d / norm;
@@ -431,17 +336,14 @@ fn compute_weighted_direction_3d(vector_4d: Vector4<f32>) -> Pos3D {
         normalized.z.abs(),
         normalized.w.abs(),
     ];
-    let mut pos_x = 0.0f32;
-    let mut pos_y = 0.0f32;
-    let mut pos_z = 0.0f32;
 
+    let mut result = Vector3::zeros();
     for (i, &weight) in weights.iter().enumerate() {
-        pos_x += TETRAHEDRON_BASE_VERTICES[i].x * weight;
-        pos_y += TETRAHEDRON_BASE_VERTICES[i].y * weight;
-        pos_z += TETRAHEDRON_BASE_VERTICES[i].z * weight;
+        let [x, y, z] = TETRAHEDRON_BASE_VERTICES[i];
+        result += Vector3::new(x, y, z) * weight;
     }
 
-    Pos3D::new(pos_x, pos_y, pos_z)
+    result
 }
 
 #[must_use]
@@ -455,7 +357,7 @@ pub fn normalize_4d_vector(v: Vector4<f32>) -> Vector4<f32> {
 }
 
 #[must_use]
-pub fn compute_weighted_direction(vector_4d: Vector4<f32>) -> Pos3D {
+pub fn compute_weighted_direction(vector_4d: Vector4<f32>) -> Vector3<f32> {
     let normalized = normalize_4d_vector(vector_4d);
     let gadget = TetrahedronGadget::from_4d_vector(normalized);
     gadget.vector_arrow.end_position
@@ -816,26 +718,6 @@ mod tests {
     }
 
     #[test]
-    fn test_pos3d_from_array() {
-        let arr = [1.0, 2.0, 3.0];
-        let pos = Pos3D::from_array(arr);
-
-        assert_approx_eq(pos.x, 1.0, 1e-5);
-        assert_approx_eq(pos.y, 2.0, 1e-5);
-        assert_approx_eq(pos.z, 3.0, 1e-5);
-    }
-
-    #[test]
-    fn test_pos3d_to_array() {
-        let pos = Pos3D::new(1.0, 2.0, 3.0);
-        let arr = pos.to_array();
-
-        assert_approx_eq(arr[0], 1.0, 1e-5);
-        assert_approx_eq(arr[1], 2.0, 1e-5);
-        assert_approx_eq(arr[2], 3.0, 1e-5);
-    }
-
-    #[test]
     fn test_vector_arrow_direction_consistency() {
         let s = 1.0 / SQRT_3;
         let vectors = vec![
@@ -851,16 +733,6 @@ mod tests {
             assert_approx_eq(gadget.vector_arrow.end_position.y, expected_y, 1e-3);
             assert_approx_eq(gadget.vector_arrow.end_position.z, expected_z, 1e-3);
         }
-    }
-
-    #[test]
-    fn test_pos3d_rotate_xy() {
-        let pos = Pos3D::new(1.0, 0.0, 0.5);
-        let rotated = pos.rotate_xy(std::f32::consts::FRAC_PI_2);
-
-        assert_approx_eq(rotated.x, 0.0, 1e-5);
-        assert_approx_eq(rotated.y, 1.0, 1e-5);
-        assert_approx_eq(rotated.z, 0.5, 1e-5);
     }
 
     #[test]

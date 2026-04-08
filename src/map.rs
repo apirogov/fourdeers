@@ -760,15 +760,13 @@ fn render_tetrahedron_with_projector(params: &TetraRenderParams) {
         crate::colors::to_u8(alpha * 200.0),
     );
     for edge in &gadget.edges {
-        let v0 = gadget
+        let v0 = *gadget
             .get_vertex_3d(edge.vertex_indices[0])
             .expect("edge vertex index out of bounds")
-            .to_vector3()
             + center_3d;
-        let v1 = gadget
+        let v1 = *gadget
             .get_vertex_3d(edge.vertex_indices[1])
             .expect("edge vertex index out of bounds")
-            .to_vector3()
             + center_3d;
         if let (Some(p0), Some(p1)) = (
             projector.project_3d(v0.x, v0.y, v0.z),
@@ -789,8 +787,8 @@ fn render_tetrahedron_with_projector(params: &TetraRenderParams) {
             if let (Some(pos), Some(normal)) =
                 (gadget.get_vertex_3d(i), gadget.get_vertex_normal(i))
             {
-                let pos_v = pos.to_vector3();
-                let normal_v = normal.to_vector3();
+                let pos_v = *pos;
+                let normal_v = *normal;
                 let label_pos = pos_v + normal_v * 0.12 + center_3d;
                 let pos_c = pos_v + center_3d;
                 if let Some(label_p) = projector.project_3d(label_pos.x, label_pos.y, pos_c.z) {
@@ -824,7 +822,7 @@ fn render_tetrahedron_with_projector(params: &TetraRenderParams) {
         }
     }
 
-    let arrow = gadget.arrow_position().to_vector3() + center_3d;
+    let arrow = *gadget.arrow_position() + center_3d;
     let head_size = gadget.arrow_head_size() * MAP_ARROW_HEAD_SCALE;
     draw_direction_arrow(
         painter,
