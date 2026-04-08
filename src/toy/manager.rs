@@ -60,11 +60,11 @@ impl ToyManager {
 
     #[must_use]
     pub fn toy_list(&self) -> Vec<(&str, &str)> {
-        super::registry::toy_ids()
+        super::registry::toy_id_order()
             .into_iter()
             .filter_map(|id| {
-                let name = super::registry::toy_name_by_id(id)?;
-                Some((id, name))
+                let toy = self.toys.get(id)?;
+                Some((toy.id(), toy.name()))
             })
             .collect()
     }

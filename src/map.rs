@@ -501,7 +501,7 @@ impl MapRenderer {
         frame_mode: CompassFrameMode,
     ) {
         let map_transform = MapViewTransform::new(&self.camera);
-        let slice_info = SliceInfo::new(scene_camera, bounds, &self.camera, self.w_thickness);
+        let slice_info = SliceInfo::new(scene_camera, self.w_thickness);
         for wp in waypoints {
             let norm_pos = normalize_to_tesseract(wp.position, bounds);
             let vector_4d = match frame_mode {
@@ -553,7 +553,7 @@ impl MapRenderer {
     ) {
         let norm_cam = normalize_to_tesseract(scene_camera.position, bounds);
         let map_transform = MapViewTransform::new(&self.camera);
-        let slice_info = SliceInfo::new(scene_camera, bounds, &self.camera, self.w_thickness);
+        let slice_info = SliceInfo::new(scene_camera, self.w_thickness);
         let s3d = map_transform.project_to_3d(norm_cam);
         if s3d.z <= -self.projection_distance {
             return;
@@ -665,12 +665,7 @@ struct SliceInfo {
     w_half: f32,
 }
 impl SliceInfo {
-    fn new(
-        scene_camera: &Camera,
-        _bounds: &(Vector4<f32>, Vector4<f32>),
-        _map_camera: &Camera,
-        w_thickness: f32,
-    ) -> Self {
+    fn new(scene_camera: &Camera, w_thickness: f32) -> Self {
         let slice_rotation = Rotation4D::new(
             UnitQuaternion::identity(),
             *scene_camera.rotation_4d.q_right(),
@@ -1780,7 +1775,7 @@ mod tests {
             Vector4::new(1.0, 1.0, 1.0, 1.0),
         );
         let map_cam = Camera::new();
-        let info = SliceInfo::new(&cam, &bounds, &map_cam, 2.5);
+        let info = SliceInfo::new(&cam, 2.5);
         let (color, alpha) = info.style_for_point(cam.position);
         assert_eq!(color, SLICE_GREEN);
         assert_approx_eq(alpha, 1.0, 1e-6);
@@ -1794,7 +1789,7 @@ mod tests {
             Vector4::new(1.0, 1.0, 1.0, 1.0),
         );
         let map_cam = Camera::new();
-        let info = SliceInfo::new(&cam, &bounds, &map_cam, 2.5);
+        let info = SliceInfo::new(&cam, 2.5);
         let pos_nearby = cam.position + Vector4::new(0.0, 0.0, 0.0, 0.5);
         let (color, alpha) = info.style_for_point(pos_nearby);
         assert_eq!(color, SLICE_GREEN);
@@ -1809,7 +1804,7 @@ mod tests {
             Vector4::new(1.0, 1.0, 1.0, 1.0),
         );
         let map_cam = Camera::new();
-        let info = SliceInfo::new(&cam, &bounds, &map_cam, 2.5);
+        let info = SliceInfo::new(&cam, 2.5);
         let w_half = 1.25;
         let pos_near = cam.position + Vector4::new(0.0, 0.0, 0.0, w_half + 0.5 * w_half);
         let (color, alpha) = info.style_for_point(pos_near);
@@ -1830,7 +1825,7 @@ mod tests {
             Vector4::new(1.0, 1.0, 1.0, 1.0),
         );
         let map_cam = Camera::new();
-        let info = SliceInfo::new(&cam, &bounds, &map_cam, 2.5);
+        let info = SliceInfo::new(&cam, 2.5);
         let pos_far = cam.position + Vector4::new(0.0, 0.0, 0.0, 20.0);
         let (color, alpha) = info.style_for_point(pos_far);
         assert_eq!(color, DIM_GRAY);
@@ -1845,7 +1840,7 @@ mod tests {
             Vector4::new(1.0, 1.0, 1.0, 1.0),
         );
         let map_cam = Camera::new();
-        let info = SliceInfo::new(&cam, &bounds, &map_cam, 2.5);
+        let info = SliceInfo::new(&cam, 2.5);
         let pos_far_neg = cam.position + Vector4::new(0.0, 0.0, 0.0, -20.0);
         let (color, alpha) = info.style_for_point(pos_far_neg);
         assert_eq!(color, DIM_GRAY);
@@ -1861,7 +1856,7 @@ mod tests {
         );
         let map_cam = Camera::new();
         let w_thickness = 2.5;
-        let info = SliceInfo::new(&cam, &bounds, &map_cam, w_thickness);
+        let info = SliceInfo::new(&cam, w_thickness);
         let w_half = w_thickness * 0.5;
         let pos_boundary = cam.position + Vector4::new(0.0, 0.0, 0.0, w_half);
         let (color, alpha) = info.style_for_point(pos_boundary);
@@ -1878,7 +1873,7 @@ mod tests {
         );
         let map_cam = Camera::new();
         let w_thickness = 2.5;
-        let info = SliceInfo::new(&cam, &bounds, &map_cam, w_thickness);
+        let info = SliceInfo::new(&cam, w_thickness);
         let w_half = w_thickness * 0.5;
         let pos_boundary = cam.position + Vector4::new(0.0, 0.0, 0.0, 2.0 * w_half);
         let (color, alpha) = info.style_for_point(pos_boundary);
@@ -1895,7 +1890,7 @@ mod tests {
             Vector4::new(1.0, 1.0, 1.0, 1.0),
         );
         let map_cam = Camera::new();
-        let info = SliceInfo::new(&cam, &bounds, &map_cam, 2.5);
+        let info = SliceInfo::new(&cam, 2.5);
         let (color, alpha) = info.style_for_point(cam.position);
         assert_eq!(color, SLICE_GREEN);
         assert_approx_eq(alpha, 1.0, 1e-6);
@@ -1914,7 +1909,7 @@ mod tests {
         );
         let map_cam = Camera::new();
         let w_thickness = 2.5;
-        let info = SliceInfo::new(&cam, &bounds, &map_cam, w_thickness);
+        let info = SliceInfo::new(&cam, w_thickness);
         let w_half = w_thickness * 0.5;
         let epsilon = 0.01;
         let pos_just_inside = cam.position + Vector4::new(0.0, 0.0, 0.0, w_half - epsilon);

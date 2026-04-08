@@ -65,7 +65,7 @@ impl Toy for DebugScratchpadToy {
 
     fn handle_keyboard(&mut self, _ctx: &egui::Context) {}
 
-    fn get_visualization_rect(&self) -> Option<egui::Rect> {
+    fn visualization_rect(&self) -> Option<egui::Rect> {
         self.visualization_rect
     }
 

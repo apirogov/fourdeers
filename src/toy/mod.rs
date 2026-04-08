@@ -12,6 +12,8 @@ pub mod registry;
 
 pub use manager::ToyManager;
 
+pub use crate::input::DragState;
+
 /// A named 4D position shown in the compass view.
 #[derive(Clone)]
 pub struct CompassWaypoint {
@@ -49,7 +51,7 @@ pub trait Toy {
     fn handle_keyboard(&mut self, ctx: &egui::Context);
 
     /// Return the rect where the toy renders, if any.
-    fn get_visualization_rect(&self) -> Option<egui::Rect>;
+    fn visualization_rect(&self) -> Option<egui::Rect>;
 
     /// The 4D vector displayed by the compass gadget, if any.
     fn compass_vector(&self) -> Option<Vector4<f32>> {
@@ -100,21 +102,4 @@ pub trait Toy {
     fn set_stereo_settings(&mut self, _settings: &StereoSettings) {}
     /// Apply 4D visualization settings from the shared controls.
     fn set_four_d_settings(&mut self, _settings: &FourDSettings) {}
-}
-
-/// Tracks the active drag gesture state.
-#[derive(Default)]
-pub struct DragState {
-    pub drag_view: Option<crate::input::DragView>,
-}
-
-impl DragState {
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub const fn clear(&mut self) {
-        self.drag_view = None;
-    }
 }

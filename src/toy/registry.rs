@@ -1,7 +1,7 @@
 //! Static toy registry
 //!
-//! Creates all known toy instances and provides ID-to-name lookups.
-//! Each toy's `id()` and `name()` are its canonical source for the mapping.
+//! Creates all known toy instances and provides a stable display order.
+//! Each toy's `id()` and `name()` are its canonical source for metadata.
 
 use std::collections::HashMap;
 
@@ -26,18 +26,10 @@ pub fn create_all_toys() -> HashMap<String, Box<dyn Toy>> {
     toys
 }
 
+/// Returns toy IDs in the preferred display order.
 #[must_use]
-pub fn toy_ids() -> Vec<&'static str> {
+pub fn toy_id_order() -> Vec<&'static str> {
     vec!["polytopes", "debug_scratchpad"]
-}
-
-#[must_use]
-pub fn toy_name_by_id(id: &str) -> Option<&'static str> {
-    match id {
-        "polytopes" => Some("Polytopes"),
-        "debug_scratchpad" => Some("DebugScratchpad"),
-        _ => None,
-    }
 }
 
 #[cfg(test)]
@@ -53,16 +45,25 @@ mod tests {
     }
 
     #[test]
-    fn test_toy_ids_returns_known_ids() {
-        let ids = toy_ids();
-        assert!(ids.contains(&"polytopes"));
-        assert!(ids.contains(&"debug_scratchpad"));
+    fn test_toy_id_order_matches_registry() {
+        let toys = create_all_toys();
+        for id in toy_id_order() {
+            assert!(
+                toys.contains_key(id),
+                "ID order references unknown toy: {id}"
+            );
+        }
     }
 
     #[test]
-    fn test_toy_name_by_id_returns_names() {
-        assert_eq!(toy_name_by_id("polytopes"), Some("Polytopes"));
-        assert_eq!(toy_name_by_id("debug_scratchpad"), Some("DebugScratchpad"));
-        assert_eq!(toy_name_by_id("nonexistent"), None);
+    fn test_toy_id_order_includes_all() {
+        let toys = create_all_toys();
+        let ordered: std::collections::HashSet<&str> = toy_id_order().into_iter().collect();
+        for id in toys.keys() {
+            assert!(
+                ordered.contains(id.as_str()),
+                "Toy {id} missing from id_order"
+            );
+        }
     }
 }

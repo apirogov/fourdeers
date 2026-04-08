@@ -280,12 +280,7 @@ impl Toy for PolytopesToy {
         if self.polytope_type != prev_type {
             self.ensure_polytope_cached();
             self.camera.reset();
-            self.rot_xy = 0.0;
-            self.rot_xz = 0.0;
-            self.rot_yz = 0.0;
-            self.rot_xw = 0.0;
-            self.rot_yw = 0.0;
-            self.rot_zw = 0.0;
+            self.reset_rotation_angles();
         }
 
         ui.label(format!(
@@ -438,7 +433,7 @@ impl Toy for PolytopesToy {
         });
     }
 
-    fn get_visualization_rect(&self) -> Option<egui::Rect> {
+    fn visualization_rect(&self) -> Option<egui::Rect> {
         self.visualization_rect
     }
 
