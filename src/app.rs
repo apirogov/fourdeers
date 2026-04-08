@@ -448,71 +448,14 @@ impl FourDeersApp {
                 max: egui::pos2(right_rect.max.x, right_rect.min.y + MENU_BAR_HEIGHT),
             };
 
-            render_common_menu_half(&left_painter, left_menu_rect);
-            let map_label = if self.active_view == ActiveView::Map {
-                "Close"
-            } else {
-                "Map"
-            };
-            render_tap_zone_label(&left_painter, left_rect, Zone::West, map_label, None);
-
-            let compass_label = if self.active_view == ActiveView::Compass {
-                "Close"
-            } else {
-                "Compass"
-            };
-            render_tap_zone_label(
+            self.render_overlay_labels(
                 &left_painter,
+                &right_painter,
                 left_rect,
-                Zone::SouthWest,
-                compass_label,
-                None,
+                right_rect,
+                left_menu_rect,
+                right_menu_rect,
             );
-
-            if self.active_view == ActiveView::Compass {
-                let frame_label = self.compass_frame_mode.display_label();
-                render_tap_zone_label(&left_painter, left_rect, Zone::South, frame_label, None);
-                render_tap_zone_label(&right_painter, right_rect, Zone::South, "Prev", None);
-                render_tap_zone_label(&right_painter, right_rect, Zone::SouthEast, "Next", None);
-            }
-
-            if self.active_view == ActiveView::Map {
-                let frame_label = self.map_frame_mode.display_label();
-                render_tap_zone_label(&left_painter, left_rect, Zone::South, frame_label, None);
-
-                let labels_label = if self.map_renderer.labels_visible() {
-                    "Labels: On"
-                } else {
-                    "Labels: Off"
-                };
-                render_tap_zone_label(
-                    &left_painter,
-                    left_rect,
-                    Zone::NorthEast,
-                    labels_label,
-                    None,
-                );
-                render_tap_zone_label(&left_painter, left_rect, Zone::SouthEast, "Reset", None);
-
-                let rot_label = if self.map_rotation_3d {
-                    "Rot:3D"
-                } else {
-                    "Rot:4D"
-                };
-                render_tap_zone_label(
-                    &right_painter,
-                    right_rect,
-                    Zone::NorthEast,
-                    rot_label,
-                    Some(crate::colors::LABEL_INACTIVE),
-                );
-            }
-
-            if self.active_view == ActiveView::Main {
-                self.toy_manager
-                    .active_toy()
-                    .render_toy_menu(&right_painter, right_menu_rect);
-            }
 
             if self.settings.show_debug {
                 let options = ZoneDebugOptions::default();
@@ -534,6 +477,76 @@ impl FourDeersApp {
                 self.render_menu_overlay(ui, rect);
             }
         });
+    }
+
+    fn render_overlay_labels(
+        &self,
+        left_painter: &egui::Painter,
+        right_painter: &egui::Painter,
+        left_rect: egui::Rect,
+        right_rect: egui::Rect,
+        left_menu_rect: egui::Rect,
+        right_menu_rect: egui::Rect,
+    ) {
+        render_common_menu_half(left_painter, left_menu_rect);
+        let map_label = if self.active_view == ActiveView::Map {
+            "Close"
+        } else {
+            "Map"
+        };
+        render_tap_zone_label(left_painter, left_rect, Zone::West, map_label, None);
+
+        let compass_label = if self.active_view == ActiveView::Compass {
+            "Close"
+        } else {
+            "Compass"
+        };
+        render_tap_zone_label(
+            left_painter,
+            left_rect,
+            Zone::SouthWest,
+            compass_label,
+            None,
+        );
+
+        if self.active_view == ActiveView::Compass {
+            let frame_label = self.compass_frame_mode.display_label();
+            render_tap_zone_label(left_painter, left_rect, Zone::South, frame_label, None);
+            render_tap_zone_label(right_painter, right_rect, Zone::South, "Prev", None);
+            render_tap_zone_label(right_painter, right_rect, Zone::SouthEast, "Next", None);
+        }
+
+        if self.active_view == ActiveView::Map {
+            let frame_label = self.map_frame_mode.display_label();
+            render_tap_zone_label(left_painter, left_rect, Zone::South, frame_label, None);
+
+            let labels_label = if self.map_renderer.labels_visible() {
+                "Labels: On"
+            } else {
+                "Labels: Off"
+            };
+            render_tap_zone_label(left_painter, left_rect, Zone::NorthEast, labels_label, None);
+            render_tap_zone_label(left_painter, left_rect, Zone::SouthEast, "Reset", None);
+
+            let rot_label = if self.map_rotation_3d {
+                "Rot:3D"
+            } else {
+                "Rot:4D"
+            };
+            render_tap_zone_label(
+                right_painter,
+                right_rect,
+                Zone::NorthEast,
+                rot_label,
+                Some(crate::colors::LABEL_INACTIVE),
+            );
+        }
+
+        if self.active_view == ActiveView::Main {
+            self.toy_manager
+                .active_toy()
+                .render_toy_menu(right_painter, right_menu_rect);
+        }
     }
 
     fn render_menu_overlay(&mut self, ui: &mut egui::Ui, vis_rect: egui::Rect) {

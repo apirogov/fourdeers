@@ -106,6 +106,148 @@ impl PolytopesToy {
             zone_to_movement_action(zone)
         }
     }
+
+    fn render_camera_controls(&mut self, ui: &mut egui::Ui) {
+        ui.label(format!(
+            "Position: ({:.1}, {:.1}, {:.1}, {:.1})",
+            self.camera.position.x,
+            self.camera.position.y,
+            self.camera.position.z,
+            self.camera.position.w
+        ));
+
+        ui.horizontal(|ui| {
+            ui.label("X:");
+            ui.add(
+                egui::Slider::new(&mut self.camera.position.x, POSITION_SLIDER_RANGE.clone())
+                    .text(""),
+            );
+            ui.label("Y:");
+            ui.add(
+                egui::Slider::new(&mut self.camera.position.y, POSITION_SLIDER_RANGE.clone())
+                    .text(""),
+            );
+        });
+
+        ui.horizontal(|ui| {
+            ui.label("Z:");
+            ui.add(
+                egui::Slider::new(&mut self.camera.position.z, POSITION_SLIDER_RANGE.clone())
+                    .text(""),
+            );
+            ui.label("W:");
+            ui.add(egui::Slider::new(&mut self.camera.position.w, W_SLIDER_RANGE.clone()).text(""));
+        });
+
+        ui.horizontal(|ui| {
+            let mut yaw_l = self.camera.yaw_l();
+            ui.label("Yaw(L)");
+            if ui
+                .add(
+                    egui::Slider::new(&mut yaw_l, -std::f32::consts::PI..=std::f32::consts::PI)
+                        .text(""),
+                )
+                .changed()
+            {
+                self.camera.set_yaw_l(yaw_l);
+            }
+            let mut pitch_l = self.camera.pitch_l();
+            ui.label("Pitch(L)");
+            if ui
+                .add(
+                    egui::Slider::new(&mut pitch_l, -std::f32::consts::PI..=std::f32::consts::PI)
+                        .text(""),
+                )
+                .changed()
+            {
+                self.camera.set_pitch_l(pitch_l);
+            }
+        });
+
+        ui.horizontal(|ui| {
+            let mut yaw_r = self.camera.yaw_r();
+            ui.label("Yaw(R)");
+            if ui
+                .add(
+                    egui::Slider::new(&mut yaw_r, -std::f32::consts::PI..=std::f32::consts::PI)
+                        .text(""),
+                )
+                .changed()
+            {
+                self.camera.set_yaw_r(yaw_r);
+            }
+            let mut pitch_r = self.camera.pitch_r();
+            ui.label("Pitch(R)");
+            if ui
+                .add(
+                    egui::Slider::new(&mut pitch_r, -std::f32::consts::PI..=std::f32::consts::PI)
+                        .text(""),
+                )
+                .changed()
+            {
+                self.camera.set_pitch_r(pitch_r);
+            }
+        });
+    }
+
+    fn render_rotation_controls(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            ui.label("XY:");
+            ui.add(
+                egui::Slider::new(
+                    &mut self.rot_xy,
+                    -std::f32::consts::PI..=std::f32::consts::PI,
+                )
+                .text(""),
+            );
+            ui.label("XZ:");
+            ui.add(
+                egui::Slider::new(
+                    &mut self.rot_xz,
+                    -std::f32::consts::PI..=std::f32::consts::PI,
+                )
+                .text(""),
+            );
+        });
+
+        ui.horizontal(|ui| {
+            ui.label("YZ:");
+            ui.add(
+                egui::Slider::new(
+                    &mut self.rot_yz,
+                    -std::f32::consts::PI..=std::f32::consts::PI,
+                )
+                .text(""),
+            );
+            ui.label("XW:");
+            ui.add(
+                egui::Slider::new(
+                    &mut self.rot_xw,
+                    -std::f32::consts::PI..=std::f32::consts::PI,
+                )
+                .text(""),
+            );
+        });
+
+        ui.horizontal(|ui| {
+            ui.label("YW:");
+            ui.add(
+                egui::Slider::new(
+                    &mut self.rot_yw,
+                    -std::f32::consts::PI..=std::f32::consts::PI,
+                )
+                .text(""),
+            );
+            ui.label("ZW:");
+            ui.add(
+                egui::Slider::new(
+                    &mut self.rot_zw,
+                    -std::f32::consts::PI..=std::f32::consts::PI,
+                )
+                .text(""),
+            );
+        });
+    }
 }
 
 impl Toy for PolytopesToy {
@@ -162,163 +304,14 @@ impl Toy for PolytopesToy {
         ui.add_space(8.0);
 
         ui.collapsing("Camera", |ui| {
-            ui.label(format!(
-                "Position: ({:.1}, {:.1}, {:.1}, {:.1})",
-                self.camera.position.x,
-                self.camera.position.y,
-                self.camera.position.z,
-                self.camera.position.w
-            ));
-
-            // X + Y
-            ui.horizontal(|ui| {
-                ui.label("X:");
-                ui.add(
-                    egui::Slider::new(&mut self.camera.position.x, POSITION_SLIDER_RANGE.clone())
-                        .text(""),
-                );
-                ui.label("Y:");
-                ui.add(
-                    egui::Slider::new(&mut self.camera.position.y, POSITION_SLIDER_RANGE.clone())
-                        .text(""),
-                );
-            });
-
-            // Z + W
-            ui.horizontal(|ui| {
-                ui.label("Z:");
-                ui.add(
-                    egui::Slider::new(&mut self.camera.position.z, POSITION_SLIDER_RANGE.clone())
-                        .text(""),
-                );
-                ui.label("W:");
-                ui.add(
-                    egui::Slider::new(&mut self.camera.position.w, W_SLIDER_RANGE.clone()).text(""),
-                );
-            });
-
-            // Yaw(L) + Pitch(L)
-            ui.horizontal(|ui| {
-                let mut yaw_l = self.camera.yaw_l();
-                ui.label("Yaw(L)");
-                if ui
-                    .add(
-                        egui::Slider::new(&mut yaw_l, -std::f32::consts::PI..=std::f32::consts::PI)
-                            .text(""),
-                    )
-                    .changed()
-                {
-                    self.camera.set_yaw_l(yaw_l);
-                }
-                let mut pitch_l = self.camera.pitch_l();
-                ui.label("Pitch(L)");
-                if ui
-                    .add(
-                        egui::Slider::new(
-                            &mut pitch_l,
-                            -std::f32::consts::PI..=std::f32::consts::PI,
-                        )
-                        .text(""),
-                    )
-                    .changed()
-                {
-                    self.camera.set_pitch_l(pitch_l);
-                }
-            });
-
-            // Yaw(R) + Pitch(R)
-            ui.horizontal(|ui| {
-                let mut yaw_r = self.camera.yaw_r();
-                ui.label("Yaw(R)");
-                if ui
-                    .add(
-                        egui::Slider::new(&mut yaw_r, -std::f32::consts::PI..=std::f32::consts::PI)
-                            .text(""),
-                    )
-                    .changed()
-                {
-                    self.camera.set_yaw_r(yaw_r);
-                }
-                let mut pitch_r = self.camera.pitch_r();
-                ui.label("Pitch(R)");
-                if ui
-                    .add(
-                        egui::Slider::new(
-                            &mut pitch_r,
-                            -std::f32::consts::PI..=std::f32::consts::PI,
-                        )
-                        .text(""),
-                    )
-                    .changed()
-                {
-                    self.camera.set_pitch_r(pitch_r);
-                }
-            });
-        }); // Camera collapsible
+            self.render_camera_controls(ui);
+        });
 
         ui.separator();
         ui.add_space(4.0);
 
         ui.collapsing("4D Object Rotation", |ui| {
-            // XY + XZ
-            ui.horizontal(|ui| {
-                ui.label("XY:");
-                ui.add(
-                    egui::Slider::new(
-                        &mut self.rot_xy,
-                        -std::f32::consts::PI..=std::f32::consts::PI,
-                    )
-                    .text(""),
-                );
-                ui.label("XZ:");
-                ui.add(
-                    egui::Slider::new(
-                        &mut self.rot_xz,
-                        -std::f32::consts::PI..=std::f32::consts::PI,
-                    )
-                    .text(""),
-                );
-            });
-
-            // YZ + XW
-            ui.horizontal(|ui| {
-                ui.label("YZ:");
-                ui.add(
-                    egui::Slider::new(
-                        &mut self.rot_yz,
-                        -std::f32::consts::PI..=std::f32::consts::PI,
-                    )
-                    .text(""),
-                );
-                ui.label("XW:");
-                ui.add(
-                    egui::Slider::new(
-                        &mut self.rot_xw,
-                        -std::f32::consts::PI..=std::f32::consts::PI,
-                    )
-                    .text(""),
-                );
-            });
-
-            // YW + ZW
-            ui.horizontal(|ui| {
-                ui.label("YW:");
-                ui.add(
-                    egui::Slider::new(
-                        &mut self.rot_yw,
-                        -std::f32::consts::PI..=std::f32::consts::PI,
-                    )
-                    .text(""),
-                );
-                ui.label("ZW:");
-                ui.add(
-                    egui::Slider::new(
-                        &mut self.rot_zw,
-                        -std::f32::consts::PI..=std::f32::consts::PI,
-                    )
-                    .text(""),
-                );
-            });
+            self.render_rotation_controls(ui);
         });
 
         ui.add_space(4.0);
