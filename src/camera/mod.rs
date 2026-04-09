@@ -256,7 +256,7 @@ impl Camera {
 
     #[cfg(test)]
     #[must_use]
-    pub fn direction_label_4d(&self, direction: SliceDirection) -> String {
+    pub(crate) fn direction_label_4d(&self, direction: SliceDirection) -> String {
         let basis = self.rotation_4d.basis_vectors();
         let v = match direction {
             SliceDirection::Forward => basis[2],
