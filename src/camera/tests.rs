@@ -250,18 +250,15 @@ fn test_move_along() {
 }
 
 #[test]
-fn test_rotate_affects_q_left_only() {
+fn test_rotate_affects_look_only() {
     let mut camera = Camera::new();
 
-    let initial_q_right = *camera.rotation_4d.q_right();
+    let initial_tilt = *camera.rotation_4d.q_right();
 
     camera.rotate(1.0, 0.5);
 
-    let new_q_right = *camera.rotation_4d.q_right();
-    assert_eq!(
-        initial_q_right, new_q_right,
-        "rotate() should not affect q_right"
-    );
+    let new_tilt = *camera.rotation_4d.q_right();
+    assert_eq!(initial_tilt, new_tilt, "rotate() should not affect tilt");
 
     let forward = camera.forward_vector();
     assert!(
@@ -271,18 +268,15 @@ fn test_rotate_affects_q_left_only() {
 }
 
 #[test]
-fn test_rotate_4d_affects_q_right_only() {
+fn test_rotate_4d_affects_tilt_only() {
     let mut camera = Camera::new();
 
-    let initial_q_left = *camera.rotation_4d.q_left();
+    let initial_look = *camera.rotation_4d.q_left();
 
     camera.rotate_4d(1.0, 0.5);
 
-    let new_q_left = *camera.rotation_4d.q_left();
-    assert_eq!(
-        initial_q_left, new_q_left,
-        "rotate_4d() should not affect q_left"
-    );
+    let new_look = *camera.rotation_4d.q_left();
+    assert_eq!(initial_look, new_look, "rotate_4d() should not affect look");
 
     let basis_w = camera.rotation_4d.basis_w();
     assert!(
@@ -427,12 +421,12 @@ fn test_kata_ana_move_along_slice_normal() {
 }
 
 #[test]
-fn test_kata_ana_independent_of_q_left_yaw_pitch() {
-    let q_right_tilt = *Rotation4D::from_6_plane_angles(0.0, 0.0, 0.0, 0.41, -0.27, 0.18).q_right();
+fn test_kata_ana_independent_of_look_yaw_pitch() {
+    let tilt_quat = *Rotation4D::from_6_plane_angles(0.0, 0.0, 0.0, 0.41, -0.27, 0.18).q_right();
 
     let mut camera_a = Camera {
         position: Vector4::zeros(),
-        rotation_4d: Rotation4D::new(UnitQuaternion::identity(), q_right_tilt),
+        rotation_4d: Rotation4D::new(UnitQuaternion::identity(), tilt_quat),
         ..Camera::new()
     };
     let mut camera_b = Camera {
@@ -440,7 +434,7 @@ fn test_kata_ana_independent_of_q_left_yaw_pitch() {
         rotation_4d: Rotation4D::new(
             UnitQuaternion::from_axis_angle(&Vector3::y_axis(), 0.73)
                 * UnitQuaternion::from_axis_angle(&Vector3::x_axis(), -0.38),
-            q_right_tilt,
+            tilt_quat,
         ),
         ..Camera::new()
     };
@@ -509,21 +503,21 @@ fn test_rotate_and_rotate_4d_independent() {
     let mut camera = Camera::new();
 
     camera.rotate(1.0, 0.5);
-    let q_left_after_rotate = *camera.rotation_4d.q_left();
-    let q_right_after_rotate = *camera.rotation_4d.q_right();
+    let look_after_rotate = *camera.rotation_4d.q_left();
+    let tilt_after_rotate = *camera.rotation_4d.q_right();
 
     camera.rotate_4d(0.5, 1.0);
 
-    let q_left_after_both = *camera.rotation_4d.q_left();
-    let q_right_after_both = *camera.rotation_4d.q_right();
+    let look_after_both = *camera.rotation_4d.q_left();
+    let tilt_after_both = *camera.rotation_4d.q_right();
 
     assert_eq!(
-        q_left_after_rotate, q_left_after_both,
-        "rotate_4d() should not change q_left"
+        look_after_rotate, look_after_both,
+        "rotate_4d() should not change look"
     );
     assert!(
-        q_right_after_both != q_right_after_rotate,
-        "rotate_4d() should change q_right"
+        tilt_after_both != tilt_after_rotate,
+        "rotate_4d() should change tilt"
     );
 }
 
@@ -549,47 +543,47 @@ fn test_rotate_4d_circular_drag_returns_to_start() {
     camera.rotate_4d(-100.0, 0.0);
     camera.rotate_4d(0.0, -100.0);
 
-    let final_q_right = *camera.rotation_4d.q_right();
+    let final_tilt = *camera.rotation_4d.q_right();
 
     let expected = UnitQuaternion::identity();
-    assert_approx_eq(final_q_right.w, expected.w, 1e-3);
-    assert_approx_eq(final_q_right.i, expected.i, 1e-3);
-    assert_approx_eq(final_q_right.j, expected.j, 1e-3);
-    assert_approx_eq(final_q_right.k, expected.k, 1e-3);
+    assert_approx_eq(final_tilt.w, expected.w, 1e-3);
+    assert_approx_eq(final_tilt.i, expected.i, 1e-3);
+    assert_approx_eq(final_tilt.j, expected.j, 1e-3);
+    assert_approx_eq(final_tilt.k, expected.k, 1e-3);
 }
 
 #[test]
 fn test_rotate_4d_horizontal_then_back_returns_to_start() {
     let mut camera = Camera::new();
 
-    let initial_q_right = *camera.rotation_4d.q_right();
+    let initial_tilt = *camera.rotation_4d.q_right();
 
     camera.rotate_4d(100.0, 0.0);
     camera.rotate_4d(-100.0, 0.0);
 
-    let final_q_right = *camera.rotation_4d.q_right();
+    let final_tilt = *camera.rotation_4d.q_right();
 
-    assert_approx_eq(final_q_right.w, initial_q_right.w, 1e-3);
-    assert_approx_eq(final_q_right.i, initial_q_right.i, 1e-3);
-    assert_approx_eq(final_q_right.j, initial_q_right.j, 1e-3);
-    assert_approx_eq(final_q_right.k, initial_q_right.k, 1e-3);
+    assert_approx_eq(final_tilt.w, initial_tilt.w, 1e-3);
+    assert_approx_eq(final_tilt.i, initial_tilt.i, 1e-3);
+    assert_approx_eq(final_tilt.j, initial_tilt.j, 1e-3);
+    assert_approx_eq(final_tilt.k, initial_tilt.k, 1e-3);
 }
 
 #[test]
 fn test_rotate_4d_vertical_then_back_returns_to_start() {
     let mut camera = Camera::new();
 
-    let initial_q_right = *camera.rotation_4d.q_right();
+    let initial_tilt = *camera.rotation_4d.q_right();
 
     camera.rotate_4d(0.0, 100.0);
     camera.rotate_4d(0.0, -100.0);
 
-    let final_q_right = *camera.rotation_4d.q_right();
+    let final_tilt = *camera.rotation_4d.q_right();
 
-    assert_approx_eq(final_q_right.w, initial_q_right.w, 1e-3);
-    assert_approx_eq(final_q_right.i, initial_q_right.i, 1e-3);
-    assert_approx_eq(final_q_right.j, initial_q_right.j, 1e-3);
-    assert_approx_eq(final_q_right.k, initial_q_right.k, 1e-3);
+    assert_approx_eq(final_tilt.w, initial_tilt.w, 1e-3);
+    assert_approx_eq(final_tilt.i, initial_tilt.i, 1e-3);
+    assert_approx_eq(final_tilt.j, initial_tilt.j, 1e-3);
+    assert_approx_eq(final_tilt.k, initial_tilt.k, 1e-3);
 }
 
 #[test]

@@ -8,6 +8,18 @@
 //! This is the standard double-cover of `SO(4)` and is the foundation for all camera and object
 //! rotation logic in this project.
 //!
+//! # Camera semantic mapping
+//!
+//! The camera system stores its orientation in a `Rotation4D` but assigns **non-standard semantic
+//! roles** to the two quaternion slots:
+//!
+//! - `q_left` → **look** (in-slice 3D orientation: what direction the camera faces within its slice)
+//! - `q_right` → **tilt** (how the 3D slice itself is oriented in 4D)
+//!
+//! These are the standard field names from the math, but the camera interprets them as orthogonal
+//! control axes rather than symmetric factors. See `docs/camera_rotation_model.md` for the full
+//! explanation of how this affects movement vs. rendering.
+//!
 //! # Composition law (critical invariant)
 //!
 //! If `R1(v) = L1 v R1^{-1}` and `R2(v) = L2 v R2^{-1}`, then
@@ -33,8 +45,8 @@
 //!
 //! - `from_3d_rotation` must use `q_left = q_right = q`.
 //! - `then` must use the composition order documented above.
-//! - `basis_vectors` returns basis of the *full* `(q_left, q_right)` transform, not a camera
-//!   split model. Camera code intentionally derives some axes from `q_right` only.
+//! - `basis_vectors` returns basis of the *full* `(q_left, q_right)` transform, not the camera's
+//!   look/tilt decomposition. Camera code intentionally derives some axes from tilt only.
 
 use nalgebra::{Matrix4, UnitQuaternion, Vector3, Vector4};
 

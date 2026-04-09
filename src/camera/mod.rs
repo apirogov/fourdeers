@@ -4,31 +4,33 @@
 //!
 //! The camera stores one `Rotation4D` but uses it in two semantic parts:
 //!
-//! - `q_left`: orientation *inside* the current 3D slice (look direction, left/right/up frame)
-//! - `q_right`: orientation of the slice itself in 4D (slice tilt and slice normal)
+//! - **look** (`q_left` slot): orientation *inside* the current 3D slice (look direction, left/right/up frame)
+//! - **tilt** (`q_right` slot): orientation of the slice itself in 4D (slice tilt and slice normal)
 //!
 //! This split is intentional and must stay consistent with render code.
 //!
 //! # Why controls are implemented this way
 //!
 //! - 3D movement (`forward/backward/left/right/up/down`) should follow what the camera sees in the
-//!   current slice. So we compute camera-frame directions from `q_left` and then project those into
-//!   world 4D using the basis induced by `q_right` only.
+//!   current slice. So we compute camera-frame directions from the **look** quaternion and then project
+//!   those into world 4D using the basis induced by the **tilt** quaternion only.
 //! - 4D movement (`kata/ana`) should move along the slice normal, so it uses `basis_w` from a
-//!   rotation built as `(identity, q_right)`.
+//!   rotation built as `(identity, tilt)`.
 //!
-//! If `kata/ana` are derived from the full `(q_left, q_right)` basis, horizontal 3D look changes
+//! If `kata/ana` are derived from the full `(look, tilt)` basis, horizontal 3D look changes
 //! can incorrectly introduce vertical drift.
 //!
 //! # Refactor guardrails
 //!
-//! - Keep `rotate` affecting `q_left` only.
-//! - Keep `rotate_4d` affecting `q_right` only.
+//! - Keep `rotate` affecting **look** only.
+//! - Keep `rotate_4d` affecting **tilt** only.
 //! - Keep `apply_action` frame split exactly as described above.
 //! - If changed, run and verify camera tests around:
 //!   - `test_apply_action_moves_follow_3d_camera_frame_with_tilted_slice`
-//!   - `test_kata_ana_independent_of_q_left_yaw_pitch`
+//!   - `test_kata_ana_independent_of_look_yaw_pitch`
 //!   - `test_kata_ana_do_not_change_xyz_in_pure_3d_slice`
+//!
+//! See `docs/camera_rotation_model.md` for a full explanation of the rotation model.
 
 use nalgebra::{UnitQuaternion, Vector3, Vector4};
 
@@ -44,8 +46,7 @@ pub struct Camera {
 
     pub rotation_4d: Rotation4D,
 
-    /// Cached yaw angle (rotation around Y axis) for `q_left` - in radians.
-    /// Cached to avoid quaternion-to-Euler conversion instability that causes UI slider glitching.
+    /// Cached look yaw angle (rotation around Y axis) in radians.
     yaw_l: f32,
     pitch_l: f32,
     yaw_r: f32,
@@ -116,7 +117,7 @@ impl Camera {
         ) * speed;
     }
 
-    /// Rotate camera by delta mouse movement (3D mode - affects `q_left`)
+    /// Rotate camera by delta mouse movement (3D mode - affects **look** quaternion).
     /// `delta_x`: horizontal movement (positive = drag right)
     /// `delta_y`: vertical movement (positive = drag down)
     ///
@@ -132,7 +133,7 @@ impl Camera {
             UnitQuaternion::from_axis_angle(&Vector3::x_axis(), delta_y * ROTATION_SENSITIVITY);
 
         // Apply rotations: yaw (around world Y) then pitch (around local X)
-        // Modify q_left (the 3D-like rotation)
+        // Modify look quaternion (the 3D-like rotation)
         let new_q_left = yaw_rot * *self.rotation_4d.q_left() * pitch_rot;
         self.rotation_4d = Rotation4D::new(new_q_left, *self.rotation_4d.q_right());
 
@@ -141,9 +142,9 @@ impl Camera {
         self.pitch_l += delta_y * ROTATION_SENSITIVITY;
     }
 
-    /// Rotate 4D camera slice orientation (affects `q_right` only).
+    /// Rotate 4D camera slice orientation (affects **tilt** quaternion only).
     ///
-    /// This tilts the 3D slice in 4D. It should not change in-slice look frame (`q_left`).
+    /// This tilts the 3D slice in 4D. It should not change in-slice look frame.
     #[allow(clippy::similar_names)]
     pub fn rotate_4d(&mut self, delta_x: f32, delta_y: f32) {
         // XW plane for horizontal (like XZ in 3D), YW plane for vertical (like YZ in 3D)
@@ -162,19 +163,19 @@ impl Camera {
         self.pitch_r += delta_y * ROTATION_SENSITIVITY;
     }
 
-    /// Get yaw angle (rotation around Y axis) in radians - for `q_left`
+    /// Get look yaw angle (rotation around Y axis) in radians
     #[must_use]
     pub const fn yaw_l(&self) -> f32 {
         self.yaw_l
     }
 
-    /// Get pitch angle (rotation around X axis) in radians - for `q_left`
+    /// Get look pitch angle (rotation around X axis) in radians
     #[must_use]
     pub const fn pitch_l(&self) -> f32 {
         self.pitch_l
     }
 
-    /// Set `q_left` (3D orientation) from yaw and pitch angles
+    /// Set **look** quaternion from yaw and pitch angles
     pub fn set_yaw_pitch_l(&mut self, yaw: f32, pitch: f32) {
         let yaw_rot = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), yaw);
         let pitch_rot = UnitQuaternion::from_axis_angle(&Vector3::x_axis(), pitch);
@@ -183,13 +184,13 @@ impl Camera {
         self.pitch_l = pitch;
     }
 
-    /// Set yaw only for `q_left`, preserving current pitch
+    /// Set look yaw only, preserving current pitch
     pub fn set_yaw_l(&mut self, yaw: f32) {
         self.set_yaw_pitch_l_internal(yaw, self.pitch_l);
         self.yaw_l = yaw;
     }
 
-    /// Set pitch only for `q_left`, preserving current yaw
+    /// Set look pitch only, preserving current yaw
     pub fn set_pitch_l(&mut self, pitch: f32) {
         self.set_yaw_pitch_l_internal(self.yaw_l, pitch);
         self.pitch_l = pitch;
@@ -201,33 +202,33 @@ impl Camera {
         self.rotation_4d = Rotation4D::new(yaw_rot * pitch_rot, *self.rotation_4d.q_right());
     }
 
-    /// Get yaw angle for `q_right` (4D rotation in XW plane)
+    /// Get tilt yaw angle (4D rotation in XW plane)
     #[must_use]
     pub const fn yaw_r(&self) -> f32 {
         self.yaw_r
     }
 
-    /// Get pitch angle for `q_right` (4D rotation in YW plane)
+    /// Get tilt pitch angle (4D rotation in YW plane)
     #[must_use]
     pub const fn pitch_r(&self) -> f32 {
         self.pitch_r
     }
 
-    /// Set yaw only for `q_right`, preserving current pitch
+    /// Set tilt yaw only, preserving current pitch
     pub fn set_yaw_r(&mut self, yaw: f32) {
         let pitch = self.pitch_r;
         self.rotation_4d.set_q_right_from_yaw_pitch(yaw, pitch);
         self.yaw_r = yaw;
     }
 
-    /// Set pitch only for `q_right`, preserving current yaw
+    /// Set tilt pitch only, preserving current yaw
     pub fn set_pitch_r(&mut self, pitch: f32) {
         let yaw = self.yaw_r;
         self.rotation_4d.set_q_right_from_yaw_pitch(yaw, pitch);
         self.pitch_r = pitch;
     }
 
-    /// Returns the slice-only rotation (identity q_left, actual q_right).
+    /// Returns the tilt-only rotation (identity look, actual tilt).
     ///
     /// Used to derive slice-normal direction and to project in-slice camera
     /// directions into world 4D without including the camera's 3D look rotation.
@@ -276,10 +277,10 @@ impl Camera {
         Self::project_3d_to_4d_with_basis(v3, &self.rotation_4d.basis_vectors())
     }
 
-    /// Projects a camera-local 3D direction into world 4D using only `q_right` slice orientation.
+    /// Projects a camera-local 3D direction into world 4D using **tilt** quaternion only.
     ///
-    /// This is the key bridge between in-slice movement (`q_left`) and tilted-slice world motion
-    /// (`q_right`).
+    /// This is the key bridge between in-slice movement (**look**) and tilted-slice world motion
+    /// (**tilt**).
     #[must_use]
     pub fn project_camera_3d_to_world_4d(&self, v3: Vector3<f32>) -> Vector4<f32> {
         Self::project_3d_to_4d_with_basis(v3, &self.slice_rotation().basis_vectors())
@@ -313,8 +314,8 @@ impl Camera {
 
     /// Applies one camera movement action in the mathematically split frame model.
     ///
-    /// - 3D actions: derive direction from `q_left`, project through `q_right` slice basis.
-    /// - Kata/Ana: move along slice normal from `(identity, q_right).basis_w()`.
+    /// - 3D actions: derive direction from **look** quaternion, project through **tilt** basis.
+    /// - Kata/Ana: move along slice normal from `(identity, tilt).basis_w()`.
     ///
     /// Do not collapse this to full `rotation_4d.basis_*` without updating camera semantics.
     pub fn apply_action(&mut self, action: Direction4D, speed: f32) {
