@@ -147,7 +147,14 @@ The same stored pair `(q_left, q_right)` is used in two distinct ways:
 v' = q_left * v * q_right^{-1}
 ```
 
-This is the full standard rotation. Used in `Rotation4D::rotate_point`, `basis_vectors`, `to_matrix`, etc. The tesseract vertices are transformed through the complete rotation to appear in camera space.
+This is the full standard rotation. Used in `Rotation4D::rotate_point`, `basis_vectors`, `to_matrix`, etc. For projecting 4D vertices into 3D screen space (used by both the scene view and the map view), the rotation is decomposed as:
+
+```
+mat_4d = (I, q_right)^{-1}.to_matrix()     // undo tilt: applies q_right^{-1} from the right only
+mat_3d = q_left^{-1}.to_rotation_matrix()   // undo look: applies q_left^{-1} from the left only
+```
+
+This maps 4D world positions → tilt-adjusted 4D → 3D (by using only XYZ components) → look-adjusted 3D. Both the scene renderer and the map renderer use this same pattern.
 
 ### For movement (deriving translation directions)
 
@@ -161,17 +168,6 @@ slice_normal = (I, q_R).basis_w()                             // W-column of til
 ```
 
 Look determines the in-slice movement direction (what direction "forward" means within the slice). Tilt determines how that 3D direction maps into 4D, and independently provides the slice-normal direction for kata/ana. The full rotation `q_left * v * q_right^{-1}` is only used for rendering.
-
-### For the map view
-
-The map view decomposes the rotation in a similar two-stage fashion (`MapViewTransform`):
-
-```
-mat_4d = (I, q_right)^{-1}.to_matrix()     // undo tilt: (I, q_right^{-1})
-mat_3d = q_left^{-1}.to_rotation_matrix()   // undo look
-```
-
-This maps 4D world positions → tilt-adjusted 4D → 3D (by using only XYZ components) → look-adjusted 3D.
 
 ## 6. Relationship to Isoclinic Decomposition
 
