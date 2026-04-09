@@ -54,6 +54,13 @@ pub struct Camera {
 
 impl Default for Camera {
     fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Camera {
+    #[must_use]
+    pub fn new() -> Self {
         Self {
             position: DEFAULT_CAMERA_POSITION,
             rotation_4d: Rotation4D::identity(),
@@ -62,13 +69,6 @@ impl Default for Camera {
             yaw_r: 0.0,
             pitch_r: 0.0,
         }
-    }
-}
-
-impl Camera {
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
     }
 
     pub fn reset(&mut self) {

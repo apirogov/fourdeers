@@ -50,15 +50,20 @@ pub use zones::{
 };
 
 /// Tracks the active drag gesture state.
-#[derive(Default)]
 pub struct DragState {
     pub drag_view: Option<DragView>,
 }
 
+impl Default for DragState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DragState {
     #[must_use]
-    pub fn new() -> Self {
-        Self::default()
+    pub const fn new() -> Self {
+        Self { drag_view: None }
     }
 
     pub const fn clear(&mut self) {

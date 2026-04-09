@@ -133,18 +133,18 @@ pub struct StereoSettings {
 
 impl Default for StereoSettings {
     fn default() -> Self {
-        Self {
-            eye_separation: 0.12,
-            projection_distance: DEFAULT_PROJECTION_DISTANCE,
-            projection_mode: ProjectionMode::Perspective,
-        }
+        Self::new()
     }
 }
 
 impl StereoSettings {
     #[must_use]
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            eye_separation: 0.12,
+            projection_distance: DEFAULT_PROJECTION_DISTANCE,
+            projection_mode: ProjectionMode::Perspective,
+        }
     }
 
     #[must_use]
