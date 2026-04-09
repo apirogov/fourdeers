@@ -100,11 +100,25 @@ impl TetraStyle {
     }
 }
 
-#[allow(clippy::too_many_lines)]
 pub fn render_tetrahedron(
     painter: &egui::Painter,
     gadget: &TetrahedronGadget,
     project: impl Fn(f32, f32, f32) -> Option<egui::Pos2>,
+    style: &TetraStyle,
+) {
+    render_tetra_edges(painter, gadget, &project, style);
+
+    let component_mags: [f32; 4] = gadget.component_values.map(f32::abs);
+    let max_mag = component_mags.iter().copied().fold(0.0f32, f32::max);
+    render_tetra_labels(painter, gadget, &project, style, max_mag);
+
+    render_tetra_arrow(painter, gadget, &project, style);
+}
+
+fn render_tetra_edges(
+    painter: &egui::Painter,
+    gadget: &TetrahedronGadget,
+    project: &impl Fn(f32, f32, f32) -> Option<egui::Pos2>,
     style: &TetraStyle,
 ) {
     for edge in &gadget.edges {
@@ -125,123 +139,138 @@ pub fn render_tetrahedron(
             );
         }
     }
+}
 
-    let component_mags: [f32; 4] = gadget.component_values.map(f32::abs);
-    let max_mag = component_mags.iter().copied().fold(0.0f32, f32::max);
-
-    if !matches!(style.label_mode, TetraLabelMode::Hidden) {
-        let font_id = if style.vertex_label_font_proportional {
-            egui::FontId::proportional(style.vertex_label_font_size)
-        } else {
-            egui::FontId::monospace(style.vertex_label_font_size)
-        };
-
-        for (i, vertex) in gadget.vertices.iter().enumerate() {
-            let component = gadget.component_values[i];
-            let color = crate::tetrahedron::compute_component_color(component, max_mag);
-            let egui_color = color.to_egui_color();
-
-            if let (Some(pos), Some(normal)) = (gadget.vertex_3d(i), gadget.vertex_normal(i)) {
-                let label_x = pos.x + normal.x * style.label_normal_offset;
-                let label_y = pos.y + normal.y * style.label_normal_offset;
-                if let Some(p) = project(label_x, label_y, pos.z) {
-                    let vertex_label = match &style.label_mode {
-                        TetraLabelMode::Compass(frame_mode) => {
-                            compass_vertex_label(*frame_mode, i, component, &vertex.label)
-                        }
-                        TetraLabelMode::Raw => &vertex.label,
-                        TetraLabelMode::Hidden => unreachable!(),
-                    };
-
-                    render_dual_outlined_text(
-                        painter,
-                        p,
-                        egui::Align2::CENTER_CENTER,
-                        vertex_label,
-                        font_id.clone(),
-                        egui_color,
-                        style.outline_color,
-                    );
-                }
-            }
-
-            if style.show_component_values {
-                if let (Some(pos), Some(normal)) = (gadget.vertex_3d(i), gadget.vertex_normal(i)) {
-                    let offset = style.component_value_normal_offset;
-                    let label_x = pos.x + normal.x * offset;
-                    let label_y = pos.y + normal.y * offset;
-                    if let Some(label_p) = project(label_x, label_y, pos.z) {
-                        let value_text = crate::tetrahedron::format_component_value(component);
-                        let value_font = egui::FontId::monospace(style.component_value_font_size);
-
-                        render_outlined_text(
-                            painter,
-                            label_p,
-                            egui::Align2::CENTER_CENTER,
-                            &value_text,
-                            value_font,
-                            TEXT_HIGHLIGHT,
-                            OUTLINE_THIN,
-                        );
-                    }
-                }
-            }
-        }
+fn render_tetra_labels(
+    painter: &egui::Painter,
+    gadget: &TetrahedronGadget,
+    project: &impl Fn(f32, f32, f32) -> Option<egui::Pos2>,
+    style: &TetraStyle,
+    max_mag: f32,
+) {
+    if matches!(style.label_mode, TetraLabelMode::Hidden) {
+        return;
     }
 
-    let arrow = gadget.arrow_position();
-    let arrow_p = project(arrow.x, arrow.y, arrow.z);
-    let origin_p = project(0.0, 0.0, 0.0);
-    if let (Some(arrow_end), Some(arrow_start)) = (arrow_p, origin_p) {
-        let arrow_vec = arrow_end - arrow_start;
+    let font_id = if style.vertex_label_font_proportional {
+        egui::FontId::proportional(style.vertex_label_font_size)
+    } else {
+        egui::FontId::monospace(style.vertex_label_font_size)
+    };
 
-        if arrow_vec.length() > 1e-3 {
-            painter.line_segment(
-                [arrow_start, arrow_end],
-                egui::Stroke::new(style.arrow_stroke_width, style.arrow_color),
-            );
+    for (i, vertex) in gadget.vertices.iter().enumerate() {
+        let component = gadget.component_values[i];
+        let color = crate::tetrahedron::compute_component_color(component, max_mag);
+        let egui_color = color.to_egui_color();
 
-            let arrow_head_size = gadget.arrow_head_size() * style.arrow_head_scale;
-            if arrow_vec.length() > arrow_head_size {
-                draw_arrow_head(
+        if let (Some(pos), Some(normal)) = (gadget.vertex_3d(i), gadget.vertex_normal(i)) {
+            let label_x = pos.x + normal.x * style.label_normal_offset;
+            let label_y = pos.y + normal.y * style.label_normal_offset;
+            if let Some(p) = project(label_x, label_y, pos.z) {
+                let vertex_label = match &style.label_mode {
+                    TetraLabelMode::Compass(frame_mode) => {
+                        compass_vertex_label(*frame_mode, i, component, &vertex.label)
+                    }
+                    TetraLabelMode::Raw => &vertex.label,
+                    TetraLabelMode::Hidden => unreachable!(),
+                };
+
+                render_dual_outlined_text(
                     painter,
-                    arrow_end,
-                    arrow_vec,
-                    arrow_head_size,
-                    style.arrow_color,
+                    p,
+                    egui::Align2::CENTER_CENTER,
+                    vertex_label,
+                    font_id.clone(),
+                    egui_color,
+                    style.outline_color,
                 );
             }
         }
 
-        painter.circle_filled(arrow_start, style.origin_dot_radius, style.origin_dot_color);
+        if style.show_component_values {
+            if let (Some(pos), Some(normal)) = (gadget.vertex_3d(i), gadget.vertex_normal(i)) {
+                let offset = style.component_value_normal_offset;
+                let label_x = pos.x + normal.x * offset;
+                let label_y = pos.y + normal.y * offset;
+                if let Some(label_p) = project(label_x, label_y, pos.z) {
+                    let value_text = crate::tetrahedron::format_component_value(component);
+                    let value_font = egui::FontId::monospace(style.component_value_font_size);
 
-        if let Some(ref label) = gadget.base_label {
-            let base_pos = arrow_start + egui::Vec2::new(0.0, style.base_label_offset_y);
-            let font_id = egui::FontId::proportional(style.base_label_font_size);
-            render_outlined_text(
+                    render_outlined_text(
+                        painter,
+                        label_p,
+                        egui::Align2::CENTER_CENTER,
+                        &value_text,
+                        value_font,
+                        TEXT_HIGHLIGHT,
+                        OUTLINE_THIN,
+                    );
+                }
+            }
+        }
+    }
+}
+
+fn render_tetra_arrow(
+    painter: &egui::Painter,
+    gadget: &TetrahedronGadget,
+    project: &impl Fn(f32, f32, f32) -> Option<egui::Pos2>,
+    style: &TetraStyle,
+) {
+    let arrow = gadget.arrow_position();
+    let arrow_p = project(arrow.x, arrow.y, arrow.z);
+    let origin_p = project(0.0, 0.0, 0.0);
+    let (Some(arrow_end), Some(arrow_start)) = (arrow_p, origin_p) else {
+        return;
+    };
+    let arrow_vec = arrow_end - arrow_start;
+
+    if arrow_vec.length() > 1e-3 {
+        painter.line_segment(
+            [arrow_start, arrow_end],
+            egui::Stroke::new(style.arrow_stroke_width, style.arrow_color),
+        );
+
+        let arrow_head_size = gadget.arrow_head_size() * style.arrow_head_scale;
+        if arrow_vec.length() > arrow_head_size {
+            draw_arrow_head(
                 painter,
-                base_pos,
-                egui::Align2::CENTER_CENTER,
-                label,
-                font_id,
-                LABEL_DEFAULT,
-                OUTLINE_DEFAULT,
+                arrow_end,
+                arrow_vec,
+                arrow_head_size,
+                style.arrow_color,
             );
         }
+    }
 
-        if let Some(ref label) = gadget.tip_label {
-            let tip_offset = egui::Vec2::new(0.0, -style.tip_label_offset_y);
-            let label_pos = arrow_end + tip_offset;
-            painter.text(
-                label_pos,
-                egui::Align2::CENTER_BOTTOM,
-                label,
-                egui::FontId::proportional(style.tip_label_font_size),
-                style.tip_label_color,
-            );
-        } else if arrow_vec.length() > 1e-3 {
-            painter.circle_filled(arrow_end, style.tip_dot_radius, style.arrow_color);
-        }
+    painter.circle_filled(arrow_start, style.origin_dot_radius, style.origin_dot_color);
+
+    if let Some(ref label) = gadget.base_label {
+        let base_pos = arrow_start + egui::Vec2::new(0.0, style.base_label_offset_y);
+        let font_id = egui::FontId::proportional(style.base_label_font_size);
+        render_outlined_text(
+            painter,
+            base_pos,
+            egui::Align2::CENTER_CENTER,
+            label,
+            font_id,
+            LABEL_DEFAULT,
+            OUTLINE_DEFAULT,
+        );
+    }
+
+    if let Some(ref label) = gadget.tip_label {
+        let tip_offset = egui::Vec2::new(0.0, -style.tip_label_offset_y);
+        let label_pos = arrow_end + tip_offset;
+        painter.text(
+            label_pos,
+            egui::Align2::CENTER_BOTTOM,
+            label,
+            egui::FontId::proportional(style.tip_label_font_size),
+            style.tip_label_color,
+        );
+    } else if arrow_vec.length() > 1e-3 {
+        painter.circle_filled(arrow_end, style.tip_dot_radius, style.arrow_color);
     }
 }
 
