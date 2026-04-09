@@ -7,8 +7,8 @@ use crate::camera::{CameraAction, ROTATION_SENSITIVITY};
 use crate::colors::PANEL_FILL;
 use crate::input::render_zone_debug_overlay;
 use crate::input::{
-    analyze_tap_in_stereo_view_with_modes, zone_from_rect, zone_to_movement_action, DragView, Zone,
-    ZoneDebugOptions, ZoneMode,
+    analyze_tap_in_stereo_view_with_modes, zone_from_rect, zone_to_movement_action, DragView,
+    TapAnalysis, Zone, ZoneDebugOptions, ZoneMode,
 };
 use crate::map::MapRenderer;
 use crate::render::{
@@ -406,6 +406,12 @@ impl FourDeersApp {
         self.last_drag_pos = Some(pos);
     }
 
+    fn analyze_tap_for_active_toy(&self, rect: egui::Rect, pos: egui::Pos2) -> Option<TapAnalysis> {
+        let left_zone_mode = self.toy_manager.active_toy().zone_mode_for_view(true);
+        let right_zone_mode = self.toy_manager.active_toy().zone_mode_for_view(false);
+        analyze_tap_in_stereo_view_with_modes(rect, pos, left_zone_mode, right_zone_mode)
+    }
+
     fn process_hold(&mut self, pos: egui::Pos2) {
         if self.active_view == ActiveView::Map {
             let vis_rect = self.visualization_rect;
@@ -428,15 +434,7 @@ impl FourDeersApp {
 
         if let Some(visualization_rect) = vis_rect {
             if visualization_rect.contains(pos) {
-                let left_zone_mode = self.toy_manager.active_toy().zone_mode_for_view(true);
-                let right_zone_mode = self.toy_manager.active_toy().zone_mode_for_view(false);
-
-                if let Some(analysis) = analyze_tap_in_stereo_view_with_modes(
-                    visualization_rect,
-                    pos,
-                    left_zone_mode,
-                    right_zone_mode,
-                ) {
+                if let Some(analysis) = self.analyze_tap_for_active_toy(visualization_rect, pos) {
                     self.toy_manager.active_toy_mut().handle_hold(&analysis);
                 }
             }
@@ -818,15 +816,7 @@ impl FourDeersApp {
             return;
         }
 
-        let left_zone_mode = self.toy_manager.active_toy().zone_mode_for_view(true);
-        let right_zone_mode = self.toy_manager.active_toy().zone_mode_for_view(false);
-
-        let Some(analysis) = analyze_tap_in_stereo_view_with_modes(
-            visualization_rect,
-            pos,
-            left_zone_mode,
-            right_zone_mode,
-        ) else {
+        let Some(analysis) = self.analyze_tap_for_active_toy(visualization_rect, pos) else {
             return;
         };
 
