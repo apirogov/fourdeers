@@ -20,21 +20,23 @@ The code stores this pair in `Rotation4D` with fields named `q_left` and `q_righ
 
 The camera assigns **specific semantic roles** to these two quaternion slots:
 
-| `Rotation4D` field | Camera role | Controls |
+| `Rotation4D` field | Camera role | What it controls |
 |---|---|---|
-| `q_left` | **Look** orientation | In-slice yaw/pitch (what you see) |
-| `q_right` | **Tilt** orientation | Slice tilt in 4D (XW/YW planes) |
+| `q_left` | **Look** | In-slice orientation: yaw/pitch of the camera within the current 3D slice |
+| `q_right` | **Tilt** | Slice orientation: how the 3D slice itself is rotated in 4D (XW/YW planes) |
 
-This is **not** the standard way to interpret `(q_L, q_R)`. In the standard model, both quaternions contribute symmetrically to the final rotation. Here, the camera treats them as orthogonal control axes:
+This is **not** the standard way to interpret `(q_L, q_R)`. In the standard model, both quaternions contribute symmetrically to the final rotation. Here, the camera treats them as independent control axes:
 
 - Mouse drag changes **look** (3D FPS-style yaw/pitch, stored in `q_left`)
 - 4D tilt controls change **tilt** (XW/YW rotation, stored in `q_right`)
 
-Both still participate in the full rotation `q_L * v * q_R^{-1}` for rendering. But for **movement**, they are used differently.
+Both still participate in the full rotation `q_L * v * q_R^{-1}` for rendering. But for **movement**, the camera uses them through a decoupled pipeline rather than the standard rotation basis.
+
+Note: **look** and **tilt** are both *rotations*. **Movement** (translation along an axis) is a separate thing — the camera derives its movement directions from the look and tilt quaternions, but the quaternions themselves are not movement.
 
 ## 3. The Two-Stage Movement Pipeline
 
-This is the most important — and most confusing — part of the camera system. Movement axes are **not** derived from the standard rotation basis.
+Movement axes are **not** derived from the standard rotation basis. The camera computes them through a two-stage pipeline that keeps in-slice movement and 4D movement independent.
 
 ### Standard rotation basis
 
@@ -61,8 +63,10 @@ Step 2: Project to 4D through tilt
     right4   = project_via_tilt(right3)
     up4      = project_via_tilt(up3)
 
-Step 3: Kata/Ana (4D only)
+Step 3: Slice-normal movement
     w_axis   = (I, q_R).basis_w()             // W-column of tilt-only rotation
+    kata     = +w_axis                         // translate along slice normal
+    ana      = -w_axis                         // translate against slice normal
 ```
 
 ### Why two stages?
@@ -72,13 +76,13 @@ The key difference from the standard basis is **Step 2**: the 3D look directions
 This means:
 
 - **Forward/Backward/Left/Right/Up/Down** movement follows what you **see** in the current slice. If you're looking right and press forward, you move in the direction you're looking — projected into 4D by how the slice is tilted.
-- **Kata/Ana** movement is along the slice normal, which depends **only** on tilt. It is completely independent of where you're looking.
+- **Kata/Ana** movement is **translation** along the slice normal. The slice normal is derived from the tilt quaternion (`(I, q_R).basis_w()`), so kata/ana depends only on tilt, not on look direction.
 
 If the camera used the standard basis for movement, changing your 3D look direction would alter your kata/ana direction (because the full basis interleaves look and tilt). The two-stage pipeline keeps them independent.
 
 ### Mathematical formulation
 
-The camera computes each movement axis in two steps:
+The camera computes each in-slice movement axis in two steps:
 
 1. Derive a 3D direction from the look quaternion via standard conjugation:
    `forward3 = q_L * (0,0,1) * q_L^{-1}`
@@ -96,6 +100,13 @@ tilt-only rotation to the j-th standard basis vector. Equivalently: compute the 
 direction, embed it in 4D as `[x, y, z, 0]`, then apply the tilt rotation to map it into
 world 4D space.
 
+For kata/ana, the movement axis is simply the W-column of `(I, q_R)`:
+```
+kata_axis = (I, q_R).rotate_point([0,0,0,1])
+```
+
+This is the slice normal — the direction orthogonal to the tilted 3D slice.
+
 ## 4. Why `rotate_4d` Extracts `.q_left()` From Plane Rotations
 
 This is a common source of confusion. The code in `Camera::rotate_4d`:
@@ -105,16 +116,26 @@ let tilt_xw = Rotation4D::from_plane_angle(RotationPlane::XW, angle);
 let new_q_right = *tilt_xw.q_left() * *self.rotation_4d.q_right() * *tilt_yw.q_left();
 ```
 
-Why does it extract `.q_left()` to update what we just called the **tilt** quaternion (stored in `q_right`)?
+Why does it extract `.q_left()` to update the tilt quaternion (stored in `q_right`)?
 
-Because of how `Rotation4D::from_plane_angle` constructs XW/YW rotations:
+`Rotation4D::from_plane_angle` constructs rotations differently depending on the plane:
 
 - **XY/XZ/YZ planes**: `q_left = q_right = q(angle)` — standard 3D conjugation, leaves W unchanged.
-- **XW/YW/ZW planes**: `q_left = q(angle)`, `q_right = q(angle)^{-1}` — double-sided action that mixes spatial axes with W.
+- **XW/YW/ZW planes**: `q_left = q(angle)`, `q_right = q(angle)^{-1}`.
 
-So for XW/YW, the "raw" rotation quaternion is in the `q_left` slot, while `q_right` holds its inverse. When the camera wants to accumulate tilt into its `q_right` slot, it extracts the non-inverted quaternion from `.q_left()`.
+So for an XW rotation by angle `a`, `from_plane_angle` creates the pair `(q, q^{-1})`. The full rotation action is:
+```
+v' = q * v * (q^{-1})^{-1} = q * v * q
+```
 
-The naming collision (`.q_left()` being stored into `q_right`) is unfortunate but mechanically correct. The `q_left`/`q_right` names belong to the math layer; the camera's **look**/**tilt** roles are a separate semantic overlay.
+This correctly mixes spatial axes with W. Now, the camera accumulates tilt into `q_right`. It extracts the raw quaternion `q` from `tilt_xw.q_left()` and composes it into `q_right`:
+```
+new_q_right = tilt_xw.q_left() * old_q_right * tilt_yw.q_left()
+```
+
+Later, when the full rotation is applied for rendering as `q_L * v * q_R^{-1}`, this accumulated `q_right` is inverted by the formula: the stored `q` acts as `q^{-1}`. The net effect is the correct XW/YW rotation.
+
+The naming collision (extracting `.q_left()` to store into `q_right`) is unfortunate but mechanically correct. The `q_left`/`q_right` names belong to the math layer; the camera's **look**/**tilt** roles are a separate semantic overlay.
 
 ## 5. Rendering vs. Movement: Two Uses of the Same Quaternions
 
@@ -128,26 +149,29 @@ v' = q_left * v * q_right^{-1}
 
 This is the full standard rotation. Used in `Rotation4D::rotate_point`, `basis_vectors`, `to_matrix`, etc. The tesseract vertices are transformed through the complete rotation to appear in camera space.
 
-### For movement (computing camera axes)
+### For movement (deriving translation directions)
 
 ```
+// In-slice movement (Forward/Backward/Left/Right/Up/Down)
 look_3d  = q_left * (standard 3D vectors) * q_left^{-1}     // 3D conjugation
 move_4d  = tilt_basis_matrix * [look_3d.x, look_3d.y, look_3d.z, 0]  // project via (I, q_R)
-kata/ana = tilt_basis.column_w                                // W-column of (I, q_R)
+
+// Slice-normal movement (Kata/Ana)
+slice_normal = (I, q_R).basis_w()                             // W-column of tilt-only rotation
 ```
 
-Look and tilt are **decoupled** for movement. Look determines what you see; tilt determines how that direction maps into 4D. The full rotation `q_left * v * q_right^{-1}` is only used for rendering.
+Look determines the in-slice movement direction (what direction "forward" means within the slice). Tilt determines how that 3D direction maps into 4D, and independently provides the slice-normal direction for kata/ana. The full rotation `q_left * v * q_right^{-1}` is only used for rendering.
 
 ### For the map view
 
 The map view decomposes the rotation in a similar two-stage fashion (`MapViewTransform`):
 
 ```
-mat_4d = (I, q_right)^{-1}.to_matrix()     // undo tilt
+mat_4d = (I, q_right)^{-1}.to_matrix()     // undo tilt: (I, q_right^{-1})
 mat_3d = q_left^{-1}.to_rotation_matrix()   // undo look
 ```
 
-This maps 4D world positions → tilt-adjusted 4D → 3D by discarding W → look-adjusted 3D.
+This maps 4D world positions → tilt-adjusted 4D → 3D (by using only XYZ components) → look-adjusted 3D.
 
 ## 6. Relationship to Isoclinic Decomposition
 
@@ -166,7 +190,7 @@ The camera's control decomposition aligns with the isoclinic decomposition at th
 - A pure look change (`rotate`) modifies `q_left` with `q_right` fixed — a left-isoclinic change.
 - A pure tilt change (`rotate_4d`) modifies `q_right` with `q_left` fixed — a right-isoclinic change.
 
-However, the camera's **movement pipeline** treats the two components asymmetrically: look directions are projected through tilt for 3D→4D mapping, but tilt (kata/ana) does not depend on look. This asymmetry is why the movement axes differ from the standard rotation basis — the quaternions are stored as isoclinic factors but used asymmetrically for movement.
+However, the camera's **movement pipeline** treats the two components asymmetrically: look directions are projected through tilt for in-slice→4D mapping, but slice-normal movement (kata/ana) does not depend on look. This asymmetry is why the movement axes differ from the standard rotation basis — the quaternions are stored as isoclinic factors but used asymmetrically for deriving translation directions.
 
 ## 7. Summary
 
@@ -174,9 +198,9 @@ However, the camera's **movement pipeline** treats the two components asymmetric
 |---|---|---|
 | Storage | `(q_L, q_R)` | Same — `q_left` = look, `q_right` = tilt |
 | Rotation action | `q_L * v * q_R^{-1}` | Same — used for rendering |
-| Movement axes | Full rotation basis | Two-stage: look then project through tilt |
+| In-slice movement | Full rotation basis | Two-stage: look direction projected through tilt basis |
+| Slice-normal movement | Full basis W-column | `(I, q_R)` W-column only (tilt-derived, look-independent) |
 | Look control | Not separated | Modifies `q_left` only |
 | Tilt control | Not separated | Modifies `q_right` only |
-| Kata/Ana | Full basis W-column | `(I, q_R)` W-column only |
 
-The camera is a **reparameterization for control ergonomics**: it uses the same mathematical representation as the standard model but interprets the two quaternion slots as orthogonal control axes (look and tilt), and derives movement directions through a decoupled pipeline that preserves the independence of in-slice movement and 4D movement.
+The camera is a **reparameterization for control ergonomics**: it uses the same mathematical representation as the standard model but interprets the two quaternion slots as independent control axes (look and tilt), and derives movement directions through a decoupled pipeline that preserves the independence of in-slice movement and slice-normal movement.
