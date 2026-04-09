@@ -299,7 +299,7 @@ fn test_apply_action_move_forward() {
         ..Camera::new()
     };
 
-    camera.apply_action(CameraAction::MoveForward, 1.0);
+    camera.apply_action(Direction4D::Forward, 1.0);
 
     assert_approx_eq(camera.position.z, 1.0, 1e-6);
 }
@@ -313,7 +313,7 @@ fn test_apply_action_move_forward_uses_camera_basis() {
         ..Camera::new()
     };
 
-    camera.apply_action(CameraAction::MoveForward, 1.0);
+    camera.apply_action(Direction4D::Forward, 1.0);
 
     assert_approx_eq(camera.position.x, 1.0, 1e-6);
     assert_approx_eq(camera.position.y, 0.0, 1e-6);
@@ -334,12 +334,12 @@ fn test_apply_action_moves_follow_3d_camera_frame_with_tilted_slice() {
     let forward = base_camera.project_camera_3d_to_world_4d(base_camera.forward_vector());
     let step = 0.75;
     let cases = [
-        (CameraAction::MoveRight, right),
-        (CameraAction::MoveLeft, -right),
-        (CameraAction::MoveUp, up),
-        (CameraAction::MoveDown, -up),
-        (CameraAction::MoveForward, forward),
-        (CameraAction::MoveBackward, -forward),
+        (Direction4D::Right, right),
+        (Direction4D::Left, -right),
+        (Direction4D::Up, up),
+        (Direction4D::Down, -up),
+        (Direction4D::Forward, forward),
+        (Direction4D::Backward, -forward),
     ];
 
     for (action, expected_dir) in cases {
@@ -366,12 +366,12 @@ fn test_3d_moves_do_not_change_world_w_when_slice_not_tilted() {
     };
 
     let actions = [
-        CameraAction::MoveRight,
-        CameraAction::MoveLeft,
-        CameraAction::MoveUp,
-        CameraAction::MoveDown,
-        CameraAction::MoveForward,
-        CameraAction::MoveBackward,
+        Direction4D::Right,
+        Direction4D::Left,
+        Direction4D::Up,
+        Direction4D::Down,
+        Direction4D::Forward,
+        Direction4D::Backward,
     ];
 
     for action in actions {
@@ -392,7 +392,7 @@ fn test_3d_moves_can_change_world_w_when_slice_tilted() {
     };
 
     let before = camera.position;
-    camera.apply_action(CameraAction::MoveForward, 1.0);
+    camera.apply_action(Direction4D::Forward, 1.0);
     let delta = camera.position - before;
     assert!(delta.w.abs() > 1e-6);
 }
@@ -409,7 +409,7 @@ fn test_kata_ana_move_along_slice_normal() {
 
     let mut kata = base_camera.clone();
     let kata_before = kata.position;
-    kata.apply_action(CameraAction::MoveKata, 0.8);
+    kata.apply_action(Direction4D::Kata, 0.8);
     let kata_delta = kata.position - kata_before;
     assert_approx_eq(kata_delta.x, w_axis.x * 0.8, 1e-6);
     assert_approx_eq(kata_delta.y, w_axis.y * 0.8, 1e-6);
@@ -418,7 +418,7 @@ fn test_kata_ana_move_along_slice_normal() {
 
     let mut ana = base_camera.clone();
     let ana_before = ana.position;
-    ana.apply_action(CameraAction::MoveAna, 0.8);
+    ana.apply_action(Direction4D::Ana, 0.8);
     let ana_delta = ana.position - ana_before;
     assert_approx_eq(ana_delta.x, -w_axis.x * 0.8, 1e-6);
     assert_approx_eq(ana_delta.y, -w_axis.y * 0.8, 1e-6);
@@ -447,11 +447,11 @@ fn test_kata_ana_independent_of_q_left_yaw_pitch() {
 
     let speed = 0.6;
     let before_a = camera_a.position;
-    camera_a.apply_action(CameraAction::MoveKata, speed);
+    camera_a.apply_action(Direction4D::Kata, speed);
     let delta_a = camera_a.position - before_a;
 
     let before_b = camera_b.position;
-    camera_b.apply_action(CameraAction::MoveKata, speed);
+    camera_b.apply_action(Direction4D::Kata, speed);
     let delta_b = camera_b.position - before_b;
 
     assert_approx_eq(delta_a.x, delta_b.x, 1e-6);
@@ -471,7 +471,7 @@ fn test_kata_ana_do_not_change_xyz_in_pure_3d_slice() {
 
     let mut kata = base_camera.clone();
     let before_kata = kata.position;
-    kata.apply_action(CameraAction::MoveKata, 0.9);
+    kata.apply_action(Direction4D::Kata, 0.9);
     let kata_delta = kata.position - before_kata;
     assert_approx_eq(kata_delta.x, 0.0, 1e-6);
     assert_approx_eq(kata_delta.y, 0.0, 1e-6);
@@ -480,7 +480,7 @@ fn test_kata_ana_do_not_change_xyz_in_pure_3d_slice() {
 
     let mut ana = base_camera.clone();
     let before_ana = ana.position;
-    ana.apply_action(CameraAction::MoveAna, 0.9);
+    ana.apply_action(Direction4D::Ana, 0.9);
     let ana_delta = ana.position - before_ana;
     assert_approx_eq(ana_delta.x, 0.0, 1e-6);
     assert_approx_eq(ana_delta.y, 0.0, 1e-6);
@@ -657,34 +657,34 @@ fn test_is_slice_tilted_after_4d_rotation() {
 #[test]
 fn test_direction_label_4d_forward_identity() {
     let camera = Camera::new();
-    let label = camera.direction_label_4d(super::SliceDirection::Forward);
+    let label = camera.direction_label_4d(Direction4D::Forward);
     assert_eq!(label, "+Z");
 }
 
 #[test]
 fn test_direction_label_4d_right_identity() {
     let camera = Camera::new();
-    let label = camera.direction_label_4d(super::SliceDirection::Right);
+    let label = camera.direction_label_4d(Direction4D::Right);
     assert_eq!(label, "+X");
 }
 
 #[test]
 fn test_direction_label_4d_up_identity() {
     let camera = Camera::new();
-    let label = camera.direction_label_4d(super::SliceDirection::Up);
+    let label = camera.direction_label_4d(Direction4D::Up);
     assert_eq!(label, "+Y");
 }
 
 #[test]
-fn test_direction_label_4d_w_positive_identity() {
+fn test_direction_label_4d_kata_identity() {
     let camera = Camera::new();
-    let label = camera.direction_label_4d(super::SliceDirection::WPositive);
+    let label = camera.direction_label_4d(Direction4D::Kata);
     assert_eq!(label, "+W");
 }
 
 #[test]
-fn test_camera_action_display() {
-    assert_eq!(CameraAction::MoveForward.to_string(), "MoveForward");
-    assert_eq!(CameraAction::MoveUp.to_string(), "MoveUp");
-    assert_eq!(CameraAction::MoveKata.to_string(), "MoveKata");
+fn test_direction_4d_display() {
+    assert_eq!(Direction4D::Forward.to_string(), "Forward");
+    assert_eq!(Direction4D::Up.to_string(), "Up");
+    assert_eq!(Direction4D::Kata.to_string(), "Kata");
 }

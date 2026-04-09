@@ -1,41 +1,41 @@
 //! Input handling for stereoscopic view tap zones.
 //!
 //! Provides shared keyboard movement handling for camera actions,
-//! mapping arrow keys and PageUp/PageDown/Period/Comma to standard `CameraAction` variants.
+//! mapping arrow keys and PageUp/PageDown/Period/Comma to standard `Direction4D` variants.
 
 use eframe::egui;
 
-use crate::camera::CameraAction;
+use crate::camera::Direction4D;
 
 pub fn handle_movement_keys(
     ctx: &egui::Context,
     speed: f32,
-    mut apply: impl FnMut(CameraAction, f32),
+    mut apply: impl FnMut(Direction4D, f32),
 ) {
     ctx.input(|i| {
         if i.key_down(egui::Key::ArrowUp) {
-            apply(CameraAction::MoveUp, speed);
+            apply(Direction4D::Up, speed);
         }
         if i.key_down(egui::Key::ArrowDown) {
-            apply(CameraAction::MoveDown, speed);
+            apply(Direction4D::Down, speed);
         }
         if i.key_down(egui::Key::ArrowLeft) {
-            apply(CameraAction::MoveLeft, speed);
+            apply(Direction4D::Left, speed);
         }
         if i.key_down(egui::Key::ArrowRight) {
-            apply(CameraAction::MoveRight, speed);
+            apply(Direction4D::Right, speed);
         }
         if i.key_down(egui::Key::PageUp) {
-            apply(CameraAction::MoveForward, speed);
+            apply(Direction4D::Forward, speed);
         }
         if i.key_down(egui::Key::PageDown) {
-            apply(CameraAction::MoveBackward, speed);
+            apply(Direction4D::Backward, speed);
         }
         if i.key_down(egui::Key::Period) {
-            apply(CameraAction::MoveKata, speed);
+            apply(Direction4D::Kata, speed);
         }
         if i.key_down(egui::Key::Comma) {
-            apply(CameraAction::MoveAna, speed);
+            apply(Direction4D::Ana, speed);
         }
     });
 }

@@ -3,7 +3,7 @@
 use eframe::egui;
 use nalgebra::{UnitQuaternion, Vector3, Vector4};
 
-use crate::camera::{CameraAction, ROTATION_SENSITIVITY};
+use crate::camera::{Direction4D, ROTATION_SENSITIVITY};
 use crate::colors::PANEL_FILL;
 use crate::input::render_zone_debug_overlay;
 use crate::input::{
@@ -758,7 +758,7 @@ impl FourDeersApp {
         }
     }
 
-    fn map_tap_action(right_rect: egui::Rect, pos: egui::Pos2) -> Option<CameraAction> {
+    fn map_tap_action(right_rect: egui::Rect, pos: egui::Pos2) -> Option<Direction4D> {
         if !right_rect.contains(pos) {
             return None;
         }

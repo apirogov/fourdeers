@@ -2,23 +2,23 @@
 
 use eframe::egui;
 
-use crate::camera::CameraAction;
+use crate::camera::Direction4D;
 
 /// Maps a tap zone to a camera movement action.
 ///
 /// Cardinal zones map to directional moves, diagonal zones to forward/backward/kata/ana.
 /// Returns `None` for `Center` and other non-movement zones.
 #[must_use]
-pub const fn zone_to_movement_action(zone: Zone) -> Option<CameraAction> {
+pub const fn zone_to_movement_action(zone: Zone) -> Option<Direction4D> {
     match zone {
-        Zone::North => Some(CameraAction::MoveUp),
-        Zone::South => Some(CameraAction::MoveDown),
-        Zone::West => Some(CameraAction::MoveLeft),
-        Zone::East => Some(CameraAction::MoveRight),
-        Zone::NorthEast => Some(CameraAction::MoveForward),
-        Zone::SouthWest => Some(CameraAction::MoveBackward),
-        Zone::NorthWest => Some(CameraAction::MoveKata),
-        Zone::SouthEast => Some(CameraAction::MoveAna),
+        Zone::North => Some(Direction4D::Up),
+        Zone::South => Some(Direction4D::Down),
+        Zone::West => Some(Direction4D::Left),
+        Zone::East => Some(Direction4D::Right),
+        Zone::NorthEast => Some(Direction4D::Forward),
+        Zone::SouthWest => Some(Direction4D::Backward),
+        Zone::NorthWest => Some(Direction4D::Kata),
+        Zone::SouthEast => Some(Direction4D::Ana),
         Zone::Center => None,
     }
 }
@@ -368,43 +368,37 @@ mod tests {
 
     #[test]
     fn test_zone_to_movement_action_cardinal() {
-        use crate::camera::CameraAction;
-        assert_eq!(
-            zone_to_movement_action(Zone::North),
-            Some(CameraAction::MoveUp)
-        );
+        use crate::camera::Direction4D;
+        assert_eq!(zone_to_movement_action(Zone::North), Some(Direction4D::Up));
         assert_eq!(
             zone_to_movement_action(Zone::South),
-            Some(CameraAction::MoveDown)
+            Some(Direction4D::Down)
         );
-        assert_eq!(
-            zone_to_movement_action(Zone::West),
-            Some(CameraAction::MoveLeft)
-        );
+        assert_eq!(zone_to_movement_action(Zone::West), Some(Direction4D::Left));
         assert_eq!(
             zone_to_movement_action(Zone::East),
-            Some(CameraAction::MoveRight)
+            Some(Direction4D::Right)
         );
     }
 
     #[test]
     fn test_zone_to_movement_action_diagonal() {
-        use crate::camera::CameraAction;
+        use crate::camera::Direction4D;
         assert_eq!(
             zone_to_movement_action(Zone::NorthEast),
-            Some(CameraAction::MoveForward)
+            Some(Direction4D::Forward)
         );
         assert_eq!(
             zone_to_movement_action(Zone::SouthWest),
-            Some(CameraAction::MoveBackward)
+            Some(Direction4D::Backward)
         );
         assert_eq!(
             zone_to_movement_action(Zone::NorthWest),
-            Some(CameraAction::MoveKata)
+            Some(Direction4D::Kata)
         );
         assert_eq!(
             zone_to_movement_action(Zone::SouthEast),
-            Some(CameraAction::MoveAna)
+            Some(Direction4D::Ana)
         );
     }
 

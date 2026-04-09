@@ -256,18 +256,9 @@ impl Camera {
 
     #[cfg(test)]
     #[must_use]
-    pub(crate) fn direction_label_4d(&self, direction: SliceDirection) -> String {
+    pub(crate) fn direction_label_4d(&self, direction: Direction4D) -> String {
         let basis = self.rotation_4d.basis_vectors();
-        let v = match direction {
-            SliceDirection::Forward => basis[2],
-            SliceDirection::Backward => [-basis[2][0], -basis[2][1], -basis[2][2], -basis[2][3]],
-            SliceDirection::Left => [-basis[0][0], -basis[0][1], -basis[0][2], -basis[0][3]],
-            SliceDirection::Right => basis[0],
-            SliceDirection::Up => basis[1],
-            SliceDirection::Down => [-basis[1][0], -basis[1][1], -basis[1][2], -basis[1][3]],
-            SliceDirection::WPositive => basis[3],
-            SliceDirection::WNegative => [-basis[3][0], -basis[3][1], -basis[3][2], -basis[3][3]],
-        };
+        let v = direction.to_basis_vector(basis);
         format_4d_vector(v, 0.01, 2)
     }
 
@@ -326,82 +317,76 @@ impl Camera {
     /// - Kata/Ana: move along slice normal from `(identity, q_right).basis_w()`.
     ///
     /// Do not collapse this to full `rotation_4d.basis_*` without updating camera semantics.
-    pub fn apply_action(&mut self, action: CameraAction, speed: f32) {
+    pub fn apply_action(&mut self, action: Direction4D, speed: f32) {
         let (right, up, forward, w_axis) = self.camera_world_axes();
         match action {
-            CameraAction::MoveForward => {
+            Direction4D::Forward => {
                 self.position += forward * speed;
             }
-            CameraAction::MoveBackward => {
+            Direction4D::Backward => {
                 self.position -= forward * speed;
             }
-            CameraAction::MoveLeft => {
+            Direction4D::Left => {
                 self.position -= right * speed;
             }
-            CameraAction::MoveRight => {
+            Direction4D::Right => {
                 self.position += right * speed;
             }
-            CameraAction::MoveUp => {
+            Direction4D::Up => {
                 self.position += up * speed;
             }
-            CameraAction::MoveDown => {
+            Direction4D::Down => {
                 self.position -= up * speed;
             }
-            CameraAction::MoveKata => {
+            Direction4D::Kata => {
                 self.position += w_axis * speed;
             }
-            CameraAction::MoveAna => {
+            Direction4D::Ana => {
                 self.position -= w_axis * speed;
             }
         }
     }
 }
 
-#[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum SliceDirection {
+pub enum Direction4D {
     Forward,
     Backward,
     Left,
     Right,
     Up,
     Down,
-    WPositive,
-    WNegative,
+    Kata,
+    Ana,
 }
 
-/// Camera movement actions for 4D navigation
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CameraAction {
-    /// Move forward in the direction the camera is facing
-    MoveForward,
-    /// Move backward (opposite to camera facing direction)
-    MoveBackward,
-    /// Move left (relative to camera)
-    MoveLeft,
-    /// Move right (relative to camera)
-    MoveRight,
-    /// Move up (relative to camera)
-    MoveUp,
-    /// Move down (relative to camera)
-    MoveDown,
-    /// Move along slice-normal positive W direction (kata)
-    MoveKata,
-    /// Move along slice-normal negative W direction (ana)
-    MoveAna,
+impl Direction4D {
+    #[cfg(test)]
+    fn to_basis_vector(self, basis: [[f32; 4]; 4]) -> [f32; 4] {
+        match self {
+            Direction4D::Forward => basis[2],
+            Direction4D::Backward => [-basis[2][0], -basis[2][1], -basis[2][2], -basis[2][3]],
+            Direction4D::Left => [-basis[0][0], -basis[0][1], -basis[0][2], -basis[0][3]],
+            Direction4D::Right => basis[0],
+            Direction4D::Up => basis[1],
+            Direction4D::Down => [-basis[1][0], -basis[1][1], -basis[1][2], -basis[1][3]],
+            Direction4D::Kata => basis[3],
+            Direction4D::Ana => [-basis[3][0], -basis[3][1], -basis[3][2], -basis[3][3]],
+        }
+    }
 }
 
-impl std::fmt::Display for CameraAction {
+impl std::fmt::Display for Direction4D {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            CameraAction::MoveForward => write!(f, "MoveForward"),
-            CameraAction::MoveBackward => write!(f, "MoveBackward"),
-            CameraAction::MoveLeft => write!(f, "MoveLeft"),
-            CameraAction::MoveRight => write!(f, "MoveRight"),
-            CameraAction::MoveUp => write!(f, "MoveUp"),
-            CameraAction::MoveDown => write!(f, "MoveDown"),
-            CameraAction::MoveKata => write!(f, "MoveKata"),
-            CameraAction::MoveAna => write!(f, "MoveAna"),
+            Direction4D::Forward => write!(f, "Forward"),
+            Direction4D::Backward => write!(f, "Backward"),
+            Direction4D::Left => write!(f, "Left"),
+            Direction4D::Right => write!(f, "Right"),
+            Direction4D::Up => write!(f, "Up"),
+            Direction4D::Down => write!(f, "Down"),
+            Direction4D::Kata => write!(f, "Kata"),
+            Direction4D::Ana => write!(f, "Ana"),
         }
     }
 }

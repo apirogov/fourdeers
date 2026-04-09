@@ -76,7 +76,7 @@ impl MapRenderer {
         self.labels_visible
     }
 
-    pub fn apply_action(&mut self, action: crate::camera::CameraAction, speed: f32) {
+    pub fn apply_action(&mut self, action: crate::camera::Direction4D, speed: f32) {
         self.camera.apply_action(action, speed);
     }
 

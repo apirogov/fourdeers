@@ -4,7 +4,7 @@ use eframe::egui;
 use nalgebra::{UnitQuaternion, Vector4};
 use std::collections::HashMap;
 
-use crate::camera::{Camera, CameraAction};
+use crate::camera::{Camera, Direction4D};
 use crate::colors::LABEL_INACTIVE;
 use crate::geometry::Bounds4D;
 use crate::input::{
@@ -98,12 +98,12 @@ impl PolytopesToy {
         self.cached_indices = indices;
     }
 
-    fn apply_camera_action(&mut self, action: CameraAction, speed: f32) {
+    fn apply_camera_action(&mut self, action: Direction4D, speed: f32) {
         self.reset_tetrahedron_rotations();
         self.camera.apply_action(action, speed);
     }
 
-    const fn zone_to_action(zone: Zone, is_left_view: bool) -> Option<CameraAction> {
+    const fn zone_to_action(zone: Zone, is_left_view: bool) -> Option<Direction4D> {
         if is_left_view {
             None
         } else {
