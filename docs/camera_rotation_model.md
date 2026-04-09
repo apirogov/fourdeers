@@ -20,10 +20,10 @@ The code stores this pair in `Rotation4D` with fields named `q_left` and `q_righ
 
 The camera assigns **specific semantic roles** to these two quaternion slots:
 
-| Quaternion slot | Field name | Camera role | Controls |
-|---|---|---|---|
-| `q_left` | `q_left` | **Look** orientation | In-slice yaw/pitch (what you see) |
-| `q_right` | `q_right` | **Tilt** orientation | Slice tilt in 4D (XW/YW planes) |
+| `Rotation4D` field | Camera role | Controls |
+|---|---|---|
+| `q_left` | **Look** orientation | In-slice yaw/pitch (what you see) |
+| `q_right` | **Tilt** orientation | Slice tilt in 4D (XW/YW planes) |
 
 This is **not** the standard way to interpret `(q_L, q_R)`. In the standard model, both quaternions contribute symmetrically to the final rotation. Here, the camera treats them as orthogonal control axes:
 
@@ -78,21 +78,23 @@ If the camera used the standard basis for movement, changing your 3D look direct
 
 ### Mathematical formulation
 
-The movement forward axis is:
+The camera computes each movement axis in two steps:
 
-```
-forward_move = q_R^{-1} * (q_L * (0,0,1) * q_L^{-1}) * q_R
-```
+1. Derive a 3D direction from the look quaternion via standard conjugation:
+   `forward3 = q_L * (0,0,1) * q_L^{-1}`
 
-Wait — actually the code does it slightly differently. It projects via `project_3d_to_4d_with_basis` using the basis of `(I, q_R)`:
+2. Project into 4D using the tilt-only basis. Concretely, `project_3d_to_4d_with_basis`
+   embeds the 3D vector as `[x, y, z, 0]` and multiplies by the 3x4 submatrix of the
+   `(I, q_R)` rotation basis:
 
 ```
 forward_move[i] = sum_j(forward3[j] * tilt_basis[j][i])   for i in 0..4
 ```
 
-where `tilt_basis[j]` is the j-th basis vector of `(I, q_R)` — i.e., the result of applying `(I, q_R)` to the j-th standard basis vector.
-
-This is equivalent to: compute the 3D look direction, then embed it in 4D as `[x,y,z,0]`, then apply the tilt rotation to map it into world 4D space.
+where `tilt_basis[j]` is the j-th basis vector of `(I, q_R)` — the result of applying the
+tilt-only rotation to the j-th standard basis vector. Equivalently: compute the 3D look
+direction, embed it in 4D as `[x, y, z, 0]`, then apply the tilt rotation to map it into
+world 4D space.
 
 ## 4. Why `rotate_4d` Extracts `.q_left()` From Plane Rotations
 
@@ -129,12 +131,12 @@ This is the full standard rotation. Used in `Rotation4D::rotate_point`, `basis_v
 ### For movement (computing camera axes)
 
 ```
-look_3d  = q_left * (standard 3D vectors) * q_left^{-1}   // conjugation, q_left only
-move_4d  = tilt_basis * look_3d_embedded_in_4D              // projection through q_right only
-kata/ana = tilt_basis.column_w                               // q_right only
+look_3d  = q_left * (standard 3D vectors) * q_left^{-1}     // 3D conjugation
+move_4d  = tilt_basis_matrix * [look_3d.x, look_3d.y, look_3d.z, 0]  // project via (I, q_R)
+kata/ana = tilt_basis.column_w                                // W-column of (I, q_R)
 ```
 
-Look and tilt are **decoupled** for movement. Look determines what you see; tilt determines how that maps into 4D. The full rotation is only used for rendering.
+Look and tilt are **decoupled** for movement. Look determines what you see; tilt determines how that direction maps into 4D. The full rotation `q_left * v * q_right^{-1}` is only used for rendering.
 
 ### For the map view
 
@@ -159,12 +161,12 @@ v' = q_L * v * q_R^{-1}
 - Left isoclinic: `v -> q_L * v` (left multiplication only, `q_R = identity`)
 - Right isoclinic: `v -> v * q_R^{-1}` (right multiplication only, `q_L = identity`)
 
-The camera's look/tilt split is **not** the same as the left/right isoclinic decomposition. In particular:
+The camera's control decomposition aligns with the isoclinic decomposition at the storage level:
 
-- A pure look change (`rotate`) modifies `q_left` with `q_right` fixed — this **is** a change to the left isoclinic component.
-- A pure tilt change (`rotate_4d`) modifies `q_right` with `q_left` fixed — this **is** a change to the right isoclinic component.
+- A pure look change (`rotate`) modifies `q_left` with `q_right` fixed — a left-isoclinic change.
+- A pure tilt change (`rotate_4d`) modifies `q_right` with `q_left` fixed — a right-isoclinic change.
 
-So the camera's control decomposition **does** align with the isoclinic decomposition at the control level: look = left isoclinic, tilt = right isoclinic. But the camera's **movement** pipeline treats them asymmetrically (look feeds into tilt for 3D→4D projection, but not vice versa), which is why the movement axes differ from the standard rotation basis.
+However, the camera's **movement pipeline** treats the two components asymmetrically: look directions are projected through tilt for 3D→4D mapping, but tilt (kata/ana) does not depend on look. This asymmetry is why the movement axes differ from the standard rotation basis — the quaternions are stored as isoclinic factors but used asymmetrically for movement.
 
 ## 7. Summary
 
