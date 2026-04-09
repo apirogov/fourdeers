@@ -13,8 +13,8 @@ use crate::input::{
 use crate::map::MapRenderer;
 use crate::render::{
     draw_background, draw_center_divider, render_common_menu_half, render_stereo_views,
-    render_tap_zone_label, split_stereo_views, CompassFrameMode, FourDSettings, ProjectionMode,
-    StereoSettings,
+    render_tap_zone_label, render_tetrahedron_with_projector, split_stereo_views, CompassFrameMode,
+    FourDSettings, ProjectionMode, StereoSettings,
 };
 use crate::tetrahedron::{format_magnitude, magnitude_4d, TetrahedronGadget};
 use crate::toy::{CompassWaypoint, ToyManager};
@@ -27,6 +27,9 @@ const MENU_BAR_HEIGHT: f32 = 30.0;
 const MAP_HOLD_SPEED: f32 = 0.08;
 const MAP_TAP_SPEED: f32 = 0.3;
 const MAP_KEYBOARD_SPEED: f32 = 0.05;
+const MENU_INNER_MARGIN: i8 = 12;
+const BUILD_INFO_FONT_SIZE: f32 = 12.0;
+const BUILD_INFO_COLOR: egui::Color32 = egui::Color32::GRAY;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 enum ActiveView {
@@ -253,7 +256,6 @@ impl FourDeersApp {
             proj_dist,
             ProjectionMode::Orthographic,
             |painter, projector, _view_rect| {
-                use crate::render::render_tetrahedron_with_projector;
                 render_tetrahedron_with_projector(
                     painter,
                     &gadget,
@@ -600,7 +602,7 @@ impl FourDeersApp {
             fill: PANEL_FILL,
             corner_radius: egui::CornerRadius::ZERO,
             stroke: egui::Stroke::NONE,
-            inner_margin: egui::Margin::same(12),
+            inner_margin: egui::Margin::same(MENU_INNER_MARGIN),
             ..Default::default()
         };
 
@@ -706,13 +708,13 @@ impl FourDeersApp {
         let short_hash = &commit_hash[..commit_hash.len().min(8)];
         ui.label(
             egui::RichText::new(format!("Commit: {short_hash}"))
-                .size(12.0)
-                .color(egui::Color32::GRAY),
+                .size(BUILD_INFO_FONT_SIZE)
+                .color(BUILD_INFO_COLOR),
         );
         ui.label(
             egui::RichText::new(format!("Built: {build_time}"))
-                .size(12.0)
-                .color(egui::Color32::GRAY),
+                .size(BUILD_INFO_FONT_SIZE)
+                .color(BUILD_INFO_COLOR),
         );
     }
 

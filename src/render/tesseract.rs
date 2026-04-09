@@ -12,12 +12,12 @@ use crate::tetrahedron::{tetrahedron_layout, TetrahedronGadget};
 use super::ui::render_outlined_text;
 use super::{
     w_to_color, FourDSettings, StereoProjector, StereoSettings, TetraStyle, BASE_LABEL_FONT_SIZE,
-    BASE_LABEL_OFFSET_Y, NEAR_PLANE_THRESHOLD,
+    BASE_LABEL_OFFSET_Y, NEAR_PLANE_THRESHOLD, TESSERACT_EDGE_STROKE_WIDTH,
 };
 
-const EDGE_STROKE_WIDTH: f32 = 2.5;
 const EDGE_CLIP_MARGIN: f32 = 50.0;
 const TETRA_FOCAL_LENGTH_SCALE: f32 = 3.0;
+const ZONE_LABEL_FONT_SIZE: f32 = 10.0;
 
 pub struct TesseractRenderContext<'a> {
     pub vertices: &'a [Vector4<f32>],
@@ -150,7 +150,7 @@ impl<'a> TesseractRenderContext<'a> {
         transformed: &[TransformedVertex],
         clip_rect: egui::Rect,
     ) {
-        let stroke_width = EDGE_STROKE_WIDTH;
+        let stroke_width = TESSERACT_EDGE_STROKE_WIDTH;
         let near_plane = self.projection_distance;
         let margin = EDGE_CLIP_MARGIN;
         let x_min = clip_rect.min.x - margin;
@@ -282,7 +282,7 @@ impl<'a> TesseractRenderContext<'a> {
                 pos,
                 egui::Align2::CENTER_CENTER,
                 text,
-                egui::FontId::proportional(10.0),
+                egui::FontId::proportional(ZONE_LABEL_FONT_SIZE),
                 crate::colors::TEXT_DIM,
             );
         }

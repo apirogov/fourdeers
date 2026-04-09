@@ -19,8 +19,9 @@ pub use ui::{
 use eframe::egui;
 
 pub const STEREO_SCALE_FACTOR: f32 = 0.35;
-pub(super) const NEAR_PLANE_THRESHOLD: f32 = 0.1;
+pub const NEAR_PLANE_THRESHOLD: f32 = 0.1;
 pub(super) const ARROW_STROKE_WIDTH: f32 = 2.0;
+pub const TESSERACT_EDGE_STROKE_WIDTH: f32 = 2.5;
 pub(super) const BASE_LABEL_FONT_SIZE: f32 = 11.0;
 pub(super) const BASE_LABEL_OFFSET_Y: f32 = 18.0;
 pub(super) const ARROW_END_DOT_RADIUS: f32 = 3.0;

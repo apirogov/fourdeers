@@ -76,5 +76,8 @@ pub const DEBUG_LABEL: Color32 = Color32::from_rgba_premultiplied(118, 118, 118,
 // ============================================================================
 
 pub const AXIS_LABEL_YELLOW: Color32 = Color32::from_rgb(255, 230, 50);
+pub const SLICE_GREEN: Color32 = Color32::from_rgb(80, 200, 80);
+pub const DIM_GRAY: Color32 = Color32::from_rgb(200, 200, 210);
+pub const VISIBILITY_DARK_GREEN: Color32 = Color32::from_rgb(15, 70, 15);
 pub const SLICE_GREEN_FILL: Color32 = Color32::from_rgba_premultiplied(9, 28, 9, 40);
 pub const VISIBILITY_DARK_GREEN_FILL: Color32 = Color32::from_rgba_premultiplied(6, 27, 6, 100);

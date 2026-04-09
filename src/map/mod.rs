@@ -30,14 +30,13 @@ pub use bounds::{compute_bounds, normalize_to_tesseract};
 pub use renderer::MapRenderer;
 
 pub(super) const BOUNDS_PADDING_FACTOR: f32 = 0.2;
-pub(super) const SLICE_GREEN: egui::Color32 = egui::Color32::from_rgb(80, 200, 80);
-pub(super) const DIM_GRAY: egui::Color32 = egui::Color32::from_rgb(200, 200, 210);
+pub(super) use crate::colors::{DIM_GRAY, SLICE_GREEN, VISIBILITY_DARK_GREEN};
 pub(super) const MAP_CAMERA_BACK_OFFSET: f32 = 4.0;
 pub(super) const NEAR_MARGIN: f32 = 0.5;
 pub(super) const TETRA_SCALE_WAYPOINT: f32 = 0.15;
 pub(super) const TETRA_SCALE_CAMERA: f32 = 0.2;
 pub(super) const FORWARD_ARROW_LENGTH: f32 = 0.4;
-pub(super) const EDGE_STROKE_WIDTH: f32 = 2.5;
+pub(super) use crate::render::TESSERACT_EDGE_STROKE_WIDTH as EDGE_STROKE_WIDTH;
 pub(super) const TAP_RADIUS_MULTIPLIER: f32 = 5.0;
 pub(super) const TAP_RADIUS_MIN: f32 = 15.0;
 pub(super) const TAP_RADIUS_MAX: f32 = 50.0;
@@ -53,9 +52,6 @@ pub(super) const MAP_TIP_FONT_SIZE: f32 = 9.0;
 pub(super) const MAP_TIP_LABEL_OFFSET_Y: f32 = 12.0;
 pub(super) const MAP_DISTANCE_FONT_SIZE: f32 = 8.0;
 pub(super) const MAP_DISTANCE_LABEL_OFFSET_Y: f32 = 12.0;
-/// Stroke color for the visibility cone overlay — darker than `SLICE_GREEN` (80,200,80) so the
-/// cone is visually distinct from the cross-section outline.
-pub(super) const VISIBILITY_DARK_GREEN: egui::Color32 = egui::Color32::from_rgb(15, 70, 15);
 
 #[cfg(test)]
 pub(super) const TESSERACT_EDGE_COUNT: usize = 32;

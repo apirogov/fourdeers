@@ -29,6 +29,11 @@ use super::{
     TETRA_SCALE_CAMERA, TETRA_SCALE_WAYPOINT, VISIBILITY_DARK_GREEN,
 };
 
+const SLICE_FILL_STROKE_WIDTH: f32 = 1.5;
+const SLICE_EDGE_STROKE_WIDTH: f32 = 2.0;
+const FORWARD_ARROW_STROKE_WIDTH: f32 = 2.0;
+const FORWARD_ARROW_HEAD_SIZE: f32 = 10.0;
+
 pub struct MapRenderer {
     camera: Camera,
     tesseract_vertices: Vec<Vector4<f32>>,
@@ -320,7 +325,7 @@ impl MapRenderer {
             painter.add(egui::Shape::convex_polygon(
                 screen_pts.clone(),
                 crate::colors::SLICE_GREEN_FILL,
-                egui::Stroke::new(1.5, SLICE_GREEN),
+                egui::Stroke::new(SLICE_FILL_STROKE_WIDTH, SLICE_GREEN),
             ));
 
             // ── Visibility cone computation (2D post-projection clipping) ──────────
@@ -388,7 +393,7 @@ impl MapRenderer {
             {
                 painter.line_segment(
                     [screen_seg.0, screen_seg.1],
-                    egui::Stroke::new(2.0, SLICE_GREEN),
+                    egui::Stroke::new(SLICE_EDGE_STROKE_WIDTH, SLICE_GREEN),
                 );
             }
         }
@@ -494,7 +499,7 @@ impl MapRenderer {
         let dot_alpha = crate::colors::to_u8(alpha * 255.0);
         painter.circle_filled(
             center_screen.screen_pos,
-            4.0,
+            MAP_CAMERA_DOT_RADIUS,
             egui::Color32::from_rgba_unmultiplied(255, 255, 255, dot_alpha),
         );
 
@@ -520,15 +525,14 @@ impl MapRenderer {
                 if arrow_vec.length() > 2.0 {
                     painter.line_segment(
                         [origin_p.screen_pos, arrow_p.screen_pos],
-                        egui::Stroke::new(2.0, arrow_color),
+                        egui::Stroke::new(FORWARD_ARROW_STROKE_WIDTH, arrow_color),
                     );
-                    let head_size = 10.0;
-                    if arrow_vec.length() > head_size {
+                    if arrow_vec.length() > FORWARD_ARROW_HEAD_SIZE {
                         draw_arrow_head(
                             painter,
                             arrow_p.screen_pos,
                             arrow_vec,
-                            head_size,
+                            FORWARD_ARROW_HEAD_SIZE,
                             arrow_color,
                         );
                     }
@@ -560,7 +564,7 @@ impl MapRenderer {
                 continue;
             };
             let z_offset = self.projection_distance + s3d.z;
-            if z_offset <= 0.1 {
+            if z_offset <= crate::render::NEAR_PLANE_THRESHOLD {
                 continue;
             }
             let projected_size = TETRA_SCALE_WAYPOINT * left_projector.scale() / z_offset;
