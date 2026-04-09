@@ -24,7 +24,7 @@ const TETRAHEDRON_BASE_VERTICES: [[f32; 3]; 4] = [
     [1.0, -1.0, -1.0],
 ];
 
-fn get_tetrahedron_vertices(scale: f32) -> [Vector3<f32>; 4] {
+fn tetrahedron_vertices(scale: f32) -> [Vector3<f32>; 4] {
     let s = scale / SQRT_3;
     TETRAHEDRON_BASE_VERTICES.map(|[x, y, z]| Vector3::new(x * s, y * s, z * s))
 }
@@ -38,7 +38,7 @@ pub struct TetrahedronLayout {
 
 /// Compute tetrahedron layout based on view rect dimensions
 #[must_use]
-pub fn get_tetrahedron_layout(view_rect: egui::Rect) -> TetrahedronLayout {
+pub fn tetrahedron_layout(view_rect: egui::Rect) -> TetrahedronLayout {
     let longer_side = view_rect.width().max(view_rect.height());
     TetrahedronLayout {
         scale: longer_side * 0.05,
@@ -133,14 +133,6 @@ impl TetrahedronGadget {
     }
 
     #[must_use]
-    pub fn with_auto_magnitude_label(mut self) -> Self {
-        if (self.vector_magnitude - 1.0).abs() > 0.01 {
-            self.tip_label = Some(format_magnitude(self.vector_magnitude));
-        }
-        self
-    }
-
-    #[must_use]
     pub fn for_zone(
         vector_4d: Vector4<f32>,
         zone: Zone,
@@ -205,7 +197,7 @@ impl TetrahedronGadget {
         scale: f32,
         rotation: &UnitQuaternion<f32>,
     ) -> [TetrahedronVertex; 4] {
-        let base_positions = get_tetrahedron_vertices(scale);
+        let base_positions = tetrahedron_vertices(scale);
         let labels = ["X", "Y", "Z", "W"];
         let axes = ['X', 'Y', 'Z', 'W'];
 
@@ -277,7 +269,7 @@ impl TetrahedronGadget {
             };
         }
 
-        let base_vertices = get_tetrahedron_vertices(scale);
+        let base_vertices = tetrahedron_vertices(scale);
 
         let mut end = Vector3::zeros();
         for (i, &weight) in weights.iter().enumerate() {
@@ -292,12 +284,12 @@ impl TetrahedronGadget {
     }
 
     #[must_use]
-    pub fn get_vertex_3d(&self, vertex_index: usize) -> Option<&Vector3<f32>> {
+    pub fn vertex_3d(&self, vertex_index: usize) -> Option<&Vector3<f32>> {
         self.vertices.get(vertex_index).map(|v| &v.position)
     }
 
     #[must_use]
-    pub fn get_vertex_normal(&self, vertex_index: usize) -> Option<&Vector3<f32>> {
+    pub fn vertex_normal(&self, vertex_index: usize) -> Option<&Vector3<f32>> {
         self.vertices.get(vertex_index).map(|v| &v.normal)
     }
 
@@ -358,9 +350,7 @@ pub fn normalize_4d_vector(v: Vector4<f32>) -> Vector4<f32> {
 
 #[must_use]
 pub fn compute_weighted_direction(vector_4d: Vector4<f32>) -> Vector3<f32> {
-    let normalized = normalize_4d_vector(vector_4d);
-    let gadget = TetrahedronGadget::from_4d_vector(normalized);
-    gadget.vector_arrow.end_position
+    compute_weighted_direction_3d(vector_4d) / SQRT_3
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -647,11 +637,11 @@ mod tests {
     }
 
     #[test]
-    fn test_get_vertex_3d() {
+    fn test_vertex_3d() {
         let vector = Vector4::new(1.0, 0.0, 0.0, 0.0);
         let gadget = TetrahedronGadget::from_4d_vector(vector);
 
-        let Some(pos) = gadget.get_vertex_3d(0) else {
+        let Some(pos) = gadget.vertex_3d(0) else {
             panic!("Failed to get vertex 3d position");
         };
 
@@ -662,11 +652,11 @@ mod tests {
     }
 
     #[test]
-    fn test_get_vertex_3d_invalid_index() {
+    fn test_vertex_3d_invalid_index() {
         let vector = Vector4::new(1.0, 0.0, 0.0, 0.0);
         let gadget = TetrahedronGadget::from_4d_vector(vector);
 
-        let pos = gadget.get_vertex_3d(10);
+        let pos = gadget.vertex_3d(10);
         assert!(pos.is_none());
     }
 

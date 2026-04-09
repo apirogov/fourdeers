@@ -45,7 +45,7 @@ pub mod zones;
 
 pub use zone_debug::{render_zone_debug_overlay, ZoneDebugOptions};
 pub use zones::{
-    analyze_tap_in_stereo_view_with_modes, get_zone_from_rect, zone_to_movement_action, DragView,
+    analyze_tap_in_stereo_view_with_modes, zone_from_rect, zone_to_movement_action, DragView,
     TapAnalysis, TetraId, Zone, ZoneMode,
 };
 

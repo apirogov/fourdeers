@@ -150,7 +150,7 @@ pub fn analyze_tap_in_stereo_view_with_modes(
         right_zone_mode
     };
 
-    let zone = get_zone_from_rect(view_rect, tap_pos, zone_mode)?;
+    let zone = zone_from_rect(view_rect, tap_pos, zone_mode)?;
 
     let norm_x = (tap_pos.x - view_rect.min.x) / view_rect.width();
     let norm_y = (tap_pos.y - view_rect.min.y) / view_rect.height();
@@ -166,7 +166,7 @@ pub fn analyze_tap_in_stereo_view_with_modes(
 }
 
 #[must_use]
-pub fn get_zone_from_rect(rect: egui::Rect, point: egui::Pos2, mode: ZoneMode) -> Option<Zone> {
+pub fn zone_from_rect(rect: egui::Rect, point: egui::Pos2, mode: ZoneMode) -> Option<Zone> {
     if !rect.contains(point) {
         return None;
     }
@@ -182,12 +182,12 @@ pub fn get_zone_from_rect(rect: egui::Rect, point: egui::Pos2, mode: ZoneMode) -
     let norm_y = (point.y - rect.min.y) / height;
 
     match mode {
-        ZoneMode::FourZones => Some(get_zone_4way(norm_x, norm_y)),
-        ZoneMode::NineZones => Some(get_zone_9way(norm_x, norm_y)),
+        ZoneMode::FourZones => Some(zone_4way(norm_x, norm_y)),
+        ZoneMode::NineZones => Some(zone_9way(norm_x, norm_y)),
     }
 }
 
-fn get_zone_4way(norm_x: f32, norm_y: f32) -> Zone {
+fn zone_4way(norm_x: f32, norm_y: f32) -> Zone {
     let above_nw_se = norm_y < 1.0 - norm_x;
     let above_ne_sw = norm_y < norm_x;
 
@@ -202,7 +202,7 @@ fn get_zone_4way(norm_x: f32, norm_y: f32) -> Zone {
     }
 }
 
-fn get_zone_9way(norm_x: f32, norm_y: f32) -> Zone {
+fn zone_9way(norm_x: f32, norm_y: f32) -> Zone {
     let third_x = 1.0 / 3.0;
     let third_y = 1.0 / 3.0;
 
@@ -279,71 +279,71 @@ mod tests {
     }
 
     #[test]
-    fn test_get_zone_from_rect_4way() {
+    fn test_zone_from_rect_4way() {
         let rect = egui::Rect {
             min: egui::pos2(0.0, 0.0),
             max: egui::pos2(100.0, 100.0),
         };
 
         assert_eq!(
-            get_zone_from_rect(rect, egui::pos2(50.0, 25.0), ZoneMode::FourZones),
+            zone_from_rect(rect, egui::pos2(50.0, 25.0), ZoneMode::FourZones),
             Some(Zone::North)
         );
         assert_eq!(
-            get_zone_from_rect(rect, egui::pos2(50.0, 75.0), ZoneMode::FourZones),
+            zone_from_rect(rect, egui::pos2(50.0, 75.0), ZoneMode::FourZones),
             Some(Zone::South)
         );
         assert_eq!(
-            get_zone_from_rect(rect, egui::pos2(25.0, 50.0), ZoneMode::FourZones),
+            zone_from_rect(rect, egui::pos2(25.0, 50.0), ZoneMode::FourZones),
             Some(Zone::West)
         );
         assert_eq!(
-            get_zone_from_rect(rect, egui::pos2(75.0, 50.0), ZoneMode::FourZones),
+            zone_from_rect(rect, egui::pos2(75.0, 50.0), ZoneMode::FourZones),
             Some(Zone::East)
         );
     }
 
     #[test]
-    fn test_get_zone_from_rect_9way() {
+    fn test_zone_from_rect_9way() {
         let rect = egui::Rect {
             min: egui::pos2(0.0, 0.0),
             max: egui::pos2(300.0, 300.0),
         };
 
         assert_eq!(
-            get_zone_from_rect(rect, egui::pos2(50.0, 50.0), ZoneMode::NineZones),
+            zone_from_rect(rect, egui::pos2(50.0, 50.0), ZoneMode::NineZones),
             Some(Zone::NorthWest)
         );
         assert_eq!(
-            get_zone_from_rect(rect, egui::pos2(150.0, 50.0), ZoneMode::NineZones),
+            zone_from_rect(rect, egui::pos2(150.0, 50.0), ZoneMode::NineZones),
             Some(Zone::North)
         );
         assert_eq!(
-            get_zone_from_rect(rect, egui::pos2(250.0, 50.0), ZoneMode::NineZones),
+            zone_from_rect(rect, egui::pos2(250.0, 50.0), ZoneMode::NineZones),
             Some(Zone::NorthEast)
         );
         assert_eq!(
-            get_zone_from_rect(rect, egui::pos2(50.0, 150.0), ZoneMode::NineZones),
+            zone_from_rect(rect, egui::pos2(50.0, 150.0), ZoneMode::NineZones),
             Some(Zone::West)
         );
         assert_eq!(
-            get_zone_from_rect(rect, egui::pos2(150.0, 150.0), ZoneMode::NineZones),
+            zone_from_rect(rect, egui::pos2(150.0, 150.0), ZoneMode::NineZones),
             Some(Zone::Center)
         );
         assert_eq!(
-            get_zone_from_rect(rect, egui::pos2(250.0, 150.0), ZoneMode::NineZones),
+            zone_from_rect(rect, egui::pos2(250.0, 150.0), ZoneMode::NineZones),
             Some(Zone::East)
         );
         assert_eq!(
-            get_zone_from_rect(rect, egui::pos2(50.0, 250.0), ZoneMode::NineZones),
+            zone_from_rect(rect, egui::pos2(50.0, 250.0), ZoneMode::NineZones),
             Some(Zone::SouthWest)
         );
         assert_eq!(
-            get_zone_from_rect(rect, egui::pos2(150.0, 250.0), ZoneMode::NineZones),
+            zone_from_rect(rect, egui::pos2(150.0, 250.0), ZoneMode::NineZones),
             Some(Zone::South)
         );
         assert_eq!(
-            get_zone_from_rect(rect, egui::pos2(250.0, 250.0), ZoneMode::NineZones),
+            zone_from_rect(rect, egui::pos2(250.0, 250.0), ZoneMode::NineZones),
             Some(Zone::SouthEast)
         );
     }

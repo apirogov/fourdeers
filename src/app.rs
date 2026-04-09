@@ -7,8 +7,8 @@ use crate::camera::CameraAction;
 use crate::colors::PANEL_FILL;
 use crate::input::render_zone_debug_overlay;
 use crate::input::{
-    analyze_tap_in_stereo_view_with_modes, get_zone_from_rect, zone_to_movement_action, DragView,
-    Zone, ZoneDebugOptions, ZoneMode,
+    analyze_tap_in_stereo_view_with_modes, zone_from_rect, zone_to_movement_action, DragView, Zone,
+    ZoneDebugOptions, ZoneMode,
 };
 use crate::map::MapRenderer;
 use crate::render::{
@@ -770,7 +770,7 @@ impl FourDeersApp {
         if !right_rect.contains(pos) {
             return None;
         }
-        let zone = get_zone_from_rect(right_rect, pos, ZoneMode::NineZones)?;
+        let zone = zone_from_rect(right_rect, pos, ZoneMode::NineZones)?;
         zone_to_movement_action(zone)
     }
 
@@ -792,7 +792,7 @@ impl FourDeersApp {
         }
 
         let (left_rect, right_rect) = split_stereo_views(visualization_rect);
-        let left_zone = get_zone_from_rect(left_rect, pos, ZoneMode::NineZones);
+        let left_zone = zone_from_rect(left_rect, pos, ZoneMode::NineZones);
 
         match left_zone {
             Some(Zone::NorthWest) => {
@@ -851,7 +851,7 @@ impl FourDeersApp {
         }
 
         if right_rect.contains(pos) {
-            let zone = get_zone_from_rect(right_rect, pos, ZoneMode::NineZones);
+            let zone = zone_from_rect(right_rect, pos, ZoneMode::NineZones);
             if zone == Some(Zone::South) {
                 self.cycle_compass_waypoint(-1);
             }
@@ -885,7 +885,7 @@ impl FourDeersApp {
         }
 
         if right_rect.contains(pos) {
-            let zone = get_zone_from_rect(right_rect, pos, ZoneMode::NineZones);
+            let zone = zone_from_rect(right_rect, pos, ZoneMode::NineZones);
             if zone == Some(Zone::Center) {
                 self.map.toggle_rotation_3d();
                 return;

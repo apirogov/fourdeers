@@ -12,25 +12,23 @@ use crate::colors::{
 use crate::input::{TetraId, Zone};
 use crate::polytopes::Vertex4D;
 use crate::rotation4d::Rotation4D;
-use crate::tetrahedron::{get_tetrahedron_layout, TetrahedronGadget};
+use crate::tetrahedron::{tetrahedron_layout, TetrahedronGadget};
 
 use super::ui::{draw_arrow_head, render_dual_outlined_text, render_outlined_text};
-use super::{w_to_color, FourDSettings, StereoProjector, StereoSettings};
+use super::{
+    w_to_color, FourDSettings, StereoProjector, StereoSettings, ARROW_END_DOT_RADIUS,
+    ARROW_STROKE_WIDTH, BASE_LABEL_FONT_SIZE, BASE_LABEL_OFFSET_Y, NEAR_PLANE_THRESHOLD,
+};
 
 const EDGE_STROKE_WIDTH: f32 = 2.5;
 const EDGE_CLIP_MARGIN: f32 = 50.0;
-const NEAR_PLANE_THRESHOLD: f32 = 0.1;
 const TETRA_FOCAL_LENGTH_SCALE: f32 = 3.0;
 const TETRA_EDGE_STROKE: f32 = 1.5;
-const ARROW_STROKE_WIDTH: f32 = 2.0;
 const ARROW_HEAD_SCALE: f32 = 15.0;
 const VERTEX_LABEL_FONT_SIZE: f32 = 14.0;
 const MAGNITUDE_LABEL_FONT_SIZE: f32 = 10.0;
-const BASE_LABEL_FONT_SIZE: f32 = 11.0;
-const BASE_LABEL_OFFSET_Y: f32 = 18.0;
 const TIP_LABEL_OFFSET_Y: f32 = 12.0;
 const ARROW_ORIGIN_DOT_RADIUS: f32 = 2.0;
-const ARROW_END_DOT_RADIUS: f32 = 3.0;
 
 pub struct TesseractRenderContext<'a> {
     pub vertices: &'a [Vertex4D],
@@ -144,12 +142,7 @@ impl<'a> TesseractRenderContext<'a> {
         self.vertices
             .iter()
             .map(|v| {
-                let v4 = nalgebra::Vector4::new(
-                    v.position[0],
-                    v.position[1],
-                    v.position[2],
-                    v.position[3],
-                );
+                let v4 = v.to_vector();
                 let p_4d = self.mat_4d * v4 - self.offset_4d;
                 let result = self.mat_3d * p_4d;
                 TransformedVertex {
@@ -232,7 +225,7 @@ impl<'a> TesseractRenderContext<'a> {
 
     pub fn render_zone_labels(&self, painter: &egui::Painter, view_rect: egui::Rect) {
         let basis = self.camera.rotation_4d.basis_vectors();
-        let layout = get_tetrahedron_layout(view_rect);
+        let layout = tetrahedron_layout(view_rect);
         let offset = layout.edge_offset;
         let third_w = view_rect.width() / 3.0;
         let third_h = view_rect.height() / 3.0;
@@ -316,7 +309,7 @@ impl<'a> TesseractRenderContext<'a> {
         tetrahedron_rotations: &HashMap<TetraId, UnitQuaternion<f32>>,
     ) {
         let basis = self.camera.rotation_4d.basis_vectors();
-        let layout = get_tetrahedron_layout(view_rect);
+        let layout = tetrahedron_layout(view_rect);
         let offset = layout.edge_offset;
         let third_w = view_rect.width() / 3.0;
         let third_h = view_rect.height() / 3.0;
@@ -429,7 +422,7 @@ fn render_single_tetrahedron(painter: &egui::Painter, spec: &TetraRenderSpec<'_>
         let v0_idx = edge.vertex_indices[0];
         let v1_idx = edge.vertex_indices[1];
 
-        let p0 = gadget.get_vertex_3d(v0_idx).and_then(|pos| {
+        let p0 = gadget.vertex_3d(v0_idx).and_then(|pos| {
             let z_offset = focal_length + pos.z;
             if z_offset > NEAR_PLANE_THRESHOLD {
                 let s = focal_length / z_offset;
@@ -438,7 +431,7 @@ fn render_single_tetrahedron(painter: &egui::Painter, spec: &TetraRenderSpec<'_>
                 None
             }
         });
-        let p1 = gadget.get_vertex_3d(v1_idx).and_then(|pos| {
+        let p1 = gadget.vertex_3d(v1_idx).and_then(|pos| {
             let z_offset = focal_length + pos.z;
             if z_offset > NEAR_PLANE_THRESHOLD {
                 let s = focal_length / z_offset;
@@ -463,7 +456,7 @@ fn render_single_tetrahedron(painter: &egui::Painter, spec: &TetraRenderSpec<'_>
         for (i, vertex) in gadget.vertices.iter().enumerate() {
             let component = gadget.component_values[i];
 
-            if let Some(pos) = gadget.get_vertex_3d(i) {
+            if let Some(pos) = gadget.vertex_3d(i) {
                 let z_offset = focal_length + pos.z;
                 if z_offset > NEAR_PLANE_THRESHOLD {
                     let s = focal_length / z_offset;
@@ -487,7 +480,7 @@ fn render_single_tetrahedron(painter: &egui::Painter, spec: &TetraRenderSpec<'_>
                     }
 
                     if spec.show_magnitudes {
-                        if let Some(normal) = gadget.get_vertex_normal(i) {
+                        if let Some(normal) = gadget.vertex_normal(i) {
                             let label_x = pos.x + normal.x * 20.0;
                             let label_y = pos.y + normal.y * 20.0;
                             let label_pos = egui::Pos2::new(

@@ -6,7 +6,9 @@ use std::collections::HashMap;
 
 use crate::camera::{Camera, CameraAction};
 use crate::colors::LABEL_INACTIVE;
-use crate::input::{zone_to_movement_action, DragView, TapAnalysis, TetraId, Zone, ZoneMode};
+use crate::input::{
+    zone_to_movement_action, DragState, DragView, TapAnalysis, TetraId, Zone, ZoneMode,
+};
 use crate::polytopes::{create_polytope, PolytopeType};
 use crate::render::{
     draw_background, draw_center_divider, render_stereo_views, render_tap_zone_label,
@@ -14,7 +16,7 @@ use crate::render::{
     TesseractRenderContext,
 };
 use crate::rotation4d::Rotation4D;
-use crate::toy::{CompassWaypoint, DragState, Toy};
+use crate::toy::{CompassWaypoint, Toy};
 
 const TAP_MOVE_SPEED: f32 = 0.15;
 const HOLD_MOVE_SPEED: f32 = 0.08;
@@ -473,7 +475,7 @@ impl Toy for PolytopesToy {
         let mut min = Vector4::repeat(f32::MAX);
         let mut max = Vector4::repeat(f32::MIN);
         for v in &self.cached_vertices {
-            let pos = Vector4::new(v.position[0], v.position[1], v.position[2], v.position[3]);
+            let pos = v.to_vector();
             let rotated = rotation.rotate_vector(pos);
             for i in 0..4 {
                 min[i] = min[i].min(rotated[i]);

@@ -4,253 +4,119 @@
 
 ```
 src/
-  app.rs          (856 lines)  — Main application: UI, input routing, 3 view modes
-  camera.rs       (1134 lines) — Camera model with split 3D/4D rotation semantics
+  app.rs          (~900 lines)  — Main application: UI, input routing, 3 view modes
+  camera.rs       (~1130 lines) — Camera model with split 3D/4D rotation semantics
   colors.rs       (80 lines)   — Named color constants
-  rotation4d.rs   (767 lines)  — 4D rotation math (SO(4) via double quaternion)
-  render.rs       (1608 lines) — Stereo rendering, projection, tesseract pipeline, UI helpers
-  map.rs          (2507 lines) — 4D tesseract map view, cross-section geometry, slice rendering
-  tetrahedron.rs  (979 lines)  — Tetrahedron gadget for 4D direction visualization
-  polytopes.rs    (244 lines)  — 4D polytope type definitions + factory
-  polytopes_data.rs (1054 lines) — Generated vertex/index data (excluded from review)
+  rotation4d.rs   (~760 lines)  — 4D rotation math (SO(4) via double quaternion)
+  render/
+    mod.rs        (~880 lines)  — Stereo rendering, projection, compass tetrahedron, UI helpers
+    tesseract.rs  (~570 lines)  — Tesseract rendering pipeline, zone tetrahedron rendering
+    ui.rs         (118 lines)   — UI primitives (background, dividers, text, arrow heads)
+  map.rs          (~2100 lines) — 4D tesseract map view, cross-section geometry, slice rendering
+  tetrahedron.rs  (~830 lines)  — Tetrahedron gadget for 4D direction visualization
+  polytopes.rs    (~250 lines)  — 4D polytope type definitions + factory
+  polytopes_data.rs (~1050 lines) — Generated vertex/index data (excluded from review)
   input/
-    mod.rs        (50 lines)   — Shared keyboard handling
-    zones.rs      (422 lines)  — Touch zone analysis (4-way and 9-way)
-    zone_debug.rs (261 lines)  — Debug overlay for zone boundaries
+    mod.rs        (67 lines)    — Shared keyboard handling + DragState
+    zones.rs      (~422 lines)  — Touch zone analysis (4-way and 9-way)
+    zone_debug.rs (261 lines)   — Debug overlay for zone boundaries
   toy/
-    mod.rs        (120 lines)  — Toy trait + DragState
-    manager.rs    (140 lines)  — Runtime toy switching via HashMap
-    registry.rs   (68 lines)   — Static toy registry (ID/name lookup)
+    mod.rs        (~105 lines)  — Toy trait definition
+    manager.rs    (~140 lines)  — Runtime toy switching via HashMap
+    registry.rs   (~69 lines)   — Static toy registry (ID/name lookup)
   toys/
-    polytopes.rs          (506 lines) — Main polytopes toy
-    debug_scratchpad.rs   (75 lines)  — Empty scratchpad for experiments
-  test_utils.rs   (9 lines)   — Shared test assertions
-  lib.rs          (25 lines)  — Crate root
-  main.rs         (26 lines)  — Native entry point
-  wasm.rs         (39 lines)  — WASM entry point
+    polytopes.rs  (~501 lines)  — Main polytopes toy
+    debug_scratchpad.rs (75 lines) — Empty scratchpad for experiments
+  test_utils.rs   (9 lines)    — Shared test assertions
+  lib.rs          (26 lines)   — Crate root
+  main.rs         (26 lines)   — Native entry point
+  wasm.rs         (39 lines)   — WASM entry point
 ```
 
-Total: ~10,977 LOC (excluding generated data).
+Total: ~10,900 LOC (excluding generated data).
 
 ---
 
-## Trait Design: `Toy`
+## Completed Quick Fixes (Phase 1)
 
-### Current Design
-
-The `Toy` trait in `src/toy/mod.rs` has 18 methods covering:
-
-- Identity: `name()`, `id()`
-- Lifecycle: `reset()`
-- UI: `render_sidebar()`, `render_scene()`, `render_toy_menu()`
-- Input: `handle_tap()`, `handle_drag()`, `handle_hold()`, `handle_drag_start()`, `handle_keyboard()`
-- State: `get_visualization_rect()`, `clear_interaction_state()`
-- Compass integration: `compass_vector()`, `compass_reference_position()`, `compass_world_to_camera_frame()`, `compass_waypoints()`
-- Map integration: `map_camera()`, `scene_geometry_bounds()`, `map_waypoints()`
-- Settings: `set_stereo_settings()`, `set_four_d_settings()`, `zone_mode_for_view()`
-
-Six methods have default implementations returning `None`/empty, making them opt-in.
-
-### Assessment
-
-**Good:** Clean separation of scene rendering, sidebar controls, input handling, and compass/map integration. Builder-pattern on `TetrahedronGadget` is idiomatic.
-
-**Concerns:**
-
-1. **18 methods is wide.** With only 2 implementations, this is acceptable, but any new capability adds more methods. A future direction would be capability traits (e.g., `CompassProvider`, `MapProvider`) that toys opt into, but not worth doing now.
-
-2. **`get_visualization_rect` still has `get_` prefix** — inconsistent with the Phase 8F rename that covered camera/rotation4d methods.
-
-3. **`handle_drag` receives `is_left_view: bool` that `PolytopesToy` ignores.** The implementation already knows which view via `self.drag_state.drag_view`. The parameter is redundant for this implementation.
-
-4. **`DragState` lives in `toy/mod.rs`** but is a general input-tracking struct, not toy-specific. It belongs in `input/`.
+| # | Fix | Files changed |
+|---|-----|---------------|
+| 1.1 | Added `Vertex4D::to_vector()` to eliminate 4 duplicate `Vector4::new(v.position[0],...)` conversions | `polytopes.rs`, `render/tesseract.rs`, `map.rs`, `render/mod.rs`, `toys/polytopes.rs` |
+| 1.2 | Removed dead code: `with_auto_magnitude_label`, `StereoSettings::with_eye_separation/with_projection_mode`, `StereoProjector::center/with_center/with_scale`, `Rotation4D::basis_x/y/z` | `tetrahedron.rs`, `render/mod.rs`, `rotation4d.rs` |
+| 1.3 | Renamed all `get_`-prefixed methods to follow Rust conventions (`get_tetrahedron_vertices` → `tetrahedron_vertices`, `get_vertex_3d` → `vertex_3d`, etc.) | `tetrahedron.rs`, `input/zones.rs`, `render/mod.rs`, `render/tesseract.rs`, `map.rs`, `app.rs` |
+| 1.4 | Deduplicated 5 shared constants (`NEAR_PLANE_THRESHOLD`, `ARROW_STROKE_WIDTH`, `BASE_LABEL_FONT_SIZE`, `BASE_LABEL_OFFSET_Y`, `ARROW_END_DOT_RADIUS`) between `render/mod.rs` and `render/tesseract.rs` | `render/mod.rs`, `render/tesseract.rs` |
+| 1.5 | Added `Camera::slice_rotation()` method, eliminating 4 duplicate `Rotation4D::new(UnitQuaternion::identity(), *q_right)` constructions | `camera.rs`, `map.rs` |
+| 1.6 | Consolidated default camera position into `DEFAULT_CAMERA_POSITION` constant | `camera.rs` |
+| 1.7 | Fixed toy registry default ID duplication: `ToyManager::new()` now derives default from `toy_id_order()[0]` | `toy/manager.rs` |
+| 1.8 | Removed misleading `DragState` re-export from `toy/mod.rs`; `toys/polytopes.rs` now imports directly from `crate::input` | `toy/mod.rs`, `toys/polytopes.rs` |
+| 1.9 | Simplified `compute_weighted_direction` to delegate to `compute_weighted_direction_3d` instead of constructing a full `TetrahedronGadget` | `tetrahedron.rs` |
 
 ---
 
-## Struct Design
+## Remaining Issues
 
-### `FourDeersApp` (17 fields, 856 lines)
+### 1. Three Tetrahedron Renderers (HIGH)
 
-Handles 3 distinct view modes (Main, Compass, Map). The fields break down as:
+Three independent implementations render the same tetrahedron shape with different projection modes and styling:
 
-- Core app state: `toy_manager`, `menu_open`, `settings`, `visualization_rect`, `active_view`
-- Compass-specific: `compass_rotation`, `compass_waypoint_index`, `compass_frame_mode`
-- Map-specific: `map_renderer`, `map_frame_mode`, `map_rotation_3d`
-- Input state: `last_tap_time`, `mouse_down_pos`, `mouse_down_time`, `is_drag_mode`, `drag_view`, `last_drag_pos`
+| # | Location | Projection | Context |
+|---|----------|-----------|---------|
+| A | `render/mod.rs:305-436` | `StereoProjector` | Compass view |
+| B | `render/tesseract.rs:422-572` | Inline perspective math | Tesseract zone view |
+| C | `map.rs:722-837` | `StereoProjector` + 3D offset + alpha | Map waypoints |
 
-**Recommendation:** Extract compass state into `CompassState` and map state into `MapState`. This would reduce `FourDeersApp` to ~11 fields and make view-specific state self-contained. Low priority — works fine as-is.
+All three follow the same rendering sequence: **edges → vertex labels (with component colors) → direction arrow → tip/base labels**. They share ~60% structural code but differ in projection method, styling constants, and feature flags.
 
-### `MapRenderer` (9 fields, 2507 lines)
+**Recommendation:** Extract a `TetrahedronRenderer` with configurable styling and a projection trait/closure.
 
-**Issue:** Has `projection_distance` as a plain field that shadows `StereoSettings.projection_distance`. The `render()` method receives `StereoSettings` but the renderer also uses its own `self.projection_distance`. This dual-source is a latent inconsistency.
+### 2. Code Duplication (remaining)
 
-### `TetrahedronGadget` (979 lines)
+| # | Pattern | Sites | Severity |
+|---|---------|-------|----------|
+| 2A | `compute_weighted_direction_3d` and `compute_vector_arrow` share core weight-computation logic | `tetrahedron.rs:248-292, 325-347` | Medium |
+| 2B | 3D→4D basis projection matrix multiply (`project_3d_to_4d` vs `project_camera_3d_to_world_4d`) — identical structure, differ only in which rotation's basis is used | `camera.rs:261-268, 276-286` | Medium |
+| 2C | `normalize_4d_vector` and `compute_weighted_direction` are only used in tests (dead in production) | `tetrahedron.rs` | Low |
+| 2D | `from_4d_vector` is never called in production code (25 test calls only) | `tetrahedron.rs` | Low |
 
-**Issue:** Uses `Vec<TetrahedronVertex>` and `Vec<TetrahedronEdge>` which are always exactly 4 vertices and 6 edges. These could be fixed-size arrays `[TetrahedronVertex; 4]` and `[TetrahedronEdge; 6]`, avoiding per-frame heap allocation. Low priority — the gadget is small.
+### 3. API Design Issues
 
-### `Pos3D` vs `nalgebra::Vector3`
+| # | Issue | Location |
+|---|-------|----------|
+| 3A | Wide `Toy` trait: 23 methods spanning 5 concerns (metadata, rendering, input, navigation, settings). `DebugScratchpadToy` provides no-op implementations for all 23. | `toy/mod.rs` |
+| 3B | Push-based settings propagation: `FourDeersApp` copies settings into each toy every frame via `set_stereo_settings()` / `set_four_d_settings()`, requiring every toy to store a copy. | `app.rs`, `toys/polytopes.rs` |
+| 3C | `handle_drag` takes `_is_left_view: bool` that `PolytopesToy` ignores (uses its own `drag_state.drag_view` instead) | `toy/mod.rs:44`, `toys/polytopes.rs:398` |
+| 3D | `ToyManager::active_toy()` panics via `.expect()`, while similar queries return `Option` | `toy/manager.rs:30-34` |
+| 3E | `PolytopesToy` has 18 fields; the 6 rotation angles could be a `RotationAngles` struct | `toys/polytopes.rs:25-44` |
 
-**Issue:** The codebase has its own `Pos3D` struct that duplicates much of `Vector3<f32>`. Conversion methods (`to_vector3`, `from_vector3`) exist, but the duality means constant back-and-forth conversions. This was likely done for field-name clarity (`x`, `y`, `z` vs indexing). Replacing `Pos3D` with `Vector3<f32>` would be a large refactor for modest gain.
+### 4. Structural/Module Issues
 
----
-
-## Module Boundaries & Responsibility
-
-### `render.rs` (1608 lines) — Too Many Concerns
-
-Contains 6 distinct responsibilities:
-
-1. **Stereo projection infrastructure** — `StereoProjector`, `ProjectedPoint`, `render_stereo_views`, `split_stereo_views`
-2. **Tesseract rendering pipeline** — `TesseractRenderContext`, `TesseractRenderConfig`, `ObjectRotationAngles`
-3. **Tetrahedron rendering** — `render_single_tetrahedron`, `render_tetrahedron_with_projector`, `TetraRenderSpec`
-4. **UI primitives** — `draw_background`, `draw_center_divider`, `render_tap_zone_label`, `render_common_menu_half`
-5. **Settings types** — `FourDSettings`, `StereoSettings`, `ProjectionMode`, `CompassFrameMode`
-6. **Utilities** — `w_to_color`, `format_4d_vector_compact`, `draw_arrow_head`, `render_outlined_text`
-
-**Recommendation:** Move the tesseract rendering pipeline into its own module (`src/render/tesseract.rs`) and the settings types into a shared location. The UI primitives could become `src/render/ui.rs`. This is a significant refactor — defer until there's a concrete reason.
-
-### `map.rs` (2507 lines) — Largest File
-
-Contains:
-- Map rendering pipeline
-- Cross-section geometry: `clip_polyhedron_by_plane`, `build_cross_section_polyhedron`, `convex_hull_2d_indexed`, `VertexDedup`
-- Edge/vertex/label rendering helpers
-- Slice computation: `SliceInfo`
-- Frustum ray computation
-- A duplicate `render_tetrahedron_with_projector` function
-
-**Recommendation:** Extract geometry primitives into `src/geometry.rs`. This would remove ~400 lines from `map.rs` and make the clipping/hull code reusable.
-
----
-
-## Code Duplication
-
-### 1. `format_4d_vector` (camera.rs) vs `format_4d_vector_compact` (render.rs)
-
-`camera.rs:401` has `format_4d_vector` (threshold 0.01, formats as `+X-Y`):
-```
-[0.0, 1.0, 0.0, 0.0] → "+Y"
-[0.5, 0.5, 0.0, 0.0] → "+0.50X+0.50Y"
-```
-
-`render.rs:960` has `format_4d_vector_compact` (threshold 0.05, formats as `+X +Y`):
-```
-[0.0, 1.0, 0.0, 0.0] → "+Y"
-[0.5, 0.5, 0.0, 0.0] → "+0.5X +0.5Y"
-```
-
-**Fix:** Consolidate into a single function with a threshold parameter in a shared location.
-
-### 2. Duplicate `render_tetrahedron_with_projector`
-
-`render.rs:984` uses `StereoProjector` for projection. `map.rs` has its own version with inline projection logic. They share ~60% structural similarity (edge loop, vertex label loop, arrow rendering, tip/base label rendering) but differ in projection mode.
-
-**Assessment:** These were previously evaluated as too divergent to meaningfully abstract. The structural similarity is inherent to rendering the same shape. Not worth forcing into a shared function — the resulting abstraction would be harder to understand than the current duplication.
-
-### 3. Registry metadata duplication
-
-`registry.rs` has `toy_ids()` and `toy_name_by_id()` that manually duplicate what each toy's `id()` and `name()` already provides:
-
-```rust
-pub fn toy_ids() -> Vec<&'static str> {
-    vec!["polytopes", "debug_scratchpad"]  // must match each toy's id()
-}
-
-pub fn toy_name_by_id(id: &str) -> Option<&'static str> {
-    match id {
-        "polytopes" => Some("Polytopes"),          // must match PolytopesToy::name()
-        "debug_scratchpad" => Some("DebugScratchpad"), // must match DebugScratchpadToy::name()
-        _ => None,
-    }
-}
-```
-
-**Fix:** Derive from toy instances at construction time.
-
-### 4. `render_sidebar` angle reset duplication
-
-`PolytopesToy::render_sidebar` (line 283-288) manually zeroes all 6 rotation angles instead of calling `self.reset_rotation_angles()`:
-
-```rust
-self.rot_xy = 0.0;
-self.rot_xz = 0.0;
-self.rot_yz = 0.0;
-self.rot_xw = 0.0;
-self.rot_yw = 0.0;
-self.rot_zw = 0.0;
-```
-
-**Fix:** Replace with `self.reset_rotation_angles()`.
-
----
-
-## Cross-Cutting Issues
-
-### Settings Propagation
-
-`FourDeersApp` pushes stereo/4D settings into the active toy every frame:
-```rust
-self.toy_manager.active_toy_mut().set_stereo_settings(&self.settings.stereo);
-self.toy_manager.active_toy_mut().set_four_d_settings(&self.settings.four_d);
-```
-
-This is fragile — adding a new setting requires updating the push path. A pull-based approach (toys receive a reference to shared settings) would be more robust, but requires lifetime management. Acceptable for now.
-
-### Dead Parameters
-
-`SliceInfo::new` takes `_bounds` and `_map_camera` parameters that are completely unused. The struct only uses `scene_camera` and `w_thickness`. Remove them.
-
-### Unused `move_along`
-
-`Camera::move_along` uses `project_3d_to_4d` (full rotation), while `apply_action` uses `project_camera_3d_to_world_4d` (split frame model). `move_along` is only called from tests. It either:
-- Should be deleted and tests rewritten to use `apply_action`
-- Should have a doc comment explaining when it's appropriate (test utility)
-
-### Arrow rendering magic numbers
-
-Several small constants in `render.rs` are still hardcoded:
-- `12.0` tip label offset (line 927, 1103)
-- `12.0` compass tip font size (line 1109)
-- `2.0`, `3.0`, `4.0` dot radii (lines 924, 937, 1086, 1113)
-
-These should be named constants for consistency with the rest of the codebase.
+| # | Issue | Location |
+|---|-------|----------|
+| 4A | `map.rs` is ~2100 lines, mixing rendering, geometry, coordinate transforms, and ~900 lines of tests | `map.rs` |
+| 4B | `render/mod.rs` is still ~880 lines after submodule split — contains `StereoProjector`, settings types, compass tetrahedron rendering, and compass label logic | `render/mod.rs` |
+| 4C | `app.rs` contains ~163 lines of pointer event processing that could be extracted to `input/pointer.rs` | `app.rs:290-452` |
+| 4D | Dependency inversion: `tetrahedron.rs` (geometry primitive) imports `input::Zone` for `for_zone()` method | `tetrahedron.rs:10` |
+| 4E | Two parallel drag-view tracking mechanisms: `FourDeersApp::drag_view` and `PolytopesToy::drag_state` | `app.rs:122`, `toys/polytopes.rs:39` |
 
 ---
 
 ## Refactoring Plan
 
-### Phase 1: Low-Hanging Fruit (Quick Fixes)
+### Phase 2: Tetrahedron Unification (Next)
 
-These are single-location changes that improve consistency and eliminate dead code.
+Unify the three tetrahedron renderers into a shared `TetrahedronRenderer` with configurable parameters:
+- Extract common rendering loop (edges, labels, arrow, tip/base)
+- Parameterize projection (StereoProjector vs inline perspective vs offset projector)
+- Parameterize styling (stroke widths, font sizes, alpha, color)
+- Consolidate remaining per-renderer constants
 
-| # | Item | File(s) | Effort |
-|---|------|---------|--------|
-| 1.1 | Rename `get_visualization_rect` → `visualization_rect` in Toy trait + impls | `toy/mod.rs`, `toys/polytopes.rs`, `toys/debug_scratchpad.rs` | Trivial |
-| 1.2 | Remove unused `_bounds` and `_map_camera` params from `SliceInfo::new` | `map.rs` | Trivial |
-| 1.3 | Replace manual angle zeroing with `self.reset_rotation_angles()` | `toys/polytopes.rs` | Trivial |
-| 1.4 | Derive registry metadata from toy instances | `toy/registry.rs`, `toy/manager.rs` | Easy |
-| 1.5 | Move `DragState` from `toy/mod.rs` to `input/mod.rs` | `toy/mod.rs`, `input/mod.rs`, `toys/polytopes.rs` | Easy |
+### Phase 3: Structural Improvements (Future)
 
-### Phase 2: Code Consolidation (Medium Effort)
-
-These eliminate duplication across files.
-
-| # | Item | File(s) | Effort |
-|---|------|---------|--------|
-| 2.1 | Consolidate `format_4d_vector` and `format_4d_vector_compact` into one function | `camera.rs`, `render.rs` | Medium |
-| 2.2 | Extract `compute_weighted_direction` to use `compute_weighted_direction_3d` directly | `tetrahedron.rs` | Easy |
-| 2.3 | Name remaining magic numbers in `render.rs` (tip offsets, dot radii, font sizes) | `render.rs` | Easy |
-
-### Phase 3: Structural Improvements (Future, Larger Scope)
-
-These would require more planning and testing.
-
-| # | Item | File(s) | Effort |
-|---|------|---------|--------|
-| 3.1 | Split `render.rs` into submodules (projection, tesseract, ui) | `render.rs` → `render/mod.rs`, `render/tesseract.rs`, etc. | High |
-| 3.2 | Extract geometry primitives from `map.rs` into `geometry.rs` | `map.rs` → `geometry.rs` | High |
-| 3.3 | Decompose `FourDeersApp` into view-specific state structs | `app.rs` | Medium |
-| 3.4 | Replace `Pos3D` with `Vector3<f32>` throughout | `tetrahedron.rs`, `render.rs`, `map.rs` | High |
-| 3.5 | Change `TetrahedronGadget` to use fixed-size arrays | `tetrahedron.rs` | Medium |
-
-Phase 1 and 2.3 should be done now. Phase 2.1-2.2 after that. Phase 3 is deferred until there's a concrete need.
+| # | Item | Effort |
+|---|------|--------|
+| 3.1 | Extract `project_3d_to_4d_with_basis` helper to unify projection methods in camera.rs | Easy |
+| 3.2 | Extract geometry primitives from `map.rs` into `geometry.rs` | High |
+| 3.3 | Further split `render/mod.rs` (projector, compass, settings) | Medium |
+| 3.4 | Extract pointer event processing from `app.rs` to `input/pointer.rs` | Medium |
+| 3.5 | Decompose `FourDeersApp` into view-specific state structs | Medium |
+| 3.6 | Consider capability traits for Toy (e.g., `CompassProvider`, `MapProvider`) | High |

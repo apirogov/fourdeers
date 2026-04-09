@@ -35,6 +35,7 @@ use nalgebra::{UnitQuaternion, Vector3, Vector4};
 use crate::rotation4d::{Rotation4D, RotationPlane};
 
 const ROTATION_SENSITIVITY: f32 = 0.005;
+const DEFAULT_CAMERA_POSITION: Vector4<f32> = Vector4::new(0.0, 0.0, -5.0, 0.0);
 
 /// First-person camera state with 4D orientation
 #[derive(Clone)]
@@ -54,7 +55,7 @@ pub struct Camera {
 impl Default for Camera {
     fn default() -> Self {
         Self {
-            position: Vector4::new(0.0, 0.0, -5.0, 0.0),
+            position: DEFAULT_CAMERA_POSITION,
             rotation_4d: Rotation4D::identity(),
             yaw_l: 0.0,
             pitch_l: 0.0,
@@ -71,7 +72,7 @@ impl Camera {
     }
 
     pub fn reset(&mut self) {
-        self.position = Vector4::new(0.0, 0.0, -5.0, 0.0);
+        self.position = DEFAULT_CAMERA_POSITION;
         self.rotation_4d = Rotation4D::identity();
         self.yaw_l = 0.0;
         self.pitch_l = 0.0;
@@ -231,6 +232,15 @@ impl Camera {
         self.rotation_4d.basis_vectors()
     }
 
+    /// Returns the slice-only rotation (identity q_left, actual q_right).
+    ///
+    /// Used to derive slice-normal direction and to project in-slice camera
+    /// directions into world 4D without including the camera's 3D look rotation.
+    #[must_use]
+    pub fn slice_rotation(&self) -> Rotation4D {
+        Rotation4D::new(UnitQuaternion::identity(), *self.rotation_4d.q_right())
+    }
+
     #[must_use]
     pub fn slice_w_axis(&self) -> [f32; 4] {
         self.rotation_4d.basis_w()
@@ -274,9 +284,7 @@ impl Camera {
     /// (`q_right`).
     #[must_use]
     pub fn project_camera_3d_to_world_4d(&self, v3: Vector3<f32>) -> Vector4<f32> {
-        let slice_rotation =
-            Rotation4D::new(UnitQuaternion::identity(), *self.rotation_4d.q_right());
-        let basis = slice_rotation.basis_vectors();
+        let basis = self.slice_rotation().basis_vectors();
         Vector4::new(
             v3.x * basis[0][0] + v3.y * basis[1][0] + v3.z * basis[2][0],
             v3.x * basis[0][1] + v3.y * basis[1][1] + v3.z * basis[2][1],
@@ -293,9 +301,7 @@ impl Camera {
         let up = self.project_camera_3d_to_world_4d(up3);
         let forward = self.project_camera_3d_to_world_4d(forward3);
 
-        let slice_rotation =
-            Rotation4D::new(UnitQuaternion::identity(), *self.rotation_4d.q_right());
-        let w_basis = slice_rotation.basis_w();
+        let w_basis = self.slice_rotation().basis_w();
         let w_axis = Vector4::new(w_basis[0], w_basis[1], w_basis[2], w_basis[3]);
 
         (right, up, forward, w_axis)
@@ -832,11 +838,7 @@ mod tests {
             ..Camera::new()
         };
 
-        let slice_rotation = Rotation4D::new(
-            UnitQuaternion::identity(),
-            *base_camera.rotation_4d.q_right(),
-        );
-        let w_axis = vec4_from_arr(slice_rotation.basis_w());
+        let w_axis = vec4_from_arr(base_camera.slice_rotation().basis_w());
 
         let mut kata = base_camera.clone();
         let kata_before = kata.position;

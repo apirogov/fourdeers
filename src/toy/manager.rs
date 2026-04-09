@@ -13,7 +13,7 @@ impl ToyManager {
     #[must_use]
     pub fn new() -> Self {
         let toys = super::registry::create_all_toys();
-        let active_toy_id = "polytopes".to_string();
+        let active_toy_id = super::registry::toy_id_order()[0].to_string();
 
         Self {
             toys,

@@ -20,15 +20,15 @@ use crate::colors::{
 use crate::tetrahedron::TetrahedronGadget;
 
 pub const STEREO_SCALE_FACTOR: f32 = 0.35;
-const NEAR_PLANE_THRESHOLD: f32 = 0.1;
-const ARROW_STROKE_WIDTH: f32 = 2.0;
+pub(super) const NEAR_PLANE_THRESHOLD: f32 = 0.1;
+pub(super) const ARROW_STROKE_WIDTH: f32 = 2.0;
+pub(super) const BASE_LABEL_FONT_SIZE: f32 = 11.0;
+pub(super) const BASE_LABEL_OFFSET_Y: f32 = 18.0;
+pub(super) const ARROW_END_DOT_RADIUS: f32 = 3.0;
 const COMPASS_ARROW_STROKE_WIDTH: f32 = 3.0;
 const COMPASS_ARROW_HEAD_SCALE: f32 = 20.0;
 const COMPASS_LABEL_FONT_SIZE: f32 = 16.0;
 const COMPASS_VALUE_FONT_SIZE: f32 = 11.0;
-const BASE_LABEL_FONT_SIZE: f32 = 11.0;
-const BASE_LABEL_OFFSET_Y: f32 = 18.0;
-const ARROW_END_DOT_RADIUS: f32 = 3.0;
 const COMPASS_ARROW_END_DOT_RADIUS: f32 = 4.0;
 const COMPASS_TIP_LABEL_OFFSET_Y: f32 = 15.0;
 const COMPASS_TIP_FONT_SIZE: f32 = 12.0;
@@ -154,20 +154,8 @@ impl StereoSettings {
     }
 
     #[must_use]
-    pub const fn with_eye_separation(mut self, separation: f32) -> Self {
-        self.eye_separation = separation;
-        self
-    }
-
-    #[must_use]
     pub const fn with_projection_distance(mut self, distance: f32) -> Self {
         self.projection_distance = distance;
-        self
-    }
-
-    #[must_use]
-    pub const fn with_projection_mode(mut self, mode: ProjectionMode) -> Self {
-        self.projection_mode = mode;
         self
     }
 }
@@ -244,35 +232,8 @@ impl StereoProjector {
     }
 
     #[must_use]
-    pub const fn center(&self) -> egui::Pos2 {
-        self.center
-    }
-
-    #[must_use]
     pub const fn scale(&self) -> f32 {
         self.scale
-    }
-
-    #[must_use]
-    pub const fn with_center(&self, center: egui::Pos2) -> Self {
-        Self {
-            center,
-            scale: self.scale,
-            eye_offset: self.eye_offset,
-            projection_distance: self.projection_distance,
-            mode: self.mode,
-        }
-    }
-
-    #[must_use]
-    pub const fn with_scale(&self, scale: f32) -> Self {
-        Self {
-            center: self.center,
-            scale,
-            eye_offset: self.eye_offset,
-            projection_distance: self.projection_distance,
-            mode: self.mode,
-        }
     }
 
     #[must_use]
@@ -313,10 +274,10 @@ pub fn render_tetrahedron_with_projector(
         let v1_idx = edge.vertex_indices[1];
 
         let p0 = gadget
-            .get_vertex_3d(v0_idx)
+            .vertex_3d(v0_idx)
             .and_then(|pos| projector.project_3d(pos.x, pos.y, pos.z));
         let p1 = gadget
-            .get_vertex_3d(v1_idx)
+            .vertex_3d(v1_idx)
             .and_then(|pos| projector.project_3d(pos.x, pos.y, pos.z));
 
         if let (Some(p0), Some(p1)) = (p0, p1) {
@@ -335,7 +296,7 @@ pub fn render_tetrahedron_with_projector(
         let color = crate::tetrahedron::compute_component_color(component, max_mag);
         let egui_color = color.to_egui_color();
 
-        if let (Some(pos), Some(normal)) = (gadget.get_vertex_3d(i), gadget.get_vertex_normal(i)) {
+        if let (Some(pos), Some(normal)) = (gadget.vertex_3d(i), gadget.vertex_normal(i)) {
             let label_offset = 0.15;
             let label_x = pos.x + normal.x * label_offset;
             let label_y = pos.y + normal.y * label_offset;
@@ -356,7 +317,7 @@ pub fn render_tetrahedron_with_projector(
             }
         }
 
-        if let (Some(pos), Some(normal)) = (gadget.get_vertex_3d(i), gadget.get_vertex_normal(i)) {
+        if let (Some(pos), Some(normal)) = (gadget.vertex_3d(i), gadget.vertex_normal(i)) {
             let label_offset = 0.35;
             let label_x = pos.x + normal.x * label_offset;
             let label_y = pos.y + normal.y * label_offset;
@@ -841,12 +802,7 @@ mod tests {
             let inv_q_left = camera.rotation_4d.q_left().inverse();
 
             for (i, v) in test_verts.iter().enumerate() {
-                let v4 = nalgebra::Vector4::new(
-                    v.position[0],
-                    v.position[1],
-                    v.position[2],
-                    v.position[3],
-                );
+                let v4 = v.to_vector();
                 let p_4d = qr_inv.rotate_vector(v4 - camera.position);
 
                 let p3 = Vector3::new(p_4d.x, p_4d.y, p_4d.z);

@@ -11,7 +11,7 @@
 #![allow(clippy::excessive_precision)]
 
 use eframe::egui;
-use nalgebra::{UnitQuaternion, Vector3, Vector4};
+use nalgebra::{Vector3, Vector4};
 
 use crate::camera::Camera;
 use crate::colors::{ARROW_FORWARD, ARROW_GLOW, ARROW_PRIMARY};
@@ -22,6 +22,7 @@ use crate::render::{
     CompassFrameMode, FourDSettings, ObjectRotationAngles, ProjectionMode, StereoProjector,
     StereoSettings, TesseractRenderConfig, TesseractRenderContext,
 };
+#[cfg(test)]
 use crate::rotation4d::Rotation4D;
 use crate::tetrahedron::{compute_component_color, format_magnitude, TetrahedronGadget};
 use crate::toy::CompassWaypoint;
@@ -353,12 +354,8 @@ impl MapRenderer {
         stereo: StereoSettings,
     ) {
         let norm_cam = normalize_to_tesseract(scene_camera.position, bounds);
-        let slice_rotation = Rotation4D::new(
-            UnitQuaternion::identity(),
-            *scene_camera.rotation_4d.q_right(),
-        );
-        let basis_w = slice_rotation.basis_w();
-        let slice_normal = Vector4::new(basis_w[0], basis_w[1], basis_w[2], basis_w[3]);
+        let w = scene_camera.slice_rotation().basis_w();
+        let slice_normal = Vector4::new(w[0], w[1], w[2], w[3]);
         let map_transform = MapViewTransform::new(&self.camera);
         let near_z = -self.projection_distance + NEAR_MARGIN;
         let cross_section_4d = compute_slice_cross_section(
@@ -641,12 +638,8 @@ struct SliceInfo {
 }
 impl SliceInfo {
     fn new(scene_camera: &Camera, w_thickness: f32) -> Self {
-        let slice_rotation = Rotation4D::new(
-            UnitQuaternion::identity(),
-            *scene_camera.rotation_4d.q_right(),
-        );
-        let basis_w = slice_rotation.basis_w();
-        let slice_normal = Vector4::new(basis_w[0], basis_w[1], basis_w[2], basis_w[3]);
+        let w = scene_camera.slice_rotation().basis_w();
+        let slice_normal = Vector4::new(w[0], w[1], w[2], w[3]);
         Self {
             slice_normal,
             cam_position: scene_camera.position,
@@ -736,11 +729,11 @@ fn render_tetrahedron_with_projector(params: &TetraRenderParams) {
     );
     for edge in &gadget.edges {
         let v0 = *gadget
-            .get_vertex_3d(edge.vertex_indices[0])
+            .vertex_3d(edge.vertex_indices[0])
             .expect("edge vertex index out of bounds")
             + center_3d;
         let v1 = *gadget
-            .get_vertex_3d(edge.vertex_indices[1])
+            .vertex_3d(edge.vertex_indices[1])
             .expect("edge vertex index out of bounds")
             + center_3d;
         if let (Some(p0), Some(p1)) = (
@@ -759,9 +752,7 @@ fn render_tetrahedron_with_projector(params: &TetraRenderParams) {
         for (i, vertex) in gadget.vertices.iter().enumerate() {
             let component = gadget.component_values[i];
             let color = compute_component_color(component, max_mag);
-            if let (Some(pos), Some(normal)) =
-                (gadget.get_vertex_3d(i), gadget.get_vertex_normal(i))
-            {
+            if let (Some(pos), Some(normal)) = (gadget.vertex_3d(i), gadget.vertex_normal(i)) {
                 let pos_v = *pos;
                 let normal_v = *normal;
                 let label_pos = pos_v + normal_v * 0.12 + center_3d;
@@ -1032,7 +1023,7 @@ fn direction_to_tesseract(
     result
 }
 const fn vertex_to_4d(v: &crate::polytopes::Vertex4D) -> Vector4<f32> {
-    Vector4::new(v.position[0], v.position[1], v.position[2], v.position[3])
+    v.to_vector()
 }
 fn clip_segment_to_screen(
     map_transform: &MapViewTransform,

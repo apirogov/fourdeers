@@ -12,8 +12,6 @@ pub mod registry;
 
 pub use manager::ToyManager;
 
-pub use crate::input::DragState;
-
 /// A named 4D position shown in the compass view.
 #[derive(Clone)]
 pub struct CompassWaypoint {

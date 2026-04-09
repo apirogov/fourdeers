@@ -13,6 +13,7 @@
 //! | 120-cell | 600 | 1200 | 120 |
 
 use bytemuck::{Pod, Zeroable};
+use nalgebra::Vector4;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Pod, Zeroable)]
@@ -26,6 +27,16 @@ impl Vertex4D {
         Self {
             position: [x, y, z, w],
         }
+    }
+
+    #[must_use]
+    pub const fn to_vector(self) -> Vector4<f32> {
+        Vector4::new(
+            self.position[0],
+            self.position[1],
+            self.position[2],
+            self.position[3],
+        )
     }
 }
 

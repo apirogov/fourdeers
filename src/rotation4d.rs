@@ -162,21 +162,6 @@ impl Rotation4D {
     }
 
     #[must_use]
-    pub fn basis_x(&self) -> [f32; 4] {
-        self.rotate_point([1.0, 0.0, 0.0, 0.0])
-    }
-
-    #[must_use]
-    pub fn basis_y(&self) -> [f32; 4] {
-        self.rotate_point([0.0, 1.0, 0.0, 0.0])
-    }
-
-    #[must_use]
-    pub fn basis_z(&self) -> [f32; 4] {
-        self.rotate_point([0.0, 0.0, 1.0, 0.0])
-    }
-
-    #[must_use]
     pub fn basis_w(&self) -> [f32; 4] {
         self.rotate_point([0.0, 0.0, 0.0, 1.0])
     }
