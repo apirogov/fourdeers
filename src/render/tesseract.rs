@@ -295,73 +295,20 @@ impl<'a> TesseractRenderContext<'a> {
         tetrahedron_rotations: &HashMap<TetraId, UnitQuaternion<f32>>,
     ) {
         let basis = self.camera.rotation_4d.basis_vectors();
-        let layout = tetrahedron_layout(view_rect);
-        let offset = layout.edge_offset;
-        let third_w = view_rect.width() / 3.0;
-        let third_h = view_rect.height() / 3.0;
+        let entries = compute_zone_layout(&basis, view_rect);
+        let scale = tetrahedron_layout(view_rect).scale;
 
-        let tetrahedra: Vec<(nalgebra::Vector4<f32>, Zone, f32, f32)> = vec![
-            (
-                nalgebra::Vector4::from(basis[1]),
-                Zone::North,
-                view_rect.center().x,
-                view_rect.min.y + offset,
-            ),
-            (
-                nalgebra::Vector4::from(neg_vec(basis[1])),
-                Zone::South,
-                view_rect.center().x,
-                view_rect.max.y - offset,
-            ),
-            (
-                nalgebra::Vector4::from(neg_vec(basis[0])),
-                Zone::West,
-                view_rect.min.x + offset,
-                view_rect.center().y,
-            ),
-            (
-                nalgebra::Vector4::from(basis[0]),
-                Zone::East,
-                view_rect.max.x - offset,
-                view_rect.center().y,
-            ),
-            (
-                nalgebra::Vector4::from(basis[2]),
-                Zone::NorthEast,
-                view_rect.min.x + third_w * 2.5,
-                view_rect.min.y + third_h * 0.5,
-            ),
-            (
-                nalgebra::Vector4::from(neg_vec(basis[2])),
-                Zone::SouthWest,
-                view_rect.min.x + third_w * 0.5,
-                view_rect.min.y + third_h * 2.5,
-            ),
-            (
-                nalgebra::Vector4::from(basis[3]),
-                Zone::NorthWest,
-                view_rect.min.x + third_w * 0.5,
-                view_rect.min.y + third_h * 0.5,
-            ),
-            (
-                nalgebra::Vector4::from(neg_vec(basis[3])),
-                Zone::SouthEast,
-                view_rect.min.x + third_w * 2.5,
-                view_rect.min.y + third_h * 2.5,
-            ),
-        ];
-
-        for (vector_4d, zone, x, y) in tetrahedra {
+        for entry in entries {
             let tetra_id = TetraId {
                 is_left_view: false,
-                zone,
+                zone: entry.zone,
             };
             let user_rotation = tetrahedron_rotations
                 .get(&tetra_id)
                 .copied()
                 .unwrap_or_else(UnitQuaternion::identity);
 
-            let base_label = zone_to_direction_label(zone);
+            let base_label = zone_to_direction_label(entry.zone);
             let base_label = if base_label.is_empty() {
                 None
             } else {
@@ -369,17 +316,81 @@ impl<'a> TesseractRenderContext<'a> {
             };
 
             let spec = TetraRenderSpec {
-                vector_4d,
-                zone,
-                center_x: x,
-                center_y: y,
+                vector_4d: Vector4::from(entry.basis_vector),
+                zone: entry.zone,
+                center_x: entry.x,
+                center_y: entry.y,
                 user_rotation,
-                scale: layout.scale,
+                scale,
                 base_label,
             };
             render_single_tetrahedron(painter, &spec);
         }
     }
+}
+
+struct ZoneLayoutEntry {
+    basis_vector: [f32; 4],
+    zone: Zone,
+    x: f32,
+    y: f32,
+}
+
+fn compute_zone_layout(basis: &[[f32; 4]; 4], view_rect: egui::Rect) -> Vec<ZoneLayoutEntry> {
+    let offset = tetrahedron_layout(view_rect).edge_offset;
+    let third_w = view_rect.width() / 3.0;
+    let third_h = view_rect.height() / 3.0;
+
+    vec![
+        ZoneLayoutEntry {
+            basis_vector: basis[1],
+            zone: Zone::North,
+            x: view_rect.center().x,
+            y: view_rect.min.y + offset,
+        },
+        ZoneLayoutEntry {
+            basis_vector: neg_vec(basis[1]),
+            zone: Zone::South,
+            x: view_rect.center().x,
+            y: view_rect.max.y - offset,
+        },
+        ZoneLayoutEntry {
+            basis_vector: neg_vec(basis[0]),
+            zone: Zone::West,
+            x: view_rect.min.x + offset,
+            y: view_rect.center().y,
+        },
+        ZoneLayoutEntry {
+            basis_vector: basis[0],
+            zone: Zone::East,
+            x: view_rect.max.x - offset,
+            y: view_rect.center().y,
+        },
+        ZoneLayoutEntry {
+            basis_vector: basis[2],
+            zone: Zone::NorthEast,
+            x: view_rect.min.x + third_w * 2.5,
+            y: view_rect.min.y + third_h * 0.5,
+        },
+        ZoneLayoutEntry {
+            basis_vector: neg_vec(basis[2]),
+            zone: Zone::SouthWest,
+            x: view_rect.min.x + third_w * 0.5,
+            y: view_rect.min.y + third_h * 2.5,
+        },
+        ZoneLayoutEntry {
+            basis_vector: basis[3],
+            zone: Zone::NorthWest,
+            x: view_rect.min.x + third_w * 0.5,
+            y: view_rect.min.y + third_h * 0.5,
+        },
+        ZoneLayoutEntry {
+            basis_vector: neg_vec(basis[3]),
+            zone: Zone::SouthEast,
+            x: view_rect.min.x + third_w * 2.5,
+            y: view_rect.min.y + third_h * 2.5,
+        },
+    ]
 }
 
 const fn zone_to_direction_label(zone: Zone) -> &'static str {
