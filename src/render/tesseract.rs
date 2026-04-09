@@ -5,30 +5,20 @@ use nalgebra::UnitQuaternion;
 use std::collections::HashMap;
 
 use crate::camera::{format_4d_vector, Camera};
-use crate::colors::{
-    ARROW_GLOW, ARROW_PRIMARY, ARROW_TIP, LABEL_DEFAULT, OBJECT_TINT_POSITIVE, OUTLINE_DEFAULT,
-    OUTLINE_THIN, TEXT_HIGHLIGHT,
-};
 use crate::input::{TetraId, Zone};
 use crate::polytopes::Vertex4D;
 use crate::rotation4d::Rotation4D;
 use crate::tetrahedron::{tetrahedron_layout, TetrahedronGadget};
 
-use super::ui::{draw_arrow_head, render_dual_outlined_text, render_outlined_text};
+use super::ui::render_outlined_text;
 use super::{
-    w_to_color, FourDSettings, StereoProjector, StereoSettings, ARROW_END_DOT_RADIUS,
-    ARROW_STROKE_WIDTH, BASE_LABEL_FONT_SIZE, BASE_LABEL_OFFSET_Y, NEAR_PLANE_THRESHOLD,
+    w_to_color, FourDSettings, StereoProjector, StereoSettings, TetraStyle, BASE_LABEL_FONT_SIZE,
+    BASE_LABEL_OFFSET_Y, NEAR_PLANE_THRESHOLD,
 };
 
 const EDGE_STROKE_WIDTH: f32 = 2.5;
 const EDGE_CLIP_MARGIN: f32 = 50.0;
 const TETRA_FOCAL_LENGTH_SCALE: f32 = 3.0;
-const TETRA_EDGE_STROKE: f32 = 1.5;
-const ARROW_HEAD_SCALE: f32 = 15.0;
-const VERTEX_LABEL_FONT_SIZE: f32 = 14.0;
-const MAGNITUDE_LABEL_FONT_SIZE: f32 = 10.0;
-const TIP_LABEL_OFFSET_Y: f32 = 12.0;
-const ARROW_ORIGIN_DOT_RADIUS: f32 = 2.0;
 
 pub struct TesseractRenderContext<'a> {
     pub vertices: &'a [Vertex4D],
@@ -66,8 +56,6 @@ struct TetraRenderSpec<'a> {
     center_y: f32,
     user_rotation: UnitQuaternion<f32>,
     scale: f32,
-    show_captions: bool,
-    show_magnitudes: bool,
     base_label: Option<&'a str>,
 }
 
@@ -389,8 +377,6 @@ impl<'a> TesseractRenderContext<'a> {
                 center_y: y,
                 user_rotation,
                 scale: layout.scale,
-                show_captions: true,
-                show_magnitudes: false,
                 base_label,
             };
             render_single_tetrahedron(painter, &spec);
@@ -412,142 +398,35 @@ const fn zone_to_direction_label(zone: Zone) -> &'static str {
     }
 }
 
-#[allow(clippy::too_many_lines)]
 fn render_single_tetrahedron(painter: &egui::Painter, spec: &TetraRenderSpec<'_>) {
     let gadget =
         TetrahedronGadget::for_zone(spec.vector_4d, spec.zone, spec.user_rotation, spec.scale);
     let focal_length = spec.scale * TETRA_FOCAL_LENGTH_SCALE;
 
-    for edge in &gadget.edges {
-        let v0_idx = edge.vertex_indices[0];
-        let v1_idx = edge.vertex_indices[1];
+    let mut style = TetraStyle::zone_tetra();
+    if let Some(label) = spec.base_label {
+        style.base_label_font_size = BASE_LABEL_FONT_SIZE;
+        style.base_label_offset_y = BASE_LABEL_OFFSET_Y;
+        let _ = label;
+    }
 
-        let p0 = gadget.vertex_3d(v0_idx).and_then(|pos| {
-            let z_offset = focal_length + pos.z;
+    super::render_tetrahedron(
+        painter,
+        &gadget,
+        |x, y, z| {
+            let z_offset = focal_length + z;
             if z_offset > NEAR_PLANE_THRESHOLD {
                 let s = focal_length / z_offset;
-                Some((spec.center_x + pos.x * s, spec.center_y - pos.y * s))
+                Some(egui::Pos2::new(
+                    spec.center_x + x * s,
+                    spec.center_y - y * s,
+                ))
             } else {
                 None
             }
-        });
-        let p1 = gadget.vertex_3d(v1_idx).and_then(|pos| {
-            let z_offset = focal_length + pos.z;
-            if z_offset > NEAR_PLANE_THRESHOLD {
-                let s = focal_length / z_offset;
-                Some((spec.center_x + pos.x * s, spec.center_y - pos.y * s))
-            } else {
-                None
-            }
-        });
-
-        if let (Some(p0), Some(p1)) = (p0, p1) {
-            painter.line_segment(
-                [egui::Pos2::new(p0.0, p0.1), egui::Pos2::new(p1.0, p1.1)],
-                egui::Stroke::new(TETRA_EDGE_STROKE, OBJECT_TINT_POSITIVE),
-            );
-        }
-    }
-
-    if spec.show_captions || spec.show_magnitudes {
-        let component_mags: [f32; 4] = gadget.component_values.map(f32::abs);
-        let max_mag = component_mags.iter().copied().fold(0.0f32, f32::max);
-
-        for (i, vertex) in gadget.vertices.iter().enumerate() {
-            let component = gadget.component_values[i];
-
-            if let Some(pos) = gadget.vertex_3d(i) {
-                let z_offset = focal_length + pos.z;
-                if z_offset > NEAR_PLANE_THRESHOLD {
-                    let s = focal_length / z_offset;
-                    let screen_pos =
-                        egui::Pos2::new(spec.center_x + pos.x * s, spec.center_y - pos.y * s);
-
-                    if spec.show_captions {
-                        let color = crate::tetrahedron::compute_component_color(component, max_mag);
-                        let egui_color = color.to_egui_color();
-                        let font_id = egui::FontId::proportional(VERTEX_LABEL_FONT_SIZE);
-
-                        render_dual_outlined_text(
-                            painter,
-                            screen_pos,
-                            egui::Align2::CENTER_CENTER,
-                            &vertex.label,
-                            font_id,
-                            egui_color,
-                            OUTLINE_DEFAULT,
-                        );
-                    }
-
-                    if spec.show_magnitudes {
-                        if let Some(normal) = gadget.vertex_normal(i) {
-                            let label_x = pos.x + normal.x * 20.0;
-                            let label_y = pos.y + normal.y * 20.0;
-                            let label_pos = egui::Pos2::new(
-                                spec.center_x + label_x * s,
-                                spec.center_y - label_y * s,
-                            );
-                            let value_text = crate::tetrahedron::format_component_value(component);
-                            let font_id = egui::FontId::monospace(10.0);
-
-                            render_dual_outlined_text(
-                                painter,
-                                label_pos,
-                                egui::Align2::CENTER_CENTER,
-                                &value_text,
-                                font_id,
-                                TEXT_HIGHLIGHT,
-                                OUTLINE_THIN,
-                            );
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    let arrow = gadget.arrow_position();
-    let z_offset = focal_length + arrow.z;
-    if z_offset > NEAR_PLANE_THRESHOLD {
-        let s = focal_length / z_offset;
-        let center = egui::Pos2::new(spec.center_x, spec.center_y);
-        let arrow_end = egui::Pos2::new(spec.center_x + arrow.x * s, spec.center_y - arrow.y * s);
-        let arrow_vec = arrow_end - center;
-
-        if arrow_vec.length() > 1e-3 {
-            painter.line_segment(
-                [center, arrow_end],
-                egui::Stroke::new(ARROW_STROKE_WIDTH, ARROW_PRIMARY),
-            );
-
-            let arrow_head_size = gadget.arrow_head_size() * ARROW_HEAD_SCALE;
-            if arrow_vec.length() > arrow_head_size {
-                draw_arrow_head(
-                    painter,
-                    arrow_end,
-                    arrow_vec,
-                    arrow_head_size,
-                    ARROW_PRIMARY,
-                );
-            }
-        }
-
-        painter.circle_filled(center, ARROW_ORIGIN_DOT_RADIUS, ARROW_GLOW);
-
-        if let Some(ref label) = gadget.tip_label() {
-            let tip_offset = egui::Vec2::new(0.0, -TIP_LABEL_OFFSET_Y);
-            let label_pos = arrow_end + tip_offset;
-            painter.text(
-                label_pos,
-                egui::Align2::CENTER_BOTTOM,
-                label,
-                egui::FontId::proportional(MAGNITUDE_LABEL_FONT_SIZE),
-                ARROW_TIP,
-            );
-        } else if arrow_vec.length() > 1e-3 {
-            painter.circle_filled(arrow_end, ARROW_END_DOT_RADIUS, ARROW_PRIMARY);
-        }
-    }
+        },
+        &style,
+    );
 
     if let Some(label) = spec.base_label {
         let base_pos = egui::Pos2::new(spec.center_x, spec.center_y + BASE_LABEL_OFFSET_Y);
@@ -558,8 +437,8 @@ fn render_single_tetrahedron(painter: &egui::Painter, spec: &TetraRenderSpec<'_>
             egui::Align2::CENTER_CENTER,
             label,
             font_id,
-            LABEL_DEFAULT,
-            OUTLINE_DEFAULT,
+            crate::colors::LABEL_DEFAULT,
+            crate::colors::OUTLINE_DEFAULT,
         );
     }
 }
