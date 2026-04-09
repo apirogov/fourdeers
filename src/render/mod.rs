@@ -39,17 +39,21 @@ pub fn split_stereo_views(rect: egui::Rect) -> (egui::Rect, egui::Rect) {
     (left_rect, right_rect)
 }
 
-pub fn render_stereo_views(
-    ui: &mut egui::Ui,
+pub struct StereoViewPair {
+    pub left_projector: StereoProjector,
+    pub right_projector: StereoProjector,
+    pub left_rect: egui::Rect,
+    pub right_rect: egui::Rect,
+}
+
+pub fn create_stereo_projectors(
     rect: egui::Rect,
     eye_separation: f32,
     projection_distance: f32,
     mode: ProjectionMode,
-    render_fn: impl Fn(&egui::Painter, &StereoProjector, egui::Rect),
-) {
+) -> StereoViewPair {
     let (left_rect, right_rect) = split_stereo_views(rect);
     let scale = rect.height().min(rect.width() * 0.5) * STEREO_SCALE_FACTOR;
-
     let left_projector = StereoProjector::for_eye(
         left_rect.center(),
         scale,
@@ -58,9 +62,6 @@ pub fn render_stereo_views(
         mode,
         -1.0,
     );
-    let left_painter = ui.painter().with_clip_rect(left_rect);
-    render_fn(&left_painter, &left_projector, left_rect);
-
     let right_projector = StereoProjector::for_eye(
         right_rect.center(),
         scale,
@@ -69,8 +70,27 @@ pub fn render_stereo_views(
         mode,
         1.0,
     );
-    let right_painter = ui.painter().with_clip_rect(right_rect);
-    render_fn(&right_painter, &right_projector, right_rect);
+    StereoViewPair {
+        left_projector,
+        right_projector,
+        left_rect,
+        right_rect,
+    }
+}
+
+pub fn render_stereo_views(
+    ui: &mut egui::Ui,
+    rect: egui::Rect,
+    eye_separation: f32,
+    projection_distance: f32,
+    mode: ProjectionMode,
+    render_fn: impl Fn(&egui::Painter, &StereoProjector, egui::Rect),
+) {
+    let views = create_stereo_projectors(rect, eye_separation, projection_distance, mode);
+    let left_painter = ui.painter().with_clip_rect(views.left_rect);
+    render_fn(&left_painter, &views.left_projector, views.left_rect);
+    let right_painter = ui.painter().with_clip_rect(views.right_rect);
+    render_fn(&right_painter, &views.right_projector, views.right_rect);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

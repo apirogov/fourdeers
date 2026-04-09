@@ -6,7 +6,7 @@ use crate::colors::ARROW_FORWARD;
 use crate::geometry::{clip_polyhedron_by_plane, Bounds4D};
 use crate::polytopes::{create_polytope, PolytopeType};
 use crate::render::{
-    draw_arrow_head, draw_background, draw_center_divider, render_stereo_views, split_stereo_views,
+    create_stereo_projectors, draw_arrow_head, draw_background, draw_center_divider,
     CompassFrameMode, FourDSettings, ObjectRotationAngles, ProjectionMode, StereoProjector,
     StereoSettings, TesseractRenderConfig, TesseractRenderContext,
 };
@@ -115,54 +115,33 @@ impl MapRenderer {
         draw_background(ui, rect);
         draw_center_divider(ui, rect);
         let bounds = compute_bounds(scene_camera, waypoints, geometry_bounds);
-        render_stereo_views(
-            ui,
+        let views = create_stereo_projectors(
             rect,
             stereo.eye_separation,
             stereo.projection_distance,
             ProjectionMode::Perspective,
-            |painter, projector, view_rect| {
-                self.render_tesseract_wireframe(painter, projector, view_rect);
-                self.render_slice_volume(
-                    painter,
-                    projector,
-                    scene_camera,
-                    &bounds,
-                    view_rect,
-                    stereo,
-                );
-                self.render_waypoints(
-                    painter,
-                    projector,
-                    scene_camera,
-                    waypoints,
-                    &bounds,
-                    frame_mode,
-                );
-                self.render_camera_position(painter, projector, scene_camera, &bounds, frame_mode);
-            },
         );
-        let (left_rect, right_rect) = split_stereo_views(rect);
-        let scale = rect.height().min(rect.width() * 0.5) * crate::render::STEREO_SCALE_FACTOR;
-        let left_projector = StereoProjector::for_eye(
-            left_rect.center(),
-            scale,
-            stereo.eye_separation,
-            stereo.projection_distance,
-            ProjectionMode::Perspective,
-            -1.0,
-        );
-        let right_projector = StereoProjector::for_eye(
-            right_rect.center(),
-            scale,
-            stereo.eye_separation,
-            stereo.projection_distance,
-            ProjectionMode::Perspective,
-            1.0,
-        );
+        let left_painter = ui.painter().with_clip_rect(views.left_rect);
+        let right_painter = ui.painter().with_clip_rect(views.right_rect);
+        for (painter, projector, view_rect) in [
+            (&left_painter, &views.left_projector, views.left_rect),
+            (&right_painter, &views.right_projector, views.right_rect),
+        ] {
+            self.render_tesseract_wireframe(painter, projector, view_rect);
+            self.render_slice_volume(painter, projector, scene_camera, &bounds, view_rect, stereo);
+            self.render_waypoints(
+                painter,
+                projector,
+                scene_camera,
+                waypoints,
+                &bounds,
+                frame_mode,
+            );
+            self.render_camera_position(painter, projector, scene_camera, &bounds, frame_mode);
+        }
         self.compute_waypoint_tap_zones(
-            &left_projector,
-            &right_projector,
+            &views.left_projector,
+            &views.right_projector,
             scene_camera,
             waypoints,
             &bounds,
