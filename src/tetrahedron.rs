@@ -244,22 +244,13 @@ impl TetrahedronGadget {
     ) -> VectorArrow {
         let arrow_head_size = scale * 0.15;
 
-        let norm = magnitude_4d(vector_4d);
-
-        if norm < 1e-6 {
+        let Some(weights) = component_weights(vector_4d) else {
             return VectorArrow {
                 end_position: Vector3::zeros(),
                 arrow_head_size: 0.0,
             };
-        }
+        };
 
-        let normalized = vector_4d / norm;
-        let weights = [
-            normalized.x.abs(),
-            normalized.y.abs(),
-            normalized.z.abs(),
-            normalized.w.abs(),
-        ];
         let abs_sum: f32 = weights.iter().sum();
 
         if abs_sum < 1e-6 {
@@ -314,20 +305,24 @@ impl TetrahedronGadget {
     }
 }
 
-fn compute_weighted_direction_3d(vector_4d: Vector4<f32>) -> Vector3<f32> {
+fn component_weights(vector_4d: Vector4<f32>) -> Option<[f32; 4]> {
     let norm = magnitude_4d(vector_4d);
     if norm < 1e-6 {
-        return Vector3::zeros();
+        return None;
     }
-
     let normalized = vector_4d / norm;
-
-    let weights = [
+    Some([
         normalized.x.abs(),
         normalized.y.abs(),
         normalized.z.abs(),
         normalized.w.abs(),
-    ];
+    ])
+}
+
+fn compute_weighted_direction_3d(vector_4d: Vector4<f32>) -> Vector3<f32> {
+    let Some(weights) = component_weights(vector_4d) else {
+        return Vector3::zeros();
+    };
 
     let mut result = Vector3::zeros();
     for (i, &weight) in weights.iter().enumerate() {
