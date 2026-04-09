@@ -4,6 +4,7 @@ use eframe::egui;
 use nalgebra::Vector4;
 
 use crate::camera::Camera;
+use crate::geometry::Bounds4D;
 use crate::input::{DragView, TapAnalysis, ZoneMode};
 use crate::render::{FourDSettings, StereoSettings};
 
@@ -77,7 +78,7 @@ pub trait Toy {
     }
 
     /// Axis-aligned bounding box of the scene geometry in 4D, for map bounds computation.
-    fn scene_geometry_bounds(&self) -> Option<(Vector4<f32>, Vector4<f32>)> {
+    fn scene_geometry_bounds(&self) -> Option<Bounds4D> {
         None
     }
 

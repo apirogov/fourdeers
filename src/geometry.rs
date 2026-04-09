@@ -1,8 +1,60 @@
-//! Geometry primitives for polyhedron clipping and convex hull computation
+//! Geometry primitives for polyhedron clipping, convex hull computation,
+//! and 4D axis-aligned bounding boxes.
 
-use nalgebra::Vector3;
+use nalgebra::{Vector3, Vector4};
 
 const VERTEX_MERGE_EPS_SQ: f32 = 1e-6;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Bounds4D {
+    pub min: Vector4<f32>,
+    pub max: Vector4<f32>,
+}
+
+impl Bounds4D {
+    #[must_use]
+    pub fn from_point(point: Vector4<f32>) -> Self {
+        Self {
+            min: point,
+            max: point,
+        }
+    }
+
+    #[must_use]
+    pub fn expanded_to(mut self, point: Vector4<f32>) -> Self {
+        for i in 0..4 {
+            self.min[i] = self.min[i].min(point[i]);
+            self.max[i] = self.max[i].max(point[i]);
+        }
+        self
+    }
+
+    #[must_use]
+    pub fn padded(mut self, factor: f32) -> Self {
+        for i in 0..4 {
+            let range = self.max[i] - self.min[i];
+            if range < 1e-6 {
+                self.min[i] -= 1.0;
+                self.max[i] += 1.0;
+            } else {
+                let padding = range * factor;
+                self.min[i] -= padding;
+                self.max[i] += padding;
+            }
+        }
+        self
+    }
+
+    #[must_use]
+    pub fn range(&self, axis: usize) -> f32 {
+        self.max[axis] - self.min[axis]
+    }
+
+    #[must_use]
+    pub fn from_corners(min: Vector4<f32>, max: Vector4<f32>) -> Self {
+        Self { min, max }
+    }
+}
 
 pub(crate) struct VertexDedup {
     pub(crate) vertices: Vec<Vector3<f32>>,

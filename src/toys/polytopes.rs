@@ -6,6 +6,7 @@ use std::collections::HashMap;
 
 use crate::camera::{Camera, CameraAction};
 use crate::colors::LABEL_INACTIVE;
+use crate::geometry::Bounds4D;
 use crate::input::{
     zone_to_movement_action, DragState, DragView, TapAnalysis, TetraId, Zone, ZoneMode,
 };
@@ -460,7 +461,7 @@ impl Toy for PolytopesToy {
         ]
     }
 
-    fn scene_geometry_bounds(&self) -> Option<(Vector4<f32>, Vector4<f32>)> {
+    fn scene_geometry_bounds(&self) -> Option<Bounds4D> {
         if self.cached_vertices.is_empty() {
             return None;
         }
@@ -472,16 +473,12 @@ impl Toy for PolytopesToy {
             self.rot_yw,
             self.rot_zw,
         );
-        let mut min = Vector4::repeat(f32::MAX);
-        let mut max = Vector4::repeat(f32::MIN);
-        for v in &self.cached_vertices {
-            let rotated = rotation.rotate_vector(*v);
-            for i in 0..4 {
-                min[i] = min[i].min(rotated[i]);
-                max[i] = max[i].max(rotated[i]);
-            }
+        let first = rotation.rotate_vector(self.cached_vertices[0]);
+        let mut bounds = Bounds4D::from_point(first);
+        for v in &self.cached_vertices[1..] {
+            bounds = bounds.expanded_to(rotation.rotate_vector(*v));
         }
-        Some((min, max))
+        Some(bounds)
     }
 
     fn map_camera(&self) -> Option<&Camera> {

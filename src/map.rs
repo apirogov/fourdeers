@@ -15,7 +15,9 @@ use nalgebra::{Vector3, Vector4};
 
 use crate::camera::Camera;
 use crate::colors::{ARROW_FORWARD, ARROW_GLOW, ARROW_PRIMARY};
-use crate::geometry::{clip_polyhedron_by_plane, convex_hull_2d, ConvexPolyhedron, VertexDedup};
+use crate::geometry::{
+    clip_polyhedron_by_plane, convex_hull_2d, Bounds4D, ConvexPolyhedron, VertexDedup,
+};
 use crate::polytopes::{create_polytope, PolytopeType};
 use crate::render::{
     draw_arrow_head, draw_background, draw_center_divider, render_stereo_views, split_stereo_views,
@@ -154,7 +156,7 @@ impl MapRenderer {
     pub fn rotate_4d(&mut self, delta_x: f32, delta_y: f32) {
         self.camera.rotate_4d(delta_x, delta_y);
     }
-    pub fn reset_to_fit(&mut self, scene_camera: &Camera, bounds: &(Vector4<f32>, Vector4<f32>)) {
+    pub fn reset_to_fit(&mut self, scene_camera: &Camera, bounds: &Bounds4D) {
         let norm_cam = normalize_to_tesseract(scene_camera.position, bounds);
         let q_left = *scene_camera.rotation_4d.q_left();
         let offset_local = Vector3::new(0.0, 0.0, -MAP_CAMERA_BACK_OFFSET);
@@ -175,7 +177,7 @@ impl MapRenderer {
         waypoints: &[CompassWaypoint],
         stereo: StereoSettings,
         frame_mode: CompassFrameMode,
-        geometry_bounds: Option<(Vector4<f32>, Vector4<f32>)>,
+        geometry_bounds: Option<Bounds4D>,
     ) {
         draw_background(ui, rect);
         draw_center_divider(ui, rect);
@@ -345,7 +347,7 @@ impl MapRenderer {
         painter: &egui::Painter,
         projector: &StereoProjector,
         scene_camera: &Camera,
-        bounds: &(Vector4<f32>, Vector4<f32>),
+        bounds: &Bounds4D,
         view_rect: egui::Rect,
         stereo: StereoSettings,
     ) {
@@ -465,7 +467,7 @@ impl MapRenderer {
         projector: &StereoProjector,
         scene_camera: &Camera,
         waypoints: &[CompassWaypoint],
-        bounds: &(Vector4<f32>, Vector4<f32>),
+        bounds: &Bounds4D,
         frame_mode: CompassFrameMode,
     ) {
         let map_transform = MapViewTransform::new(&self.camera);
@@ -525,7 +527,7 @@ impl MapRenderer {
         painter: &egui::Painter,
         projector: &StereoProjector,
         scene_camera: &Camera,
-        bounds: &(Vector4<f32>, Vector4<f32>),
+        bounds: &Bounds4D,
         frame_mode: CompassFrameMode,
     ) {
         let norm_cam = normalize_to_tesseract(scene_camera.position, bounds);
@@ -606,7 +608,7 @@ impl MapRenderer {
         right_projector: &StereoProjector,
         _scene_camera: &Camera,
         waypoints: &[CompassWaypoint],
-        bounds: &(Vector4<f32>, Vector4<f32>),
+        bounds: &Bounds4D,
     ) {
         self.waypoint_tap_zones.clear();
         let map_transform = MapViewTransform::new(&self.camera);
@@ -825,7 +827,7 @@ fn compute_frustum_rays(
     scene_camera: &Camera,
     view_rect: egui::Rect,
     stereo: StereoSettings,
-    bounds: &(Vector4<f32>, Vector4<f32>),
+    bounds: &Bounds4D,
     map_transform: &MapViewTransform,
 ) -> [Vector3<f32>; 4] {
     let scale =
@@ -896,59 +898,35 @@ fn compute_frustum_planes(
 pub fn compute_bounds(
     scene_camera: &Camera,
     waypoints: &[CompassWaypoint],
-    geometry_bounds: Option<(Vector4<f32>, Vector4<f32>)>,
-) -> (Vector4<f32>, Vector4<f32>) {
-    let mut min = scene_camera.position;
-    let mut max = scene_camera.position;
+    geometry_bounds: Option<Bounds4D>,
+) -> Bounds4D {
+    let mut bounds = Bounds4D::from_point(scene_camera.position);
     for wp in waypoints {
-        for i in 0..4 {
-            min[i] = min[i].min(wp.position[i]);
-            max[i] = max[i].max(wp.position[i]);
-        }
+        bounds = bounds.expanded_to(wp.position);
     }
-    if let Some((geo_min, geo_max)) = geometry_bounds {
-        for i in 0..4 {
-            min[i] = min[i].min(geo_min[i]);
-            max[i] = max[i].max(geo_max[i]);
-        }
+    if let Some(geo) = geometry_bounds {
+        bounds = bounds.expanded_to(geo.min).expanded_to(geo.max);
     }
-    for i in 0..4 {
-        let range = max[i] - min[i];
-        if range < 1e-6 {
-            min[i] -= 1.0;
-            max[i] += 1.0;
-        } else {
-            let padding = range * BOUNDS_PADDING_FACTOR;
-            min[i] -= padding;
-            max[i] += padding;
-        }
-    }
-    (min, max)
+    bounds.padded(BOUNDS_PADDING_FACTOR)
 }
 #[must_use]
-pub fn normalize_to_tesseract(
-    pos: Vector4<f32>,
-    bounds: &(Vector4<f32>, Vector4<f32>),
-) -> Vector4<f32> {
+pub fn normalize_to_tesseract(pos: Vector4<f32>, bounds: &Bounds4D) -> Vector4<f32> {
     let mut result = Vector4::zeros();
     for i in 0..4 {
-        let range = bounds.1[i] - bounds.0[i];
+        let range = bounds.range(i);
         if range.abs() < 1e-6 {
             result[i] = 0.0;
         } else {
-            result[i] = 2.0 * (pos[i] - bounds.0[i]) / range - 1.0;
+            result[i] = 2.0 * (pos[i] - bounds.min[i]) / range - 1.0;
         }
     }
     result
 }
 
-fn direction_to_tesseract(
-    dir_world: Vector4<f32>,
-    bounds: &(Vector4<f32>, Vector4<f32>),
-) -> Vector4<f32> {
+fn direction_to_tesseract(dir_world: Vector4<f32>, bounds: &Bounds4D) -> Vector4<f32> {
     let mut result = Vector4::zeros();
     for i in 0..4 {
-        let range = bounds.1[i] - bounds.0[i];
+        let range = bounds.range(i);
         if range.abs() < 1e-6 {
             result[i] = dir_world[i];
         } else {
@@ -1591,7 +1569,7 @@ mod tests {
 
     #[test]
     fn test_normalize_to_tesseract_center() {
-        let bounds = (
+        let bounds = Bounds4D::from_corners(
             Vector4::new(-1.0, -1.0, -1.0, -1.0),
             Vector4::new(1.0, 1.0, 1.0, 1.0),
         );
@@ -1603,12 +1581,12 @@ mod tests {
 
     #[test]
     fn test_normalize_to_tesseract_corners() {
-        let bounds = (
+        let bounds = Bounds4D::from_corners(
             Vector4::new(-1.0, -1.0, -1.0, -1.0),
             Vector4::new(1.0, 1.0, 1.0, 1.0),
         );
-        let min_corner = normalize_to_tesseract(bounds.0, &bounds);
-        let max_corner = normalize_to_tesseract(bounds.1, &bounds);
+        let min_corner = normalize_to_tesseract(bounds.min, &bounds);
+        let max_corner = normalize_to_tesseract(bounds.max, &bounds);
         for i in 0..4 {
             assert_approx_eq(min_corner[i], -1.0, 1e-6);
             assert_approx_eq(max_corner[i], 1.0, 1e-6);
@@ -1617,7 +1595,7 @@ mod tests {
 
     #[test]
     fn test_normalize_to_tesseract_asymmetric_bounds() {
-        let bounds = (
+        let bounds = Bounds4D::from_corners(
             Vector4::new(0.0, 0.0, 0.0, 0.0),
             Vector4::new(10.0, 10.0, 10.0, 10.0),
         );
@@ -1784,7 +1762,7 @@ mod tests {
 
     #[test]
     fn test_direction_to_tesseract_identity_bounds() {
-        let bounds = (
+        let bounds = Bounds4D::from_corners(
             Vector4::new(-1.0, -1.0, -1.0, -1.0),
             Vector4::new(1.0, 1.0, 1.0, 1.0),
         );
@@ -1798,7 +1776,7 @@ mod tests {
 
     #[test]
     fn test_direction_to_tesseract_scaled() {
-        let bounds = (
+        let bounds = Bounds4D::from_corners(
             Vector4::new(-2.0, -2.0, -2.0, -2.0),
             Vector4::new(2.0, 2.0, 2.0, 2.0),
         );
@@ -1815,27 +1793,27 @@ mod tests {
         let mut camera = Camera::new();
         camera.position = Vector4::new(5.0, 5.0, 5.0, 5.0);
         let waypoints: Vec<CompassWaypoint> = vec![];
-        let (min, max) = compute_bounds(&camera, &waypoints, None);
+        let bounds = compute_bounds(&camera, &waypoints, None);
         assert!(
-            min[0] > 0.0,
+            bounds.min[0] > 0.0,
             "without geometry, bounds should be near camera"
         );
         assert!(
-            max[0] > 0.0,
+            bounds.max[0] > 0.0,
             "without geometry, bounds should be near camera"
         );
 
-        let geometry_bounds = Some((
+        let geometry_bounds = Some(Bounds4D::from_corners(
             Vector4::new(-1.0, -1.0, -1.0, -1.0),
             Vector4::new(1.0, 1.0, 1.0, 1.0),
         ));
-        let (min_g, max_g) = compute_bounds(&camera, &waypoints, geometry_bounds);
+        let bounds_g = compute_bounds(&camera, &waypoints, geometry_bounds);
         assert!(
-            min_g[0] < min[0],
+            bounds_g.min[0] < bounds.min[0],
             "with geometry, min should extend to include geometry"
         );
-        assert!(min_g[0] <= -1.0, "geometry min should be included");
-        assert!(max_g[0] >= 5.0, "camera should still be included");
+        assert!(bounds_g.min[0] <= -1.0, "geometry min should be included");
+        assert!(bounds_g.max[0] >= 5.0, "camera should still be included");
     }
 
     #[test]
@@ -1859,7 +1837,7 @@ mod tests {
         let map_transform = MapViewTransform::new(&map_camera);
         let view_rect = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(200.0, 400.0));
         let stereo = StereoSettings::default();
-        let bounds = (
+        let bounds = Bounds4D::from_corners(
             Vector4::new(-1.0, -1.0, -1.0, -1.0),
             Vector4::new(1.0, 1.0, 1.0, 1.0),
         );
@@ -1885,7 +1863,7 @@ mod tests {
         let map_camera = Camera::new();
         let map_transform = MapViewTransform::new(&map_camera);
         let scene_camera = Camera::new();
-        let bounds = (
+        let bounds = Bounds4D::from_corners(
             Vector4::new(-1.0, -1.0, -1.0, -1.0),
             Vector4::new(1.0, 1.0, 1.0, 1.0),
         );
@@ -1931,7 +1909,7 @@ mod tests {
         let map_transform = MapViewTransform::new(&map_camera);
         let mut scene_camera = Camera::new();
         scene_camera.rotate(0.5, 0.3);
-        let bounds = (
+        let bounds = Bounds4D::from_corners(
             Vector4::new(-1.0, -1.0, -1.0, -1.0),
             Vector4::new(1.0, 1.0, 1.0, 1.0),
         );
@@ -1968,7 +1946,7 @@ mod tests {
 
     #[test]
     fn test_forward_direction_points_at_origin_while_orbiting() {
-        let geometry_bounds = Some((
+        let geometry_bounds = Some(Bounds4D::from_corners(
             Vector4::new(-1.0, -1.0, -1.0, -1.0),
             Vector4::new(1.0, 1.0, 1.0, 1.0),
         ));
@@ -2030,8 +2008,8 @@ mod tests {
                 cam_z,
                 cam_3d,
                 origin_3d,
-                bounds.0[2],
-                bounds.1[2],
+                bounds.min[2],
+                bounds.max[2],
             );
         }
     }
