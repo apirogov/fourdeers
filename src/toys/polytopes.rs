@@ -27,7 +27,7 @@ const W_SLIDER_RANGE: std::ops::RangeInclusive<f32> = -3.0..=3.0;
 pub struct PolytopesToy {
     camera: Camera,
     polytope_type: PolytopeType,
-    cached_vertices: Vec<crate::polytopes::Vertex4D>,
+    cached_vertices: Vec<Vector4<f32>>,
     cached_indices: Vec<u16>,
     rot_xy: f32,
     rot_xz: f32,
@@ -475,8 +475,7 @@ impl Toy for PolytopesToy {
         let mut min = Vector4::repeat(f32::MAX);
         let mut max = Vector4::repeat(f32::MIN);
         for v in &self.cached_vertices {
-            let pos = v.to_vector();
-            let rotated = rotation.rotate_vector(pos);
+            let rotated = rotation.rotate_vector(*v);
             for i in 0..4 {
                 min[i] = min[i].min(rotated[i]);
                 max[i] = max[i].max(rotated[i]);

@@ -322,12 +322,12 @@ def generate_rust_function(name, vertices, edges):
     """Generate a Rust create_X_cell function."""
     lines = []
     lines.append("#[allow(clippy::excessive_precision)]")
-    lines.append(f"fn {name}() -> (Vec<Vertex4D>, Vec<u16>) {{")
+    lines.append(f"fn {name}() -> (Vec<nalgebra::Vector4<f32>>, Vec<u16>) {{")
 
     lines.append("    let vertices = vec![")
     for v in vertices:
         coords = ", ".join(format_float(c) for c in v)
-        lines.append(f"        Vertex4D::new({coords}),")
+        lines.append(f"        nalgebra::Vector4::new({coords}),")
     lines.append("    ];")
 
     lines.append("")

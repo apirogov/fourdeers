@@ -877,7 +877,6 @@ mod tests {
     #[test]
     fn test_render_transform_matches_quaternion_pipeline() {
         use crate::camera::Camera;
-        use crate::polytopes::Vertex4D;
         use nalgebra::Vector3;
 
         for (rot4d_x, rot4d_y, rot3d_x, rot3d_y) in [
@@ -891,13 +890,13 @@ mod tests {
             camera.rotate_4d(rot4d_x, rot4d_y);
             camera.rotate(rot3d_x, rot3d_y);
 
-            let test_verts: Vec<Vertex4D> = vec![
-                Vertex4D::new(1.0, 0.0, 0.0, 0.0),
-                Vertex4D::new(0.0, 1.0, 0.0, 0.0),
-                Vertex4D::new(0.0, 0.0, 1.0, 0.0),
-                Vertex4D::new(0.0, 0.0, 0.0, 1.0),
-                Vertex4D::new(1.0, 2.0, -3.0, 4.0),
-                Vertex4D::new(-1.0, -2.0, 3.0, -4.0),
+            let test_verts: Vec<nalgebra::Vector4<f32>> = vec![
+                nalgebra::Vector4::new(1.0, 0.0, 0.0, 0.0),
+                nalgebra::Vector4::new(0.0, 1.0, 0.0, 0.0),
+                nalgebra::Vector4::new(0.0, 0.0, 1.0, 0.0),
+                nalgebra::Vector4::new(0.0, 0.0, 0.0, 1.0),
+                nalgebra::Vector4::new(1.0, 2.0, -3.0, 4.0),
+                nalgebra::Vector4::new(-1.0, -2.0, 3.0, -4.0),
             ];
             let indices: Vec<u16> = vec![];
 
@@ -914,8 +913,7 @@ mod tests {
             let inv_q_left = camera.rotation_4d.q_left().inverse();
 
             for (i, v) in test_verts.iter().enumerate() {
-                let v4 = v.to_vector();
-                let p_4d = qr_inv.rotate_vector(v4 - camera.position);
+                let p_4d = qr_inv.rotate_vector(*v - camera.position);
 
                 let p3 = Vector3::new(p_4d.x, p_4d.y, p_4d.z);
                 let expected_xyz = inv_q_left.transform_vector(&p3);

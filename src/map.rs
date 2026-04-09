@@ -93,9 +93,9 @@ const TESSERACT_FACES: [[u16; 4]; 24] = [
 
 const AXIS_CHARS: [char; 4] = ['X', 'Y', 'Z', 'W'];
 
-fn edge_axis(vertices: &[crate::polytopes::Vertex4D], i0: usize, i1: usize) -> Option<usize> {
-    let v0 = vertices[i0].position;
-    let v1 = vertices[i1].position;
+fn edge_axis(vertices: &[Vector4<f32>], i0: usize, i1: usize) -> Option<usize> {
+    let v0 = vertices[i0];
+    let v1 = vertices[i1];
     let mut diff_axis = None;
     for ax in 0..4 {
         if (v0[ax] - v1[ax]).abs() > f32::EPSILON {
@@ -110,7 +110,7 @@ fn edge_axis(vertices: &[crate::polytopes::Vertex4D], i0: usize, i1: usize) -> O
 
 pub struct MapRenderer {
     camera: Camera,
-    tesseract_vertices: Vec<crate::polytopes::Vertex4D>,
+    tesseract_vertices: Vec<Vector4<f32>>,
     tesseract_indices: Vec<u16>,
     w_thickness: f32,
     w_color_intensity: f32,
@@ -285,7 +285,7 @@ impl MapRenderer {
             let vertex = &self.tesseract_vertices[i];
             let font_id = egui::FontId::monospace(MAP_AXIS_FONT_SIZE);
             for (ax, &ch) in AXIS_CHARS.iter().enumerate() {
-                let component = vertex.position[ax];
+                let component = vertex[ax];
                 let color = compute_component_color(component, 1.0);
                 let egui_color = color.to_egui_color();
                 let offset_x = (ax as f32 - 1.5) * 7.0;
@@ -960,9 +960,6 @@ fn direction_to_tesseract(
     }
     result
 }
-const fn vertex_to_4d(v: &crate::polytopes::Vertex4D) -> Vector4<f32> {
-    v.to_vector()
-}
 fn clip_segment_to_screen(
     map_transform: &MapViewTransform,
     projector: &StereoProjector,
@@ -1002,7 +999,7 @@ struct SliceSegment {
     fully_in: bool,
 }
 fn compute_slice_cross_section(
-    vertices: &[crate::polytopes::Vertex4D],
+    vertices: &[Vector4<f32>],
     indices: &[u16],
     slice_normal: Vector4<f32>,
     slice_origin: Vector4<f32>,
@@ -1012,8 +1009,8 @@ fn compute_slice_cross_section(
         if chunk.len() != 2 {
             continue;
         }
-        let p0 = vertex_to_4d(&vertices[chunk[0] as usize]);
-        let p1 = vertex_to_4d(&vertices[chunk[1] as usize]);
+        let p0 = vertices[chunk[0] as usize];
+        let p1 = vertices[chunk[1] as usize];
         let d0 = (p0 - slice_origin).dot(&slice_normal);
         let d1 = (p1 - slice_origin).dot(&slice_normal);
         let denom = d1 - d0;
@@ -1027,17 +1024,14 @@ fn compute_slice_cross_section(
     points
 }
 fn compute_cross_section_edges(
-    vertices: &[crate::polytopes::Vertex4D],
+    vertices: &[Vector4<f32>],
     faces: &[[u16; 4]],
     slice_normal: Vector4<f32>,
     slice_origin: Vector4<f32>,
 ) -> Vec<[Vector4<f32>; 2]> {
     let mut edges = Vec::new();
     for face in faces {
-        let face_verts: Vec<Vector4<f32>> = face
-            .iter()
-            .map(|&vi| vertex_to_4d(&vertices[vi as usize]))
-            .collect();
+        let face_verts: Vec<Vector4<f32>> = face.iter().map(|&vi| vertices[vi as usize]).collect();
         let n = face_verts.len();
         let distances: Vec<f32> = face_verts
             .iter()
@@ -1062,7 +1056,7 @@ fn compute_cross_section_edges(
 }
 #[cfg(test)]
 fn compute_in_band_segments(
-    vertices: &[crate::polytopes::Vertex4D],
+    vertices: &[Vector4<f32>],
     indices: &[u16],
     slice_normal: Vector4<f32>,
     slice_origin: Vector4<f32>,
@@ -1073,8 +1067,8 @@ fn compute_in_band_segments(
         if chunk.len() != 2 {
             continue;
         }
-        let p0 = vertex_to_4d(&vertices[chunk[0] as usize]);
-        let p1 = vertex_to_4d(&vertices[chunk[1] as usize]);
+        let p0 = vertices[chunk[0] as usize];
+        let p1 = vertices[chunk[1] as usize];
         let d0 = (p0 - slice_origin).dot(&slice_normal);
         let d1 = (p1 - slice_origin).dot(&slice_normal);
         let denom = d1 - d0;
@@ -1849,7 +1843,7 @@ mod tests {
 
     #[test]
     fn test_build_cross_section_polyhedron_cube() {
-        let (vertices, indices) = create_polytope(PolytopeType::EightCell);
+        let (vertices, _indices) = create_polytope(PolytopeType::EightCell);
         let slice_normal = Vector4::new(0.0, 0.0, 0.0, 1.0);
         let slice_origin = Vector4::zeros();
         let cs_edges =
@@ -1886,7 +1880,7 @@ mod tests {
 
     #[test]
     fn test_visibility_cone_3d_identity_cam() {
-        let (vertices, indices) = create_polytope(PolytopeType::EightCell);
+        let (vertices, _indices) = create_polytope(PolytopeType::EightCell);
         let slice_normal = Vector4::new(0.0, 0.0, 0.0, 1.0);
         let slice_origin = Vector4::zeros();
         let cs_edges =
@@ -1931,7 +1925,7 @@ mod tests {
 
     #[test]
     fn test_visibility_cone_3d_rotated_cam() {
-        let (vertices, indices) = create_polytope(PolytopeType::EightCell);
+        let (vertices, _indices) = create_polytope(PolytopeType::EightCell);
         let slice_normal = Vector4::new(0.0, 0.0, 0.0, 1.0);
         let slice_origin = Vector4::zeros();
         let cs_edges =

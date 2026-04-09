@@ -12,33 +12,7 @@
 //! | 600-cell | 120 | 720 | 600 |
 //! | 120-cell | 600 | 1200 | 120 |
 
-use bytemuck::{Pod, Zeroable};
 use nalgebra::Vector4;
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, Pod, Zeroable)]
-pub struct Vertex4D {
-    pub position: [f32; 4],
-}
-
-impl Vertex4D {
-    #[must_use]
-    pub const fn new(x: f32, y: f32, z: f32, w: f32) -> Self {
-        Self {
-            position: [x, y, z, w],
-        }
-    }
-
-    #[must_use]
-    pub const fn to_vector(self) -> Vector4<f32> {
-        Vector4::new(
-            self.position[0],
-            self.position[1],
-            self.position[2],
-            self.position[3],
-        )
-    }
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum PolytopeType {
@@ -115,7 +89,7 @@ impl PolytopeType {
 }
 
 #[must_use]
-pub fn create_polytope(kind: PolytopeType) -> (Vec<Vertex4D>, Vec<u16>) {
+pub fn create_polytope(kind: PolytopeType) -> (Vec<Vector4<f32>>, Vec<u16>) {
     match kind {
         PolytopeType::FiveCell => create_5_cell(),
         PolytopeType::EightCell => create_8_cell(),
@@ -134,18 +108,16 @@ mod tests {
 
     const EPSILON: f32 = 1e-5;
 
-    fn distance_sq(v1: &Vertex4D, v2: &Vertex4D) -> f32 {
-        (0..4)
-            .map(|i| (v1.position[i] - v2.position[i]).powi(2))
-            .sum()
+    fn distance_sq(v1: &Vector4<f32>, v2: &Vector4<f32>) -> f32 {
+        (0..4).map(|i| (v1[i] - v2[i]).powi(2)).sum()
     }
 
-    fn centroid(vertices: &[Vertex4D]) -> [f32; 4] {
+    fn centroid(vertices: &[Vector4<f32>]) -> [f32; 4] {
         let n = vertices.len() as f32;
         let mut c = [0.0f32; 4];
         for v in vertices {
             for (i, acc) in c.iter_mut().enumerate() {
-                *acc += v.position[i];
+                *acc += v[i];
             }
         }
         for acc in &mut c {
@@ -154,14 +126,13 @@ mod tests {
         c
     }
 
-    fn count_antipodal_pairs(vertices: &[Vertex4D]) -> usize {
+    fn count_antipodal_pairs(vertices: &[Vector4<f32>]) -> usize {
         let mut count = 0;
         for i in 0..vertices.len() {
             for j in (i + 1)..vertices.len() {
                 let v1 = &vertices[i];
                 let v2 = &vertices[j];
-                let is_antipodal =
-                    (0..4).all(|k| (v1.position[k] + v2.position[k]).abs() < EPSILON);
+                let is_antipodal = (0..4).all(|k| (v1[k] + v2[k]).abs() < EPSILON);
                 if is_antipodal {
                     count += 1;
                 }
@@ -170,7 +141,7 @@ mod tests {
         count
     }
 
-    fn uniform_edge_lengths(vertices: &[Vertex4D], indices: &[u16]) -> bool {
+    fn uniform_edge_lengths(vertices: &[Vector4<f32>], indices: &[u16]) -> bool {
         if indices.len() < 2 {
             return true;
         }
@@ -184,7 +155,7 @@ mod tests {
         })
     }
 
-    fn compute_vertex_degrees(vertices: &[Vertex4D], indices: &[u16]) -> Vec<usize> {
+    fn compute_vertex_degrees(vertices: &[Vector4<f32>], indices: &[u16]) -> Vec<usize> {
         let mut degrees = vec![0usize; vertices.len()];
         for chunk in indices.chunks(2) {
             degrees[chunk[0] as usize] += 1;

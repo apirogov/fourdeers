@@ -1,12 +1,11 @@
 //! Tesseract rendering pipeline and zone tetrahedron rendering
 
 use eframe::egui;
-use nalgebra::UnitQuaternion;
+use nalgebra::{UnitQuaternion, Vector4};
 use std::collections::HashMap;
 
 use crate::camera::{format_4d_vector, Camera};
 use crate::input::{TetraId, Zone};
-use crate::polytopes::Vertex4D;
 use crate::rotation4d::Rotation4D;
 use crate::tetrahedron::{tetrahedron_layout, TetrahedronGadget};
 
@@ -21,7 +20,7 @@ const EDGE_CLIP_MARGIN: f32 = 50.0;
 const TETRA_FOCAL_LENGTH_SCALE: f32 = 3.0;
 
 pub struct TesseractRenderContext<'a> {
-    pub vertices: &'a [Vertex4D],
+    pub vertices: &'a [Vector4<f32>],
     pub indices: &'a [u16],
     mat_4d: nalgebra::Matrix4<f32>,
     offset_4d: nalgebra::Vector4<f32>,
@@ -70,7 +69,7 @@ pub struct TransformedVertex {
 impl<'a> TesseractRenderContext<'a> {
     #[must_use]
     pub fn from_config(
-        vertices: &'a [Vertex4D],
+        vertices: &'a [Vector4<f32>],
         indices: &'a [u16],
         camera: &Camera,
         config: TesseractRenderConfig,
@@ -130,8 +129,7 @@ impl<'a> TesseractRenderContext<'a> {
         self.vertices
             .iter()
             .map(|v| {
-                let v4 = v.to_vector();
-                let p_4d = self.mat_4d * v4 - self.offset_4d;
+                let p_4d = self.mat_4d * v - self.offset_4d;
                 let result = self.mat_3d * p_4d;
                 TransformedVertex {
                     x: result.x,
