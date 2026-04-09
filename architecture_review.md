@@ -55,19 +55,9 @@ Total: ~10,900 LOC (excluding generated data).
 
 ## Remaining Issues
 
-### 1. Three Tetrahedron Renderers (HIGH)
+### 1. Tetrahedron Rendering (RESOLVED)
 
-Three independent implementations render the same tetrahedron shape with different projection modes and styling:
-
-| # | Location | Projection | Context |
-|---|----------|-----------|---------|
-| A | `render/mod.rs:305-436` | `StereoProjector` | Compass view |
-| B | `render/tesseract.rs:422-572` | Inline perspective math | Tesseract zone view |
-| C | `map.rs:722-837` | `StereoProjector` + 3D offset + alpha | Map waypoints |
-
-All three follow the same rendering sequence: **edges → vertex labels (with component colors) → direction arrow → tip/base labels**. They share ~60% structural code but differ in projection method, styling constants, and feature flags.
-
-**Recommendation:** Extract a `TetrahedronRenderer` with configurable styling and a projection trait/closure.
+Unified into `render_tetrahedron()` with `TetraStyle` and projection closure.
 
 ### 2. Code Duplication (remaining)
 
@@ -102,13 +92,13 @@ All three follow the same rendering sequence: **edges → vertex labels (with co
 
 ## Refactoring Plan
 
-### Phase 2: Tetrahedron Unification (Next)
+### Phase 2: Tetrahedron Unification (DONE)
 
-Unify the three tetrahedron renderers into a shared `TetrahedronRenderer` with configurable parameters:
-- Extract common rendering loop (edges, labels, arrow, tip/base)
-- Parameterize projection (StereoProjector vs inline perspective vs offset projector)
-- Parameterize styling (stroke widths, font sizes, alpha, color)
-- Consolidate remaining per-renderer constants
+Unified the three tetrahedron renderers into a single `render_tetrahedron()` function with:
+- `TetraStyle` struct for all visual parameters (edge width, colors, fonts, arrow styling)
+- `TetraLabelMode` enum for label formatting (Compass/Raw/Hidden)
+- Projection closure `Fn(f32, f32, f32) -> Option<egui::Pos2>` abstracting over projection methods
+- Preset constructors `TetraStyle::compass()` and `TetraStyle::zone_tetra()`
 
 ### Phase 3: Structural Improvements (Future)
 
