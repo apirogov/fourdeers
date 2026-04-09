@@ -402,10 +402,9 @@ fn render_single_tetrahedron(painter: &egui::Painter, spec: &TetraRenderSpec<'_>
     let focal_length = spec.scale * TETRA_FOCAL_LENGTH_SCALE;
 
     let mut style = TetraStyle::zone_tetra();
-    if let Some(label) = spec.base_label {
+    if spec.base_label.is_some() {
         style.base_label_font_size = BASE_LABEL_FONT_SIZE;
         style.base_label_offset_y = BASE_LABEL_OFFSET_Y;
-        let _ = label;
     }
 
     super::render_tetrahedron(

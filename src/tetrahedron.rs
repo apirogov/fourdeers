@@ -295,11 +295,6 @@ impl TetrahedronGadget {
     }
 
     #[must_use]
-    pub const fn tip_label(&self) -> Option<&String> {
-        self.tip_label.as_ref()
-    }
-
-    #[must_use]
     pub const fn base_label(&self) -> Option<&String> {
         self.base_label.as_ref()
     }

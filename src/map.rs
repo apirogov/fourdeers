@@ -133,14 +133,10 @@ impl MapRenderer {
             tesseract_indices: indices,
             w_thickness: crate::render::DEFAULT_W_THICKNESS,
             w_color_intensity: crate::render::DEFAULT_W_COLOR_INTENSITY,
-            projection_distance: 3.0,
+            projection_distance: crate::render::DEFAULT_PROJECTION_DISTANCE,
             labels_visible: false,
             waypoint_tap_zones: Vec::new(),
         }
-    }
-    #[must_use]
-    pub const fn camera(&self) -> &Camera {
-        &self.camera
     }
     pub const fn toggle_labels(&mut self) {
         self.labels_visible = !self.labels_visible;
@@ -832,7 +828,8 @@ fn compute_frustum_rays(
     bounds: &(Vector4<f32>, Vector4<f32>),
     map_transform: &MapViewTransform,
 ) -> [Vector3<f32>; 4] {
-    let scale = view_rect.height().min(view_rect.width() * 0.5) * 0.35;
+    let scale =
+        view_rect.height().min(view_rect.width() * 0.5) * crate::render::STEREO_SCALE_FACTOR;
     let cx = view_rect.center().x;
     let cy = view_rect.center().y;
     let pd = stereo.projection_distance;

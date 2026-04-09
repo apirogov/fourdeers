@@ -34,7 +34,7 @@ use nalgebra::{UnitQuaternion, Vector3, Vector4};
 
 use crate::rotation4d::{Rotation4D, RotationPlane};
 
-const ROTATION_SENSITIVITY: f32 = 0.005;
+pub const ROTATION_SENSITIVITY: f32 = 0.005;
 const DEFAULT_CAMERA_POSITION: Vector4<f32> = Vector4::new(0.0, 0.0, -5.0, 0.0);
 
 /// First-person camera state with 4D orientation
@@ -227,11 +227,6 @@ impl Camera {
         self.pitch_r = pitch;
     }
 
-    #[must_use]
-    pub fn basis_4d(&self) -> [[f32; 4]; 4] {
-        self.rotation_4d.basis_vectors()
-    }
-
     /// Returns the slice-only rotation (identity q_left, actual q_right).
     ///
     /// Used to derive slice-normal direction and to project in-slice camera
@@ -241,16 +236,25 @@ impl Camera {
         Rotation4D::new(UnitQuaternion::identity(), *self.rotation_4d.q_right())
     }
 
+    #[cfg(test)]
+    #[must_use]
+    pub fn basis_4d(&self) -> [[f32; 4]; 4] {
+        self.rotation_4d.basis_vectors()
+    }
+
+    #[cfg(test)]
     #[must_use]
     pub fn slice_w_axis(&self) -> [f32; 4] {
         self.rotation_4d.basis_w()
     }
 
+    #[cfg(test)]
     #[must_use]
     pub fn is_slice_tilted(&self) -> bool {
         !self.rotation_4d.is_pure_3d()
     }
 
+    #[cfg(test)]
     #[must_use]
     pub fn direction_label_4d(&self, direction: SliceDirection) -> String {
         let basis = self.rotation_4d.basis_vectors();
@@ -353,6 +357,7 @@ impl Camera {
     }
 }
 
+#[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SliceDirection {
     Forward,

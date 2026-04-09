@@ -107,6 +107,7 @@ impl CompassFrameMode {
 
 pub const DEFAULT_W_THICKNESS: f32 = 2.5;
 pub const DEFAULT_W_COLOR_INTENSITY: f32 = 0.35;
+pub const DEFAULT_PROJECTION_DISTANCE: f32 = 3.0;
 
 #[derive(Debug, Clone, Copy)]
 pub struct FourDSettings {
@@ -134,7 +135,7 @@ impl Default for StereoSettings {
     fn default() -> Self {
         Self {
             eye_separation: 0.12,
-            projection_distance: 3.0,
+            projection_distance: DEFAULT_PROJECTION_DISTANCE,
             projection_mode: ProjectionMode::Perspective,
         }
     }

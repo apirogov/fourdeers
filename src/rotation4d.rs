@@ -209,17 +209,6 @@ impl Rotation4D {
     }
 
     #[must_use]
-    pub fn from_axis_angle_3d(axis: Vector3<f32>, angle: f32) -> Self {
-        let axis_normalized = axis.normalize();
-        let q =
-            UnitQuaternion::from_axis_angle(&nalgebra::Unit::new_normalize(axis_normalized), angle);
-        Self {
-            q_left: q,
-            q_right: q,
-        }
-    }
-
-    #[must_use]
     pub const fn from_3d_rotation(q: &UnitQuaternion<f32>) -> Self {
         Self {
             q_left: *q,
@@ -508,16 +497,20 @@ mod tests {
     }
 
     #[test]
-    fn test_from_axis_angle_3d_matches_from_3d_rotation() {
+    fn test_from_3d_rotation_matches_embedded_quaternion() {
         let axis = Vector3::new(-0.4, 0.9, 0.2);
         let angle = -0.37;
         let q = UnitQuaternion::from_axis_angle(&nalgebra::Unit::new_normalize(axis), angle);
 
-        let a = Rotation4D::from_axis_angle_3d(axis, angle);
-        let b = Rotation4D::from_3d_rotation(&q);
+        let rot = Rotation4D::from_3d_rotation(&q);
         let p = [0.7, -1.5, 2.25, 4.0];
 
-        assert_vec_approx_eq(a.rotate_point(p), b.rotate_point(p), 1e-5);
+        let expected = q.transform_vector(&Vector3::new(p[0], p[1], p[2]));
+        let actual = rot.rotate_point(p);
+        assert_approx_eq(actual[0], expected.x, 1e-5);
+        assert_approx_eq(actual[1], expected.y, 1e-5);
+        assert_approx_eq(actual[2], expected.z, 1e-5);
+        assert_approx_eq(actual[3], p[3], 1e-5);
     }
 
     #[test]

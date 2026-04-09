@@ -3,7 +3,7 @@
 use eframe::egui;
 use nalgebra::{UnitQuaternion, Vector3, Vector4};
 
-use crate::camera::CameraAction;
+use crate::camera::{CameraAction, ROTATION_SENSITIVITY};
 use crate::colors::PANEL_FILL;
 use crate::input::render_zone_debug_overlay;
 use crate::input::{
@@ -23,7 +23,6 @@ const DRAG_THRESHOLD: f32 = 10.0;
 const TAP_MAX_DISTANCE: f32 = 10.0;
 const TAP_MAX_TIME: f64 = 0.3;
 const DOUBLE_TAP_SUPPRESSION_TIME: f64 = 0.15;
-const COMPASS_ROTATION_SENSITIVITY: f32 = 0.005;
 const MENU_BAR_HEIGHT: f32 = 30.0;
 const MAP_HOLD_SPEED: f32 = 0.08;
 const MAP_TAP_SPEED: f32 = 0.3;
@@ -375,11 +374,11 @@ impl FourDeersApp {
                     let delta = pos - last_pos;
                     let yaw_rot = UnitQuaternion::from_axis_angle(
                         &Vector3::y_axis(),
-                        delta.x * COMPASS_ROTATION_SENSITIVITY,
+                        delta.x * ROTATION_SENSITIVITY,
                     );
                     let pitch_rot = UnitQuaternion::from_axis_angle(
                         &Vector3::x_axis(),
-                        delta.y * COMPASS_ROTATION_SENSITIVITY,
+                        delta.y * ROTATION_SENSITIVITY,
                     );
                     let incremental = pitch_rot * yaw_rot;
                     self.compass.rotation = incremental * self.compass.rotation;
@@ -593,14 +592,7 @@ impl FourDeersApp {
     }
 
     fn render_menu_overlay(&mut self, ui: &mut egui::Ui, vis_rect: egui::Rect) {
-        let left_rect = egui::Rect {
-            min: vis_rect.min,
-            max: egui::pos2(vis_rect.center().x, vis_rect.max.y),
-        };
-        let right_rect = egui::Rect {
-            min: egui::pos2(vis_rect.center().x, vis_rect.min.y),
-            max: vis_rect.max,
-        };
+        let (left_rect, right_rect) = crate::render::split_stereo_views(vis_rect);
 
         let mut close_menu = false;
 
