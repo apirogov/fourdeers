@@ -267,15 +267,18 @@ impl Camera {
         format_4d_vector(v, 0.01, 2)
     }
 
+    fn project_3d_to_4d_with_basis(v3: Vector3<f32>, basis: &[[f32; 4]; 4]) -> Vector4<f32> {
+        Vector4::new(
+            v3.x * basis[0][0] + v3.y * basis[1][0] + v3.z * basis[2][0],
+            v3.x * basis[0][1] + v3.y * basis[1][1] + v3.z * basis[2][1],
+            v3.x * basis[0][2] + v3.y * basis[1][2] + v3.z * basis[2][2],
+            v3.x * basis[0][3] + v3.y * basis[1][3] + v3.z * basis[2][3],
+        )
+    }
+
     #[must_use]
     pub fn project_3d_to_4d(&self, v3: Vector3<f32>) -> Vector4<f32> {
-        let basis_4d = self.rotation_4d.basis_vectors();
-        Vector4::new(
-            v3.x * basis_4d[0][0] + v3.y * basis_4d[1][0] + v3.z * basis_4d[2][0],
-            v3.x * basis_4d[0][1] + v3.y * basis_4d[1][1] + v3.z * basis_4d[2][1],
-            v3.x * basis_4d[0][2] + v3.y * basis_4d[1][2] + v3.z * basis_4d[2][2],
-            v3.x * basis_4d[0][3] + v3.y * basis_4d[1][3] + v3.z * basis_4d[2][3],
-        )
+        Self::project_3d_to_4d_with_basis(v3, &self.rotation_4d.basis_vectors())
     }
 
     /// Projects a camera-local 3D direction into world 4D using only `q_right` slice orientation.
@@ -284,13 +287,7 @@ impl Camera {
     /// (`q_right`).
     #[must_use]
     pub fn project_camera_3d_to_world_4d(&self, v3: Vector3<f32>) -> Vector4<f32> {
-        let basis = self.slice_rotation().basis_vectors();
-        Vector4::new(
-            v3.x * basis[0][0] + v3.y * basis[1][0] + v3.z * basis[2][0],
-            v3.x * basis[0][1] + v3.y * basis[1][1] + v3.z * basis[2][1],
-            v3.x * basis[0][2] + v3.y * basis[1][2] + v3.z * basis[2][2],
-            v3.x * basis[0][3] + v3.y * basis[1][3] + v3.z * basis[2][3],
-        )
+        Self::project_3d_to_4d_with_basis(v3, &self.slice_rotation().basis_vectors())
     }
 
     fn camera_world_axes(&self) -> (Vector4<f32>, Vector4<f32>, Vector4<f32>, Vector4<f32>) {

@@ -338,8 +338,9 @@ fn compute_weighted_direction_3d(vector_4d: Vector4<f32>) -> Vector3<f32> {
     result
 }
 
+#[cfg(test)]
 #[must_use]
-pub fn normalize_4d_vector(v: Vector4<f32>) -> Vector4<f32> {
+fn normalize_4d_vector(v: Vector4<f32>) -> Vector4<f32> {
     let norm = magnitude_4d(v);
     if norm < 1e-6 {
         Vector4::new(0.0, 0.0, 0.0, 0.0)
@@ -348,8 +349,9 @@ pub fn normalize_4d_vector(v: Vector4<f32>) -> Vector4<f32> {
     }
 }
 
+#[cfg(test)]
 #[must_use]
-pub fn compute_weighted_direction(vector_4d: Vector4<f32>) -> Vector3<f32> {
+fn compute_weighted_direction(vector_4d: Vector4<f32>) -> Vector3<f32> {
     compute_weighted_direction_3d(vector_4d) / SQRT_3
 }
 
