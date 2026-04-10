@@ -160,73 +160,27 @@ impl<'a> TesseractRenderContext<'a> {
 
     pub fn render_zone_labels(&self, painter: &egui::Painter, view_rect: egui::Rect) {
         let basis = self.camera.rotation_4d.basis_vectors();
-        let layout = tetrahedron_layout(view_rect);
-        let offset = layout.edge_offset;
-        let third_w = view_rect.width() / 3.0;
-        let third_h = view_rect.height() / 3.0;
+        let entries = compute_zone_layout(&basis, view_rect);
 
-        let labels: Vec<(&str, String, &str, f32, f32)> = vec![
-            (
-                "\u{2191}",
-                format_4d_vector(basis[1], 0.05, 1),
-                "Up",
-                view_rect.center().x,
-                view_rect.min.y + offset * 0.5,
-            ),
-            (
-                "\u{2193}",
-                format_4d_vector(neg_vec(basis[1]), 0.05, 1),
-                "Down",
-                view_rect.center().x,
-                view_rect.max.y - offset * 0.7,
-            ),
-            (
-                "\u{2190}",
-                format_4d_vector(neg_vec(basis[0]), 0.05, 1),
-                "Left",
-                view_rect.min.x + offset * 0.5,
-                view_rect.center().y,
-            ),
-            (
-                "\u{2192}",
-                format_4d_vector(basis[0], 0.05, 1),
-                "Right",
-                view_rect.max.x - offset * 0.4,
-                view_rect.center().y,
-            ),
-            (
-                "\u{2197}",
-                format_4d_vector(basis[2], 0.05, 1),
-                "Fwd",
-                view_rect.min.x + third_w * 2.5,
-                view_rect.min.y + third_h * 0.5,
-            ),
-            (
-                "\u{2199}",
-                format_4d_vector(neg_vec(basis[2]), 0.05, 1),
-                "Back",
-                view_rect.min.x + third_w * 0.5,
-                view_rect.min.y + third_h * 2.5,
-            ),
-            (
-                "\u{2196}",
-                format_4d_vector(basis[3], 0.05, 1),
-                "Kata",
-                view_rect.min.x + third_w * 0.5,
-                view_rect.min.y + third_h * 0.5,
-            ),
-            (
-                "\u{2198}",
-                format_4d_vector(neg_vec(basis[3]), 0.05, 1),
-                "Ana",
-                view_rect.min.x + third_w * 2.5,
-                view_rect.min.y + third_h * 2.5,
-            ),
+        let label_offsets: [(f32, f32); 8] = [
+            (0.0, -0.5),
+            (0.0, 0.3),
+            (-0.5, 0.0),
+            (0.6, 0.0),
+            (0.0, 0.0),
+            (0.0, 0.0),
+            (0.0, 0.0),
+            (0.0, 0.0),
         ];
 
-        for (symbol, vector, action, x, y) in labels {
-            let pos = egui::Pos2::new(x, y);
+        let offset = tetrahedron_layout(view_rect).edge_offset;
+
+        for (i, entry) in entries.iter().enumerate() {
+            let (symbol, action) = zone_label_text(entry.zone);
+            let vector = format_4d_vector(entry.basis_vector, 0.05, 1);
             let text = format!("{symbol}\n{action}\n{vector}");
+            let (dx, dy) = label_offsets[i];
+            let pos = egui::Pos2::new(entry.x + dx * offset, entry.y + dy * offset);
             painter.text(
                 pos,
                 egui::Align2::CENTER_CENTER,
@@ -353,6 +307,20 @@ const fn zone_to_direction_label(zone: Zone) -> &'static str {
         Zone::NorthWest => "K",
         Zone::SouthEast => "A",
         Zone::Center => "",
+    }
+}
+
+const fn zone_label_text(zone: Zone) -> (&'static str, &'static str) {
+    match zone {
+        Zone::North => ("\u{2191}", "Up"),
+        Zone::South => ("\u{2193}", "Down"),
+        Zone::West => ("\u{2190}", "Left"),
+        Zone::East => ("\u{2192}", "Right"),
+        Zone::NorthEast => ("\u{2197}", "Fwd"),
+        Zone::SouthWest => ("\u{2199}", "Back"),
+        Zone::NorthWest => ("\u{2196}", "Kata"),
+        Zone::SouthEast => ("\u{2198}", "Ana"),
+        Zone::Center => ("", ""),
     }
 }
 
