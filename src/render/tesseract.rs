@@ -6,6 +6,7 @@ use std::collections::HashMap;
 
 use crate::camera::{format_4d_vector, Camera, CameraProjection};
 use crate::input::{TetraId, Zone};
+use crate::render::batch::LineBatch;
 use crate::tetrahedron::{tetrahedron_layout, TetrahedronGadget};
 
 use super::ui::render_outlined_text;
@@ -108,55 +109,48 @@ impl<'a> TesseractRenderContext<'a> {
         let y_min = clip_rect.min.y - margin;
         let y_max = clip_rect.max.y + margin;
 
-        let shapes: Vec<egui::Shape> = self
-            .indices
-            .chunks(2)
-            .filter_map(|chunk| {
-                if chunk.len() != 2 {
-                    return None;
-                }
+        let mut batch = LineBatch::new(stroke_width);
+        for chunk in self.indices.chunks(2) {
+            if chunk.len() != 2 {
+                continue;
+            }
 
-                let t0 = &transformed[chunk[0] as usize];
-                let t1 = &transformed[chunk[1] as usize];
+            let t0 = &transformed[chunk[0] as usize];
+            let t1 = &transformed[chunk[1] as usize];
 
-                if !t0.in_slice && !t1.in_slice {
-                    return None;
-                }
+            if !t0.in_slice && !t1.in_slice {
+                continue;
+            }
 
-                if t0.z <= -near_plane && t1.z <= -near_plane {
-                    return None;
-                }
+            if t0.z <= -near_plane && t1.z <= -near_plane {
+                continue;
+            }
 
-                let s0 = projector
-                    .project_3d(t0.x, t0.y, t0.z)
-                    .map(|p| p.screen_pos)?;
-                let s1 = projector
-                    .project_3d(t1.x, t1.y, t1.z)
-                    .map(|p| p.screen_pos)?;
+            let s0 = projector.project_3d(t0.x, t0.y, t0.z).map(|p| p.screen_pos);
+            let s1 = projector.project_3d(t1.x, t1.y, t1.z).map(|p| p.screen_pos);
 
-                let seg_x_min = s0.x.min(s1.x);
-                let seg_x_max = s0.x.max(s1.x);
-                let seg_y_min = s0.y.min(s1.y);
-                let seg_y_max = s0.y.max(s1.y);
-                if seg_x_max < x_min || seg_x_min > x_max || seg_y_max < y_min || seg_y_min > y_max
-                {
-                    return None;
-                }
+            let (Some(s0), Some(s1)) = (s0, s1) else {
+                continue;
+            };
 
-                let w_avg = f32::midpoint(t0.w, t1.w);
-                let alpha = if t0.in_slice && t1.in_slice { 255 } else { 100 };
+            let seg_x_min = s0.x.min(s1.x);
+            let seg_x_max = s0.x.max(s1.x);
+            let seg_y_min = s0.y.min(s1.y);
+            let seg_y_max = s0.y.max(s1.y);
+            if seg_x_max < x_min || seg_x_min > x_max || seg_y_max < y_min || seg_y_min > y_max {
+                continue;
+            }
 
-                let normalized_w = (w_avg / self.w_half).clamp(-1.0, 1.0);
-                let color = w_to_color(normalized_w, alpha, self.w_color_intensity);
+            let w_avg = f32::midpoint(t0.w, t1.w);
+            let alpha = if t0.in_slice && t1.in_slice { 255 } else { 100 };
 
-                Some(egui::Shape::line_segment(
-                    [s0, s1],
-                    egui::Stroke::new(stroke_width, color),
-                ))
-            })
-            .collect();
+            let normalized_w = (w_avg / self.w_half).clamp(-1.0, 1.0);
+            let color = w_to_color(normalized_w, alpha, self.w_color_intensity);
 
-        painter.extend(shapes);
+            batch.add_segment(s0, s1, color);
+        }
+
+        batch.submit(painter);
     }
 
     pub fn render_zone_labels(&self, painter: &egui::Painter, view_rect: egui::Rect) {

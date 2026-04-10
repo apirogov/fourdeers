@@ -1,5 +1,6 @@
 //! Rendering utilities for stereo 3D visualization
 
+pub mod batch;
 pub mod projection;
 pub mod style;
 pub mod tesseract;
