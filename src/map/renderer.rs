@@ -97,7 +97,7 @@ impl MapRenderer {
 
     pub fn reset_to_fit(&mut self, scene_camera: &Camera, bounds: &Bounds4D) {
         let norm_cam = normalize_to_tesseract(scene_camera.position, bounds);
-        let q_left = *scene_camera.rotation_4d.q_left();
+        let q_left = *scene_camera.rotation_4d().q_left();
         let offset_local = Vector3::new(0.0, 0.0, -MAP_CAMERA_BACK_OFFSET);
         let rotated_offset = q_left.transform_vector(&offset_local);
         self.camera.position =

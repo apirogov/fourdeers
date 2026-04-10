@@ -89,8 +89,8 @@ mod tests {
             let ctx = TesseractRenderContext::from_config(&test_verts, &indices, &camera, config);
             let transformed = ctx.transform_vertices();
 
-            let qr_inv = camera.rotation_4d.inverse_q_right_only();
-            let inv_q_left = camera.rotation_4d.q_left().inverse();
+            let qr_inv = camera.rotation_4d().inverse_q_right_only();
+            let inv_q_left = camera.rotation_4d().q_left().inverse();
 
             for (i, v) in test_verts.iter().enumerate() {
                 let p_4d = qr_inv.rotate_vector(*v - camera.position);

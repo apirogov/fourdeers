@@ -48,7 +48,7 @@ const DEFAULT_CAMERA_POSITION: Vector4<f32> = Vector4::new(0.0, 0.0, -5.0, 0.0);
 pub struct Camera {
     pub position: Vector4<f32>,
 
-    pub rotation_4d: Rotation4D,
+    rotation_4d: Rotation4D,
 
     /// Cached look yaw angle (rotation around Y axis) in radians.
     yaw_l: f32,
@@ -74,6 +74,19 @@ impl Camera {
             yaw_r: 0.0,
             pitch_r: 0.0,
         }
+    }
+
+    #[must_use]
+    pub fn rotation_4d(&self) -> &Rotation4D {
+        &self.rotation_4d
+    }
+
+    pub fn set_rotation_4d(&mut self, rotation: Rotation4D) {
+        self.rotation_4d = rotation;
+        self.yaw_l = 0.0;
+        self.pitch_l = 0.0;
+        self.yaw_r = 0.0;
+        self.pitch_r = 0.0;
     }
 
     pub fn reset(&mut self) {

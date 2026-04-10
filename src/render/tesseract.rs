@@ -159,7 +159,7 @@ impl<'a> TesseractRenderContext<'a> {
     }
 
     pub fn render_zone_labels(&self, painter: &egui::Painter, view_rect: egui::Rect) {
-        let basis = self.camera.rotation_4d.basis_vectors();
+        let basis = self.camera.rotation_4d().basis_vectors();
         let entries = compute_zone_layout(&basis, view_rect);
 
         let label_offsets: [(f32, f32); 8] = [
@@ -197,7 +197,7 @@ impl<'a> TesseractRenderContext<'a> {
         view_rect: egui::Rect,
         tetrahedron_rotations: &HashMap<TetraId, UnitQuaternion<f32>>,
     ) {
-        let basis = self.camera.rotation_4d.basis_vectors();
+        let basis = self.camera.rotation_4d().basis_vectors();
         let entries = compute_zone_layout(&basis, view_rect);
         let scale = tetrahedron_layout(view_rect).scale;
 

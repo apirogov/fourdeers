@@ -558,7 +558,9 @@ mod tests {
     #[test]
     fn test_style_for_point_with_tilted_slice() {
         let mut cam = Camera::new();
-        cam.rotation_4d = Rotation4D::from_6_plane_angles(0.0, 0.0, 0.0, 0.5, 0.0, 0.0);
+        cam.set_rotation_4d(Rotation4D::from_6_plane_angles(
+            0.0, 0.0, 0.0, 0.5, 0.0, 0.0,
+        ));
         let info = SliceInfo::new(&cam, 2.5);
         let (color, alpha) = info.style_for_point(cam.position);
         assert_eq!(color, SLICE_GREEN);

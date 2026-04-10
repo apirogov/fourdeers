@@ -10,11 +10,12 @@ pub(crate) struct CameraProjection {
 
 impl CameraProjection {
     pub(crate) fn new(camera: &Camera) -> Self {
-        let inv = camera.rotation_4d.inverse_q_right_only();
-        Self {
+        let inv = camera.rotation_4d().inverse_q_right_only();
+        let rotated: Vector4<f32> = inv.rotate_vector(camera.position);
+        CameraProjection {
             mat_4d: inv.to_matrix(),
-            offset_4d: inv.rotate_vector(camera.position),
-            mat_3d: camera.rotation_4d.q_left().inverse().to_rotation_matrix(),
+            offset_4d: rotated,
+            mat_3d: camera.rotation_4d().q_left().inverse().to_rotation_matrix(),
         }
     }
 

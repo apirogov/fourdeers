@@ -64,7 +64,7 @@ pub(crate) fn compute_frustum_rays(
         ),
     ];
     let mut rays = [Vector3::zeros(); 4];
-    let q_left = scene_camera.rotation_4d.q_left();
+    let q_left = scene_camera.rotation_4d().q_left();
     for (i, dir_local) in corners.iter().enumerate() {
         let dir_3d = q_left.transform_vector(dir_local);
         let dir_4d = scene_camera.project_camera_3d_to_world_4d(dir_3d);

@@ -108,6 +108,6 @@ pub(super) fn make_projector() -> StereoProjector {
 pub(super) fn make_4d_rotated_camera() -> Camera {
     let mut cam = Camera::new();
     let rot = Rotation4D::from_6_plane_angles(0.37, -0.21, 0.44, 0.29, -0.18, 0.53);
-    cam.rotation_4d = rot;
+    cam.set_rotation_4d(rot);
     cam
 }
