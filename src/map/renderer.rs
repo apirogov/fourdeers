@@ -174,7 +174,9 @@ impl MapRenderer {
                 self.render_vertex_labels(painter, projector, &frame_data.transformed);
                 self.render_edge_labels(painter, projector, &frame_data.transformed);
             }
+            let mut batch = LineBatch::new(SLICE_EDGE_STROKE_WIDTH);
             self.draw_slice_volume(
+                &mut batch,
                 painter,
                 projector,
                 &map_transform,
@@ -184,10 +186,11 @@ impl MapRenderer {
                 params.scene_camera,
                 &bounds,
             );
-            self.draw_waypoints(painter, projector, &frame_data.waypoints);
+            self.draw_waypoints(&mut batch, painter, projector, &frame_data.waypoints);
             if let Some(cam) = frame_data.camera.as_ref() {
-                self.draw_camera_position(painter, projector, cam);
+                self.draw_camera_position(&mut batch, painter, projector, cam);
             }
+            batch.submit(painter);
         }
         self.compute_waypoint_tap_zones(
             &views.left_projector,
@@ -368,6 +371,7 @@ impl MapRenderer {
     #[allow(clippy::too_many_arguments)]
     fn draw_slice_volume(
         &self,
+        batch: &mut LineBatch,
         painter: &egui::Painter,
         projector: &StereoProjector,
         map_transform: &CameraProjection,
@@ -415,27 +419,24 @@ impl MapRenderer {
             if let Some(screen_seg) =
                 clip_segment_to_screen(map_transform, projector, data.near_z, *p0, *p1)
             {
-                painter.line_segment(
-                    [screen_seg.0, screen_seg.1],
-                    egui::Stroke::new(SLICE_EDGE_STROKE_WIDTH, SLICE_GREEN),
-                );
+                batch.add_segment(screen_seg.0, screen_seg.1, SLICE_GREEN);
             }
         }
     }
 
     fn draw_waypoints(
         &self,
+        batch: &mut LineBatch,
         painter: &egui::Painter,
         projector: &StereoProjector,
         waypoints: &[PreparedWaypoint],
     ) {
-        let mut batch = LineBatch::new(1.0);
         for wp in waypoints {
             let Some(center_screen) = projector.project_3d(wp.s3d.x, wp.s3d.y, wp.s3d.z) else {
                 continue;
             };
             render_tetrahedron_in_map(
-                &mut batch,
+                batch,
                 painter,
                 &wp.gadget,
                 projector,
@@ -463,21 +464,20 @@ impl MapRenderer {
             );
             batch.add_circle_filled(center_screen.screen_pos, MAP_CAMERA_DOT_RADIUS, dot_color);
         }
-        batch.submit(painter);
     }
 
     fn draw_camera_position(
         &self,
+        batch: &mut LineBatch,
         painter: &egui::Painter,
         projector: &StereoProjector,
         cam: &PreparedCamera,
     ) {
-        let mut batch = LineBatch::new(1.0);
         let Some(center_screen) = projector.project_3d(cam.s3d.x, cam.s3d.y, cam.s3d.z) else {
             return;
         };
         render_tetrahedron_in_map(
-            &mut batch,
+            batch,
             painter,
             &cam.gadget,
             projector,
@@ -523,7 +523,6 @@ impl MapRenderer {
                 }
             }
         }
-        batch.submit(painter);
     }
 
     #[allow(clippy::cast_precision_loss)]
