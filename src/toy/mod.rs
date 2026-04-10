@@ -101,4 +101,11 @@ pub trait Toy {
     fn set_stereo_settings(&mut self, _settings: &StereoSettings) {}
     /// Apply 4D visualization settings from the shared controls.
     fn set_four_d_settings(&mut self, _settings: &FourDSettings) {}
+    /// Toggle the direction tetrahedra overlay on/off.
+    fn toggle_directions(&mut self) {}
+    /// Whether the direction tetrahedra overlay is currently visible.
+    #[must_use]
+    fn directions_visible(&self) -> bool {
+        false
+    }
 }

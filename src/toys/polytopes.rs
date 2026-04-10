@@ -29,7 +29,7 @@ pub struct PolytopesToy {
     polytope_type: PolytopeType,
     cached_vertices: Vec<Vector4<f32>>,
     cached_indices: Vec<u16>,
-    show_controls: bool,
+    show_directions: bool,
     zone_mode: ZoneMode,
     visualization_rect: Option<egui::Rect>,
     drag_state: DragState,
@@ -55,7 +55,7 @@ impl PolytopesToy {
             polytope_type,
             cached_vertices,
             cached_indices,
-            show_controls: true,
+            show_directions: false,
             zone_mode: ZoneMode::NineZones,
             visualization_rect: None,
             drag_state: DragState::new(),
@@ -213,8 +213,6 @@ impl Toy for PolytopesToy {
 
         ui.collapsing("Controls", |ui| {
             ui.label("Arrows Up/Down: Y | Arrows Left/Right: X | PgUp/Dn: Z | ,/. : W");
-            ui.separator();
-            ui.checkbox(&mut self.show_controls, "Show Mouse Controls");
         });
 
         ui.add_space(8.0);
@@ -265,7 +263,7 @@ impl Toy for PolytopesToy {
             ctx.render_zone_labels(&right_painter, right_rect);
         }
 
-        if self.show_controls {
+        if self.show_directions {
             let right_rect = split_stereo_views(rect).1;
             let right_painter = ui.painter().with_clip_rect(right_rect);
             ctx.render_tetrahedron_gadget(&right_painter, right_rect, &self.tetrahedron_rotations);
@@ -281,6 +279,14 @@ impl Toy for PolytopesToy {
         // Indicator in top-right of right view (gray since not interactive)
         let gray = Some(LABEL_INACTIVE);
         render_tap_zone_label(painter, rect, Zone::NorthEast, rot_label, gray);
+    }
+
+    fn toggle_directions(&mut self) {
+        self.show_directions = !self.show_directions;
+    }
+
+    fn directions_visible(&self) -> bool {
+        self.show_directions
     }
 
     fn set_stereo_settings(&mut self, settings: &crate::render::StereoSettings) {

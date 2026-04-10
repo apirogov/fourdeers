@@ -585,6 +585,13 @@ impl FourDeersApp {
         }
 
         if self.active_view == ActiveView::Main {
+            let dir_label = if self.toy_manager.active_toy().directions_visible() {
+                "Dir:On"
+            } else {
+                "Dir:Off"
+            };
+            render_tap_zone_label(left_painter, left_rect, Zone::NorthEast, dir_label, None);
+
             self.toy_manager
                 .active_toy()
                 .render_toy_menu(right_painter, right_menu_rect);
@@ -814,6 +821,13 @@ impl FourDeersApp {
 
         if self.active_view != ActiveView::Main {
             return;
+        }
+
+        if self.active_view == ActiveView::Main {
+            if let Some(Zone::NorthEast) = left_zone {
+                self.toy_manager.active_toy_mut().toggle_directions();
+                return;
+            }
         }
 
         let Some(analysis) = self.analyze_tap_for_active_toy(visualization_rect, pos) else {
