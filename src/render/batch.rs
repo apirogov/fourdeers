@@ -96,10 +96,6 @@ impl LineBatch {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.mesh.indices.is_empty()
-    }
-
     pub fn submit(self, painter: &egui::Painter) {
         if !self.mesh.indices.is_empty() {
             painter.add(egui::Shape::Mesh(Arc::new(self.mesh)));
@@ -139,7 +135,7 @@ mod tests {
         let mut batch = LineBatch::new(2.0);
         let p = egui::Pos2::new(5.0, 5.0);
         batch.add_segment(p, p, egui::Color32::WHITE);
-        assert!(batch.is_empty());
+        assert!(batch.mesh.indices.is_empty());
     }
 
     #[test]
@@ -208,7 +204,7 @@ mod tests {
             &[egui::Pos2::new(0.0, 0.0), egui::Pos2::new(1.0, 1.0)],
             egui::Color32::WHITE,
         );
-        assert!(batch.is_empty());
+        assert!(batch.mesh.indices.is_empty());
     }
 
     #[test]
@@ -224,14 +220,14 @@ mod tests {
     fn test_add_circle_zero_radius() {
         let mut batch = LineBatch::new(1.0);
         batch.add_circle_filled(egui::Pos2::new(50.0, 50.0), 0.0, egui::Color32::WHITE);
-        assert!(batch.is_empty());
+        assert!(batch.mesh.indices.is_empty());
     }
 
     #[test]
     fn test_add_circle_negative_radius() {
         let mut batch = LineBatch::new(1.0);
         batch.add_circle_filled(egui::Pos2::new(50.0, 50.0), -1.0, egui::Color32::WHITE);
-        assert!(batch.is_empty());
+        assert!(batch.mesh.indices.is_empty());
     }
 
     #[test]
@@ -282,7 +278,7 @@ mod tests {
     #[test]
     fn test_is_empty_initially() {
         let batch = LineBatch::new(1.0);
-        assert!(batch.is_empty());
+        assert!(batch.mesh.indices.is_empty());
     }
 
     #[test]

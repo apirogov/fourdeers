@@ -264,7 +264,7 @@ mod tests {
 
     #[test]
     fn test_near_margin_value() {
-        assert!(NEAR_MARGIN > 0.3);
+        const { assert!(NEAR_MARGIN > 0.3) };
     }
 
     #[test]
