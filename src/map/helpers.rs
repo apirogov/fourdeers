@@ -27,6 +27,7 @@ pub(super) fn lerp_color(a: egui::Color32, b: egui::Color32, t: f32) -> egui::Co
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn render_tetrahedron_in_map(
+    batch: &mut crate::render::batch::LineBatch,
     painter: &egui::Painter,
     gadget: &TetrahedronGadget,
     projector: &StereoProjector,
@@ -81,6 +82,7 @@ pub(super) fn render_tetrahedron_in_map(
     };
 
     crate::render::render_tetrahedron(
+        batch,
         painter,
         gadget,
         |x, y, z| {

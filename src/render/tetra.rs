@@ -6,6 +6,7 @@ use crate::colors::{
     ARROW_GLOW, ARROW_PRIMARY, ARROW_TIP, LABEL_DEFAULT, OBJECT_TINT_NEGATIVE, OUTLINE_DEFAULT,
     OUTLINE_THIN, TEXT_HIGHLIGHT,
 };
+use crate::render::batch::LineBatch;
 use crate::tetrahedron::TetrahedronGadget;
 
 use super::ui::{draw_arrow_head, render_dual_outlined_text, render_outlined_text};
@@ -100,27 +101,29 @@ impl TetraStyle {
     }
 }
 
-pub fn render_tetrahedron(
+pub(crate) fn render_tetrahedron(
+    batch: &mut LineBatch,
     painter: &egui::Painter,
     gadget: &TetrahedronGadget,
     project: impl Fn(f32, f32, f32) -> Option<egui::Pos2>,
     style: &TetraStyle,
 ) {
-    render_tetra_edges(painter, gadget, &project, style);
+    render_tetra_edges(batch, gadget, &project, style);
 
     let component_mags: [f32; 4] = gadget.component_values.map(f32::abs);
     let max_mag = component_mags.iter().copied().fold(0.0f32, f32::max);
     render_tetra_labels(painter, gadget, &project, style, max_mag);
 
-    render_tetra_arrow(painter, gadget, &project, style);
+    render_tetra_arrow(batch, painter, gadget, &project, style);
 }
 
 fn render_tetra_edges(
-    painter: &egui::Painter,
+    batch: &mut LineBatch,
     gadget: &TetrahedronGadget,
     project: &impl Fn(f32, f32, f32) -> Option<egui::Pos2>,
     style: &TetraStyle,
 ) {
+    batch.set_stroke_width(style.edge_stroke_width);
     for edge in &gadget.edges {
         let v0_idx = edge.vertex_indices[0];
         let v1_idx = edge.vertex_indices[1];
@@ -133,10 +136,7 @@ fn render_tetra_edges(
             .and_then(|pos| project(pos.x, pos.y, pos.z));
 
         if let (Some(p0), Some(p1)) = (p0, p1) {
-            painter.line_segment(
-                [p0, p1],
-                egui::Stroke::new(style.edge_stroke_width, style.edge_color),
-            );
+            batch.add_segment(p0, p1, style.edge_color);
         }
     }
 }
@@ -212,6 +212,7 @@ fn render_tetra_labels(
 }
 
 fn render_tetra_arrow(
+    batch: &mut LineBatch,
     painter: &egui::Painter,
     gadget: &TetrahedronGadget,
     project: &impl Fn(f32, f32, f32) -> Option<egui::Pos2>,
@@ -226,9 +227,11 @@ fn render_tetra_arrow(
     let arrow_vec = arrow_end - arrow_start;
 
     if arrow_vec.length() > 1e-3 {
-        painter.line_segment(
-            [arrow_start, arrow_end],
-            egui::Stroke::new(style.arrow_stroke_width, style.arrow_color),
+        batch.add_segment_with_width(
+            arrow_start,
+            arrow_end,
+            style.arrow_stroke_width,
+            style.arrow_color,
         );
 
         let arrow_head_size = gadget.arrow_head_size() * style.arrow_head_scale;
@@ -243,7 +246,7 @@ fn render_tetra_arrow(
         }
     }
 
-    painter.circle_filled(arrow_start, style.origin_dot_radius, style.origin_dot_color);
+    batch.add_circle_filled(arrow_start, style.origin_dot_radius, style.origin_dot_color);
 
     if let Some(ref label) = gadget.base_label {
         let base_pos = arrow_start + egui::Vec2::new(0.0, style.base_label_offset_y);
@@ -270,11 +273,12 @@ fn render_tetra_arrow(
             style.tip_label_color,
         );
     } else if arrow_vec.length() > 1e-3 {
-        painter.circle_filled(arrow_end, style.tip_dot_radius, style.arrow_color);
+        batch.add_circle_filled(arrow_end, style.tip_dot_radius, style.arrow_color);
     }
 }
 
-pub fn render_tetrahedron_with_projector(
+pub(crate) fn render_tetrahedron_with_projector(
+    batch: &mut LineBatch,
     painter: &egui::Painter,
     gadget: &TetrahedronGadget,
     projector: &StereoProjector,
@@ -283,6 +287,7 @@ pub fn render_tetrahedron_with_projector(
     let mut style = TetraStyle::compass();
     style.label_mode = TetraLabelMode::Compass(frame_mode);
     render_tetrahedron(
+        batch,
         painter,
         gadget,
         |x, y, z| projector.project_3d(x, y, z).map(|p| p.screen_pos),

@@ -6,9 +6,9 @@ use crate::colors::ARROW_FORWARD;
 use crate::geometry::{clip_polyhedron_by_plane, Bounds4D, ConvexPolyhedron};
 use crate::polytopes::{create_polytope, PolytopeType};
 use crate::render::{
-    create_stereo_projectors, draw_arrow_head, draw_background, draw_center_divider,
-    CompassFrameMode, FourDSettings, ProjectionMode, StereoProjector, StereoSettings,
-    TesseractRenderConfig, TesseractRenderContext, TransformedVertex,
+    batch::LineBatch, create_stereo_projectors, draw_arrow_head, draw_background,
+    draw_center_divider, CompassFrameMode, FourDSettings, ProjectionMode, StereoProjector,
+    StereoSettings, TesseractRenderConfig, TesseractRenderContext, TransformedVertex,
 };
 use crate::tetrahedron::{compute_component_color, format_magnitude, TetrahedronGadget};
 use crate::toy::CompassWaypoint;
@@ -429,11 +429,13 @@ impl MapRenderer {
         projector: &StereoProjector,
         waypoints: &[PreparedWaypoint],
     ) {
+        let mut batch = LineBatch::new(1.0);
         for wp in waypoints {
             let Some(center_screen) = projector.project_3d(wp.s3d.x, wp.s3d.y, wp.s3d.z) else {
                 continue;
             };
             render_tetrahedron_in_map(
+                &mut batch,
                 painter,
                 &wp.gadget,
                 projector,
@@ -453,16 +455,15 @@ impl MapRenderer {
                     egui::Color32::from_rgba_unmultiplied(200, 200, 220, a),
                 );
             }
-            {
-                let dot_color = egui::Color32::from_rgba_unmultiplied(
-                    wp.edge_color.r(),
-                    wp.edge_color.g(),
-                    wp.edge_color.b(),
-                    crate::colors::to_u8(wp.alpha * 200.0),
-                );
-                painter.circle_filled(center_screen.screen_pos, MAP_CAMERA_DOT_RADIUS, dot_color);
-            }
+            let dot_color = egui::Color32::from_rgba_unmultiplied(
+                wp.edge_color.r(),
+                wp.edge_color.g(),
+                wp.edge_color.b(),
+                crate::colors::to_u8(wp.alpha * 200.0),
+            );
+            batch.add_circle_filled(center_screen.screen_pos, MAP_CAMERA_DOT_RADIUS, dot_color);
         }
+        batch.submit(painter);
     }
 
     fn draw_camera_position(
@@ -471,10 +472,12 @@ impl MapRenderer {
         projector: &StereoProjector,
         cam: &PreparedCamera,
     ) {
+        let mut batch = LineBatch::new(1.0);
         let Some(center_screen) = projector.project_3d(cam.s3d.x, cam.s3d.y, cam.s3d.z) else {
             return;
         };
         render_tetrahedron_in_map(
+            &mut batch,
             painter,
             &cam.gadget,
             projector,
@@ -485,7 +488,7 @@ impl MapRenderer {
             self.labels_visible,
         );
         let dot_alpha = crate::colors::to_u8(cam.alpha * 255.0);
-        painter.circle_filled(
+        batch.add_circle_filled(
             center_screen.screen_pos,
             MAP_CAMERA_DOT_RADIUS,
             egui::Color32::from_rgba_unmultiplied(255, 255, 255, dot_alpha),
@@ -503,9 +506,11 @@ impl MapRenderer {
         ) {
             let arrow_vec = arrow_p.screen_pos - origin_p.screen_pos;
             if arrow_vec.length() > 2.0 {
-                painter.line_segment(
-                    [origin_p.screen_pos, arrow_p.screen_pos],
-                    egui::Stroke::new(FORWARD_ARROW_STROKE_WIDTH, arrow_color),
+                batch.add_segment_with_width(
+                    origin_p.screen_pos,
+                    arrow_p.screen_pos,
+                    FORWARD_ARROW_STROKE_WIDTH,
+                    arrow_color,
                 );
                 if arrow_vec.length() > FORWARD_ARROW_HEAD_SIZE {
                     draw_arrow_head(
@@ -518,6 +523,7 @@ impl MapRenderer {
                 }
             }
         }
+        batch.submit(painter);
     }
 
     #[allow(clippy::cast_precision_loss)]

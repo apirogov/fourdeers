@@ -196,6 +196,7 @@ impl<'a> TesseractRenderContext<'a> {
         let entries = compute_zone_layout(&basis, view_rect);
         let scale = tetrahedron_layout(view_rect).scale;
 
+        let mut batch = LineBatch::new(1.0);
         for entry in entries {
             let tetra_id = TetraId {
                 is_left_view: false,
@@ -222,8 +223,9 @@ impl<'a> TesseractRenderContext<'a> {
                 scale,
                 base_label,
             };
-            render_single_tetrahedron(painter, &spec);
+            render_single_tetrahedron(&mut batch, painter, &spec);
         }
+        batch.submit(painter);
     }
 }
 
@@ -319,7 +321,11 @@ const fn zone_label_text(zone: Zone) -> (&'static str, &'static str) {
     }
 }
 
-fn render_single_tetrahedron(painter: &egui::Painter, spec: &TetraRenderSpec<'_>) {
+fn render_single_tetrahedron(
+    batch: &mut LineBatch,
+    painter: &egui::Painter,
+    spec: &TetraRenderSpec<'_>,
+) {
     let gadget =
         TetrahedronGadget::for_zone(spec.vector_4d, spec.zone, spec.user_rotation, spec.scale);
     let focal_length = spec.scale * TETRA_FOCAL_LENGTH_SCALE;
@@ -331,6 +337,7 @@ fn render_single_tetrahedron(painter: &egui::Painter, spec: &TetraRenderSpec<'_>
     }
 
     super::render_tetrahedron(
+        batch,
         painter,
         &gadget,
         |x, y, z| {

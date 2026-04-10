@@ -50,7 +50,15 @@ impl CompassView {
             stereo.projection_distance,
             ProjectionMode::Orthographic,
             |painter, projector, _view_rect| {
-                render_tetrahedron_with_projector(painter, &gadget, projector, self.frame_mode);
+                let mut batch = crate::render::batch::LineBatch::new(1.0);
+                render_tetrahedron_with_projector(
+                    &mut batch,
+                    painter,
+                    &gadget,
+                    projector,
+                    self.frame_mode,
+                );
+                batch.submit(painter);
             },
         );
     }
