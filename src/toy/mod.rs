@@ -3,8 +3,6 @@
 use eframe::egui;
 use nalgebra::Vector4;
 
-use crate::camera::Camera;
-use crate::geometry::Bounds4D;
 use crate::input::{DragView, ZoneMode};
 use crate::render::{FourDSettings, StereoSettings};
 
@@ -25,7 +23,6 @@ pub struct CompassWaypoint {
 pub enum ViewAction {
     #[default]
     None,
-    SwitchView(String),
     ToggleMenu,
     SelectWaypoint(usize),
 }
@@ -33,7 +30,8 @@ pub enum ViewAction {
 /// The extension point for adding new interactive toys to the app.
 ///
 /// Each toy provides its own scene rendering, sidebar controls, input handling,
-/// and compass/map integration.
+/// and view management. The toy owns its views (scene, map, compass) and dispatches
+/// internally based on the active view.
 pub trait Toy {
     /// Human-readable name for display in the UI.
     fn name(&self) -> &str;
@@ -45,7 +43,7 @@ pub trait Toy {
 
     /// Render the toy's sidebar controls in the menu panel.
     fn render_sidebar(&mut self, ui: &mut egui::Ui);
-    /// Render the toy's 3D/4D scene into the given rect.
+    /// Render the toy's active view into the given rect.
     fn render_scene(&mut self, ui: &mut egui::Ui, rect: egui::Rect, show_debug: bool);
     /// Handle a single-finger tap. The toy performs its own zone analysis based on the active view.
     fn handle_tap(&mut self, pos: egui::Pos2, vis_rect: egui::Rect) -> ViewAction;
@@ -59,45 +57,7 @@ pub trait Toy {
     /// Handle keyboard input (called each frame).
     fn handle_keyboard(&mut self, ctx: &egui::Context);
 
-    /// Return the rect where the toy renders, if any.
-    fn visualization_rect(&self) -> Option<egui::Rect>;
-
-    /// The 4D vector displayed by the compass gadget, if any.
-    fn compass_vector(&self) -> Option<Vector4<f32>> {
-        None
-    }
-
-    /// The reference position for the compass (usually the camera position).
-    fn compass_reference_position(&self) -> Option<Vector4<f32>> {
-        None
-    }
-
-    /// Transform a world-space 4D vector into camera-frame coordinates for the compass.
-    fn compass_world_to_camera_frame(&self, _world_vector: Vector4<f32>) -> Option<Vector4<f32>> {
-        None
-    }
-
-    /// Named 4D positions shown as waypoints in compass and map views.
-    fn compass_waypoints(&self) -> Vec<CompassWaypoint> {
-        Vec::new()
-    }
-
-    /// The camera used for map rendering, if this toy supports the map view.
-    fn map_camera(&self) -> Option<&Camera> {
-        None
-    }
-
-    /// Axis-aligned bounding box of the scene geometry in 4D, for map bounds computation.
-    fn scene_geometry_bounds(&self) -> Option<Bounds4D> {
-        None
-    }
-
-    /// Waypoints shown on the map view (defaults to compass waypoints).
-    fn map_waypoints(&self) -> Vec<CompassWaypoint> {
-        self.compass_waypoints()
-    }
-
-    /// Override the zone mode for a given view half.
+    /// Override the zone mode for a given view half (used for debug overlay).
     fn zone_mode_for_view(&self, _is_left_view: bool) -> ZoneMode {
         ZoneMode::default()
     }
@@ -119,17 +79,4 @@ pub trait Toy {
     fn set_stereo_settings(&mut self, _settings: &StereoSettings) {}
     /// Apply 4D visualization settings from the shared controls.
     fn set_four_d_settings(&mut self, _settings: &FourDSettings) {}
-
-    /// Switch to a different view by id. No-op if the view doesn't exist.
-    fn set_active_view(&mut self, _id: &str) {}
-    /// The id of the currently active view.
-    #[must_use]
-    fn active_view_id(&self) -> &str {
-        "scene"
-    }
-    /// List of available views as (id, display_name) pairs.
-    #[must_use]
-    fn available_views(&self) -> Vec<(&str, &str)> {
-        Vec::new()
-    }
 }

@@ -6,9 +6,7 @@ use crate::render::{draw_background, FourDSettings, StereoSettings};
 use crate::toy::Toy;
 use crate::DragView;
 
-pub struct DebugScratchpadToy {
-    visualization_rect: Option<egui::Rect>,
-}
+pub struct DebugScratchpadToy;
 
 impl Default for DebugScratchpadToy {
     fn default() -> Self {
@@ -19,9 +17,7 @@ impl Default for DebugScratchpadToy {
 impl DebugScratchpadToy {
     #[must_use]
     pub const fn new() -> Self {
-        Self {
-            visualization_rect: None,
-        }
+        Self
     }
 }
 
@@ -43,7 +39,6 @@ impl Toy for DebugScratchpadToy {
 
     fn render_scene(&mut self, ui: &mut egui::Ui, rect: egui::Rect, _show_debug: bool) {
         draw_background(ui, rect);
-        self.visualization_rect = Some(rect);
 
         let painter = ui.painter().with_clip_rect(rect);
         painter.text(
@@ -66,10 +61,6 @@ impl Toy for DebugScratchpadToy {
     fn handle_drag_start(&mut self, _drag_view: DragView) {}
 
     fn handle_keyboard(&mut self, _ctx: &egui::Context) {}
-
-    fn visualization_rect(&self) -> Option<egui::Rect> {
-        self.visualization_rect
-    }
 
     fn set_stereo_settings(&mut self, _settings: &StereoSettings) {}
 

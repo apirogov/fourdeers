@@ -230,6 +230,30 @@ impl PolytopesToy {
             self.scene_view.handle_hold(&analysis, &mut self.camera);
         }
     }
+
+    fn compass_waypoints(&self) -> Vec<CompassWaypoint> {
+        vec![
+            CompassWaypoint {
+                title: "Origin",
+                position: Vector4::new(0.0, 0.0, 0.0, 0.0),
+            },
+            CompassWaypoint {
+                title: "TestPoint",
+                position: Vector4::new(1.0, 2.0, 3.0, 4.0),
+            },
+        ]
+    }
+
+    fn scene_geometry_bounds(&self) -> Option<Bounds4D> {
+        if self.cached_vertices.is_empty() {
+            return None;
+        }
+        let mut bounds = Bounds4D::from_point(self.cached_vertices[0]);
+        for v in &self.cached_vertices[1..] {
+            bounds = bounds.expanded_to(*v);
+        }
+        Some(bounds)
+    }
 }
 
 impl Toy for PolytopesToy {
@@ -462,50 +486,6 @@ impl Toy for PolytopesToy {
         }
     }
 
-    fn visualization_rect(&self) -> Option<egui::Rect> {
-        self.scene_view.visualization_rect
-    }
-
-    fn compass_vector(&self) -> Option<Vector4<f32>> {
-        Some(-self.camera.position)
-    }
-
-    fn compass_reference_position(&self) -> Option<Vector4<f32>> {
-        Some(self.camera.position)
-    }
-
-    fn compass_waypoints(&self) -> Vec<CompassWaypoint> {
-        vec![
-            CompassWaypoint {
-                title: "Origin",
-                position: Vector4::new(0.0, 0.0, 0.0, 0.0),
-            },
-            CompassWaypoint {
-                title: "TestPoint",
-                position: Vector4::new(1.0, 2.0, 3.0, 4.0),
-            },
-        ]
-    }
-
-    fn scene_geometry_bounds(&self) -> Option<Bounds4D> {
-        if self.cached_vertices.is_empty() {
-            return None;
-        }
-        let mut bounds = Bounds4D::from_point(self.cached_vertices[0]);
-        for v in &self.cached_vertices[1..] {
-            bounds = bounds.expanded_to(*v);
-        }
-        Some(bounds)
-    }
-
-    fn map_camera(&self) -> Option<&Camera> {
-        Some(&self.camera)
-    }
-
-    fn compass_world_to_camera_frame(&self, world_vector: Vector4<f32>) -> Option<Vector4<f32>> {
-        Some(self.camera.world_vector_to_camera_frame(world_vector))
-    }
-
     fn zone_mode_for_view(&self, _is_left_view: bool) -> ZoneMode {
         match self.active_view {
             ActiveViewId::Scene => self.scene_view.zone_mode(),
@@ -517,26 +497,5 @@ impl Toy for PolytopesToy {
         if self.active_view == ActiveViewId::Scene {
             self.scene_view.clear_interaction_state();
         }
-    }
-
-    fn set_active_view(&mut self, id: &str) {
-        match id {
-            "scene" => self.active_view = ActiveViewId::Scene,
-            "map" => self.active_view = ActiveViewId::Map,
-            "compass" => self.active_view = ActiveViewId::Compass,
-            _ => {}
-        }
-    }
-
-    fn active_view_id(&self) -> &str {
-        match self.active_view {
-            ActiveViewId::Scene => "scene",
-            ActiveViewId::Map => "map",
-            ActiveViewId::Compass => "compass",
-        }
-    }
-
-    fn available_views(&self) -> Vec<(&str, &str)> {
-        vec![("scene", "Scene"), ("map", "Map"), ("compass", "Compass")]
     }
 }
