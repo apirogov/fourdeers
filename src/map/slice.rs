@@ -73,24 +73,32 @@ pub(super) fn compute_cross_section_edges(
 ) -> Vec<[Vector4<f32>; 2]> {
     let mut edges = Vec::new();
     for face in faces {
-        let face_verts: Vec<Vector4<f32>> = face.iter().map(|&vi| vertices[vi as usize]).collect();
-        let n = face_verts.len();
-        let distances: Vec<f32> = face_verts
-            .iter()
-            .map(|v| (v - slice_origin).dot(&slice_normal))
-            .collect();
-        let mut crossings: Vec<Vector4<f32>> = Vec::new();
-        for i in 0..n {
-            let j = (i + 1) % n;
+        let face_verts: [Vector4<f32>; 4] = [
+            vertices[face[0] as usize],
+            vertices[face[1] as usize],
+            vertices[face[2] as usize],
+            vertices[face[3] as usize],
+        ];
+        let distances: [f32; 4] = [
+            (face_verts[0] - slice_origin).dot(&slice_normal),
+            (face_verts[1] - slice_origin).dot(&slice_normal),
+            (face_verts[2] - slice_origin).dot(&slice_normal),
+            (face_verts[3] - slice_origin).dot(&slice_normal),
+        ];
+        let mut crossings: [Vector4<f32>; 4] = [Vector4::zeros(); 4];
+        let mut crossing_count = 0usize;
+        for i in 0..4 {
+            let j = (i + 1) % 4;
             let di = distances[i];
             let dj = distances[j];
             if di.signum() != dj.signum() && (di - dj).abs() > 1e-10 {
                 let t = di / (di - dj);
                 let t = t.clamp(0.0, 1.0);
-                crossings.push(face_verts[i] + (face_verts[j] - face_verts[i]) * t);
+                crossings[crossing_count] = face_verts[i] + (face_verts[j] - face_verts[i]) * t;
+                crossing_count += 1;
             }
         }
-        if crossings.len() == 2 {
+        if crossing_count == 2 {
             edges.push([crossings[0], crossings[1]]);
         }
     }
