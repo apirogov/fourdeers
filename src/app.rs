@@ -3,14 +3,14 @@
 use eframe::egui;
 use nalgebra::{UnitQuaternion, Vector3, Vector4};
 
-use crate::camera::{Direction4D, ROTATION_SENSITIVITY};
+use crate::camera::ROTATION_SENSITIVITY;
 use crate::colors::PANEL_FILL;
 use crate::input::render_zone_debug_overlay;
 use crate::input::{
-    analyze_tap_in_stereo_view_with_modes, zone_from_rect, zone_to_movement_action, DragView,
-    TapAnalysis, Zone, ZoneDebugOptions, ZoneMode,
+    analyze_tap_in_stereo_view_with_modes, zone_from_rect, DragView, TapAnalysis, Zone,
+    ZoneDebugOptions, ZoneMode,
 };
-use crate::map::MapRenderer;
+use crate::map::MapView;
 use crate::render::{
     draw_background, draw_center_divider, render_common_menu_half, render_stereo_views,
     render_tap_zone_label, render_tetrahedron_with_projector, split_stereo_views, CompassFrameMode,
@@ -24,9 +24,6 @@ const TAP_MAX_DISTANCE: f32 = 10.0;
 const TAP_MAX_TIME: f64 = 0.3;
 const DOUBLE_TAP_SUPPRESSION_TIME: f64 = 0.15;
 const MENU_BAR_HEIGHT: f32 = 30.0;
-const MAP_HOLD_SPEED: f32 = 0.08;
-const MAP_TAP_SPEED: f32 = 0.3;
-const MAP_KEYBOARD_SPEED: f32 = 0.05;
 const MENU_INNER_MARGIN: i8 = 12;
 const BUILD_INFO_FONT_SIZE: f32 = 12.0;
 const BUILD_INFO_COLOR: egui::Color32 = egui::Color32::GRAY;
@@ -89,30 +86,6 @@ impl CompassState {
     }
 }
 
-struct MapState {
-    renderer: MapRenderer,
-    frame_mode: CompassFrameMode,
-    rotation_3d: bool,
-}
-
-impl MapState {
-    fn new() -> Self {
-        Self {
-            renderer: MapRenderer::new(),
-            frame_mode: CompassFrameMode::World,
-            rotation_3d: true,
-        }
-    }
-
-    fn toggle_frame_mode(&mut self) {
-        self.frame_mode = self.frame_mode.other();
-    }
-
-    fn toggle_rotation_3d(&mut self) {
-        self.rotation_3d = !self.rotation_3d;
-    }
-}
-
 pub struct FourDeersApp {
     toy_manager: ToyManager,
     menu_open: bool,
@@ -126,7 +99,7 @@ pub struct FourDeersApp {
     visualization_rect: Option<egui::Rect>,
     active_view: ActiveView,
     compass: CompassState,
-    map: MapState,
+    map: MapView,
 }
 
 impl FourDeersApp {
@@ -145,7 +118,7 @@ impl FourDeersApp {
             visualization_rect: None,
             active_view: ActiveView::default(),
             compass: CompassState::new(),
-            map: MapState::new(),
+            map: MapView::new(),
         }
     }
 }
@@ -174,7 +147,7 @@ impl eframe::App for FourDeersApp {
                 }
             }
             if self.active_view == ActiveView::Map && i.key_pressed(egui::Key::F) {
-                self.map.toggle_frame_mode();
+                self.map.frame_mode = self.map.frame_mode.other();
             }
         });
 
@@ -182,7 +155,7 @@ impl eframe::App for FourDeersApp {
         if self.active_view == ActiveView::Main {
             self.toy_manager.active_toy_mut().handle_keyboard(ctx);
         } else if self.active_view == ActiveView::Map {
-            self.handle_map_keyboard(ctx);
+            self.map.handle_keyboard(ctx);
         }
         self.render_ui(ctx);
         ctx.request_repaint();
@@ -271,21 +244,10 @@ impl FourDeersApp {
         let scene_camera = toy.map_camera();
         let waypoints = toy.map_waypoints();
         let geometry_bounds = toy.scene_geometry_bounds();
+        let stereo = self.settings.stereo;
 
-        if let Some(camera) = scene_camera {
-            self.map.renderer.render(
-                ui,
-                rect,
-                camera,
-                &waypoints,
-                self.settings.stereo,
-                self.map.frame_mode,
-                geometry_bounds,
-            );
-        } else {
-            draw_background(ui, rect);
-            draw_center_divider(ui, rect);
-        }
+        self.map
+            .render(ui, rect, scene_camera, &waypoints, geometry_bounds, stereo);
     }
 
     fn process_pointer_events(&mut self, ctx: &egui::Context) {
@@ -387,12 +349,7 @@ impl FourDeersApp {
                 }
                 ActiveView::Map => {
                     if matches!(self.drag_view, Some(DragView::Right)) {
-                        let delta = pos - last_pos;
-                        if self.map.rotation_3d {
-                            self.map.renderer.rotate_3d(delta.x, delta.y);
-                        } else {
-                            self.map.renderer.rotate_4d(delta.x, delta.y);
-                        }
+                        self.map.handle_drag(last_pos, pos);
                     }
                 }
                 ActiveView::Main => {
@@ -418,9 +375,7 @@ impl FourDeersApp {
             if let Some(visualization_rect) = vis_rect {
                 if visualization_rect.contains(pos) {
                     let (_, right_rect) = split_stereo_views(visualization_rect);
-                    if let Some(action) = Self::map_tap_action(right_rect, pos) {
-                        self.map.renderer.apply_action(action, MAP_HOLD_SPEED);
-                    }
+                    self.map.handle_hold(right_rect, pos);
                 }
             }
             return;
@@ -559,29 +514,8 @@ impl FourDeersApp {
         }
 
         if self.active_view == ActiveView::Map {
-            let frame_label = self.map.frame_mode.display_label();
-            render_tap_zone_label(left_painter, left_rect, Zone::South, frame_label, None);
-
-            let labels_label = if self.map.renderer.labels_visible() {
-                "Labels: On"
-            } else {
-                "Labels: Off"
-            };
-            render_tap_zone_label(left_painter, left_rect, Zone::NorthEast, labels_label, None);
-            render_tap_zone_label(left_painter, left_rect, Zone::SouthEast, "Reset", None);
-
-            let rot_label = if self.map.rotation_3d {
-                "Rot:3D"
-            } else {
-                "Rot:4D"
-            };
-            render_tap_zone_label(
-                right_painter,
-                right_rect,
-                Zone::NorthEast,
-                rot_label,
-                Some(crate::colors::LABEL_INACTIVE),
-            );
+            self.map
+                .render_overlays(left_painter, left_rect, right_painter, right_rect);
         }
 
         if self.active_view == ActiveView::Main {
@@ -743,32 +677,6 @@ impl FourDeersApp {
         }
     }
 
-    fn handle_map_keyboard(&mut self, ctx: &egui::Context) {
-        let move_speed = MAP_KEYBOARD_SPEED;
-        let renderer = &mut self.map.renderer;
-        crate::input::handle_movement_keys(ctx, move_speed, |action, speed| {
-            renderer.apply_action(action, speed);
-        });
-    }
-
-    fn reset_map_camera(&mut self) {
-        let toy = self.toy_manager.active_toy();
-        if let Some(camera) = toy.map_camera() {
-            let waypoints = toy.map_waypoints();
-            let geometry_bounds = toy.scene_geometry_bounds();
-            let bounds = crate::map::compute_bounds(camera, &waypoints, geometry_bounds);
-            self.map.renderer.reset_to_fit(camera, &bounds);
-        }
-    }
-
-    fn map_tap_action(right_rect: egui::Rect, pos: egui::Pos2) -> Option<Direction4D> {
-        if !right_rect.contains(pos) {
-            return None;
-        }
-        let zone = zone_from_rect(right_rect, pos, ZoneMode::NineZones)?;
-        zone_to_movement_action(zone)
-    }
-
     fn toggle_view(&mut self, view: ActiveView) {
         self.active_view = if self.active_view == view {
             ActiveView::Main
@@ -831,7 +739,7 @@ impl FourDeersApp {
             ViewAction::ToggleMenu => {
                 self.menu_open = !self.menu_open;
             }
-            ViewAction::None => {}
+            ViewAction::SelectWaypoint(_) | ViewAction::None => {}
         }
     }
 
@@ -858,37 +766,22 @@ impl FourDeersApp {
     }
 
     fn handle_map_tap(&mut self, left_zone: Option<Zone>, right_rect: egui::Rect, pos: egui::Pos2) {
-        if let Some(wp_index) = self.map.renderer.find_tapped_waypoint(pos) {
-            self.compass.waypoint_index = wp_index;
+        let toy = self.toy_manager.active_toy();
+        let scene_camera = toy.map_camera();
+        let waypoints = toy.map_waypoints();
+        let geometry_bounds = toy.scene_geometry_bounds();
+
+        let action = self.map.handle_tap(
+            left_zone,
+            right_rect,
+            pos,
+            scene_camera,
+            &waypoints,
+            geometry_bounds,
+        );
+        if let ViewAction::SelectWaypoint(idx) = action {
+            self.compass.waypoint_index = idx;
             self.active_view = ActiveView::Compass;
-            return;
-        }
-
-        match left_zone {
-            Some(Zone::South) => {
-                self.map.toggle_frame_mode();
-                return;
-            }
-            Some(Zone::NorthEast) => {
-                self.map.renderer.toggle_labels();
-                return;
-            }
-            Some(Zone::SouthEast) => {
-                self.reset_map_camera();
-                return;
-            }
-            _ => {}
-        }
-
-        if right_rect.contains(pos) {
-            let zone = zone_from_rect(right_rect, pos, ZoneMode::NineZones);
-            if zone == Some(Zone::Center) {
-                self.map.toggle_rotation_3d();
-                return;
-            }
-        }
-        if let Some(action) = Self::map_tap_action(right_rect, pos) {
-            self.map.renderer.apply_action(action, MAP_TAP_SPEED);
         }
     }
 }

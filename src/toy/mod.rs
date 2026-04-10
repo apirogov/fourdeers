@@ -27,6 +27,7 @@ pub enum ViewAction {
     None,
     SwitchView(String),
     ToggleMenu,
+    SelectWaypoint(usize),
 }
 
 /// The extension point for adding new interactive toys to the app.
