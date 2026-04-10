@@ -1,26 +1,16 @@
 //! Tesseract visualization toy
 
 use eframe::egui;
-use nalgebra::{UnitQuaternion, Vector4};
-use std::collections::HashMap;
+use nalgebra::Vector4;
 
-use crate::camera::{Camera, Direction4D};
-use crate::colors::LABEL_INACTIVE;
+use crate::camera::Camera;
 use crate::geometry::Bounds4D;
-use crate::input::{
-    zone_to_movement_action, DragState, DragView, TapAnalysis, TetraId, Zone, ZoneMode,
-};
+use crate::input::{DragView, TapAnalysis, ZoneMode};
 use crate::polytopes::{create_polytope, PolytopeType};
-use crate::render::{
-    draw_background, draw_center_divider, render_stereo_views, render_tap_zone_label,
-    split_stereo_views, FourDSettings, StereoSettings, TesseractRenderConfig,
-    TesseractRenderContext,
-};
+use crate::render::{FourDSettings, StereoSettings};
 use crate::toy::{CompassWaypoint, Toy, ViewAction};
+use crate::toys::scene_view::{SceneRenderParams, SceneView};
 
-const TAP_MOVE_SPEED: f32 = 0.15;
-const HOLD_MOVE_SPEED: f32 = 0.08;
-const KEYBOARD_MOVE_SPEED: f32 = 0.15;
 const POSITION_SLIDER_RANGE: std::ops::RangeInclusive<f32> = -10.0..=10.0;
 const W_SLIDER_RANGE: std::ops::RangeInclusive<f32> = -3.0..=3.0;
 
@@ -29,14 +19,9 @@ pub struct PolytopesToy {
     polytope_type: PolytopeType,
     cached_vertices: Vec<Vector4<f32>>,
     cached_indices: Vec<u16>,
-    show_directions: bool,
-    zone_mode: ZoneMode,
-    visualization_rect: Option<egui::Rect>,
-    drag_state: DragState,
-    tetrahedron_rotations: HashMap<TetraId, UnitQuaternion<f32>>,
     stereo: StereoSettings,
     four_d: FourDSettings,
-    right_view_4d_rotation: bool,
+    scene_view: SceneView,
 }
 
 impl Default for PolytopesToy {
@@ -55,38 +40,16 @@ impl PolytopesToy {
             polytope_type,
             cached_vertices,
             cached_indices,
-            show_directions: false,
-            zone_mode: ZoneMode::NineZones,
-            visualization_rect: None,
-            drag_state: DragState::new(),
-            tetrahedron_rotations: HashMap::new(),
             stereo: StereoSettings::new(),
             four_d: FourDSettings::default(),
-            right_view_4d_rotation: false,
+            scene_view: SceneView::new(),
         }
-    }
-
-    fn reset_tetrahedron_rotations(&mut self) {
-        self.tetrahedron_rotations.clear();
     }
 
     fn ensure_polytope_cached(&mut self) {
         let (vertices, indices) = create_polytope(self.polytope_type);
         self.cached_vertices = vertices;
         self.cached_indices = indices;
-    }
-
-    fn apply_camera_action(&mut self, action: Direction4D, speed: f32) {
-        self.reset_tetrahedron_rotations();
-        self.camera.apply_action(action, speed);
-    }
-
-    const fn zone_to_action(zone: Zone, is_left_view: bool) -> Option<Direction4D> {
-        if is_left_view {
-            None
-        } else {
-            zone_to_movement_action(zone)
-        }
     }
 
     fn render_camera_controls(&mut self, ui: &mut egui::Ui) {
@@ -184,7 +147,7 @@ impl Toy for PolytopesToy {
 
     fn reset(&mut self) {
         self.camera.reset();
-        self.tetrahedron_rotations.clear();
+        self.scene_view.tetrahedron_rotations.clear();
     }
 
     fn render_sidebar(&mut self, ui: &mut egui::Ui) {
@@ -228,46 +191,18 @@ impl Toy for PolytopesToy {
     }
 
     fn render_scene(&mut self, ui: &mut egui::Ui, rect: egui::Rect, show_debug: bool) {
-        draw_background(ui, rect);
-
-        self.visualization_rect = Some(rect);
-
-        draw_center_divider(ui, rect);
-
-        let config = TesseractRenderConfig {
-            four_d: self.four_d,
-            stereo: self.stereo,
-        };
-        let ctx = TesseractRenderContext::from_config(
-            &self.cached_vertices,
-            &self.cached_indices,
-            &self.camera,
-            config,
-        );
-
-        let transformed = ctx.transform_vertices();
-        render_stereo_views(
+        self.scene_view.render(
             ui,
             rect,
-            self.stereo.eye_separation,
-            self.stereo.projection_distance,
-            self.stereo.projection_mode,
-            |painter, projector, view_rect| {
-                ctx.render_edges(painter, projector, &transformed, view_rect);
+            SceneRenderParams {
+                camera: &self.camera,
+                vertices: &self.cached_vertices,
+                indices: &self.cached_indices,
+                four_d: self.four_d,
+                stereo: self.stereo,
+                show_debug,
             },
         );
-
-        if show_debug {
-            let right_rect = split_stereo_views(rect).1;
-            let right_painter = ui.painter().with_clip_rect(right_rect);
-            ctx.render_zone_labels(&right_painter, right_rect);
-        }
-
-        if self.show_directions {
-            let right_rect = split_stereo_views(rect).1;
-            let right_painter = ui.painter().with_clip_rect(right_rect);
-            ctx.render_tetrahedron_gadget(&right_painter, right_rect, &self.tetrahedron_rotations);
-        }
     }
 
     fn render_view_overlays(
@@ -277,23 +212,11 @@ impl Toy for PolytopesToy {
         right_painter: &egui::Painter,
         right_rect: egui::Rect,
     ) {
-        let dir_label = if self.show_directions {
-            "Dir:On"
-        } else {
-            "Dir:Off"
-        };
-        render_tap_zone_label(left_painter, left_rect, Zone::NorthEast, dir_label, None);
-
-        let rot_label = if self.right_view_4d_rotation {
-            "Rot:4D"
-        } else {
-            "Rot:3D"
-        };
-        let gray = Some(LABEL_INACTIVE);
-        render_tap_zone_label(right_painter, right_rect, Zone::NorthEast, rot_label, gray);
+        self.scene_view
+            .render_overlays(left_painter, left_rect, right_painter, right_rect);
     }
 
-    fn set_stereo_settings(&mut self, settings: &crate::render::StereoSettings) {
+    fn set_stereo_settings(&mut self, settings: &StereoSettings) {
         self.stereo = *settings;
     }
 
@@ -302,63 +225,27 @@ impl Toy for PolytopesToy {
     }
 
     fn handle_tap(&mut self, analysis: &TapAnalysis) -> ViewAction {
-        if analysis.is_left_view && analysis.zone == Zone::NorthEast {
-            self.show_directions = !self.show_directions;
-            return ViewAction::None;
-        }
-
-        if !analysis.is_left_view && analysis.zone == Zone::Center {
-            self.right_view_4d_rotation = !self.right_view_4d_rotation;
-            return ViewAction::None;
-        }
-
-        if let Some(action) = Self::zone_to_action(analysis.zone, analysis.is_left_view) {
-            self.apply_camera_action(action, TAP_MOVE_SPEED);
-        }
-
-        ViewAction::None
+        self.scene_view.handle_tap(analysis, &mut self.camera)
     }
 
     fn handle_drag(&mut self, _is_left_view: bool, from: egui::Pos2, to: egui::Pos2) {
-        let delta = to - from;
-
-        match self.drag_state.drag_view {
-            Some(DragView::Left) => {
-                self.camera.rotate(delta.x, delta.y);
-                self.reset_tetrahedron_rotations();
-            }
-            Some(DragView::Right) => {
-                if self.right_view_4d_rotation {
-                    self.camera.rotate_4d(delta.x, delta.y);
-                } else {
-                    self.camera.rotate(delta.x, delta.y);
-                }
-                self.reset_tetrahedron_rotations();
-            }
-            None => {}
-        }
+        self.scene_view.handle_drag(&mut self.camera, from, to);
     }
 
     fn handle_hold(&mut self, analysis: &TapAnalysis) {
-        if let Some(action) = Self::zone_to_action(analysis.zone, analysis.is_left_view) {
-            self.apply_camera_action(action, HOLD_MOVE_SPEED);
-        }
+        self.scene_view.handle_hold(analysis, &mut self.camera);
     }
 
     fn handle_drag_start(&mut self, drag_view: DragView) {
-        self.drag_state.drag_view = Some(drag_view);
+        self.scene_view.handle_drag_start(drag_view);
     }
 
     fn handle_keyboard(&mut self, ctx: &egui::Context) {
-        let move_speed = KEYBOARD_MOVE_SPEED;
-
-        crate::input::handle_movement_keys(ctx, move_speed, |action, speed| {
-            self.apply_camera_action(action, speed);
-        });
+        self.scene_view.handle_keyboard(ctx, &mut self.camera);
     }
 
     fn visualization_rect(&self) -> Option<egui::Rect> {
-        self.visualization_rect
+        self.scene_view.visualization_rect
     }
 
     fn compass_vector(&self) -> Option<Vector4<f32>> {
@@ -402,10 +289,10 @@ impl Toy for PolytopesToy {
     }
 
     fn zone_mode_for_view(&self, _is_left_view: bool) -> ZoneMode {
-        self.zone_mode
+        self.scene_view.zone_mode()
     }
 
     fn clear_interaction_state(&mut self) {
-        self.drag_state.clear();
+        self.scene_view.clear_interaction_state();
     }
 }
