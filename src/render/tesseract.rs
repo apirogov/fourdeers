@@ -6,7 +6,6 @@ use std::collections::HashMap;
 
 use crate::camera::{format_4d_vector, Camera, CameraProjection};
 use crate::input::{TetraId, Zone};
-use crate::rotation4d::Rotation4D;
 use crate::tetrahedron::{tetrahedron_layout, TetrahedronGadget};
 
 use super::ui::render_outlined_text;
@@ -29,19 +28,8 @@ pub struct TesseractRenderContext<'a> {
     pub projection_distance: f32,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-pub struct ObjectRotationAngles {
-    pub xy: f32,
-    pub xz: f32,
-    pub yz: f32,
-    pub xw: f32,
-    pub yw: f32,
-    pub zw: f32,
-}
-
 #[derive(Debug, Clone, Copy)]
 pub struct TesseractRenderConfig {
-    pub rotation_angles: ObjectRotationAngles,
     pub four_d: FourDSettings,
     pub stereo: StereoSettings,
 }
@@ -72,16 +60,7 @@ impl<'a> TesseractRenderContext<'a> {
         camera: &Camera,
         config: TesseractRenderConfig,
     ) -> Self {
-        let object_rotation = Rotation4D::from_6_plane_angles(
-            config.rotation_angles.xy,
-            config.rotation_angles.xz,
-            config.rotation_angles.yz,
-            config.rotation_angles.xw,
-            config.rotation_angles.yw,
-            config.rotation_angles.zw,
-        );
-
-        let projection = CameraProjection::with_object_rotation(camera, &object_rotation);
+        let projection = CameraProjection::new(camera);
         let w_half = config.four_d.w_thickness * 0.5;
 
         Self {

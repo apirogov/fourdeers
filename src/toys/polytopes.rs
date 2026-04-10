@@ -13,10 +13,9 @@ use crate::input::{
 use crate::polytopes::{create_polytope, PolytopeType};
 use crate::render::{
     draw_background, draw_center_divider, render_stereo_views, render_tap_zone_label,
-    split_stereo_views, FourDSettings, ObjectRotationAngles, StereoSettings, TesseractRenderConfig,
+    split_stereo_views, FourDSettings, StereoSettings, TesseractRenderConfig,
     TesseractRenderContext,
 };
-use crate::rotation4d::Rotation4D;
 use crate::toy::{CompassWaypoint, Toy};
 
 const TAP_MOVE_SPEED: f32 = 0.15;
@@ -30,12 +29,6 @@ pub struct PolytopesToy {
     polytope_type: PolytopeType,
     cached_vertices: Vec<Vector4<f32>>,
     cached_indices: Vec<u16>,
-    rot_xy: f32,
-    rot_xz: f32,
-    rot_yz: f32,
-    rot_xw: f32,
-    rot_yw: f32,
-    rot_zw: f32,
     show_controls: bool,
     zone_mode: ZoneMode,
     visualization_rect: Option<egui::Rect>,
@@ -62,12 +55,6 @@ impl PolytopesToy {
             polytope_type,
             cached_vertices,
             cached_indices,
-            rot_xy: 0.0,
-            rot_xz: 0.0,
-            rot_yz: 0.0,
-            rot_xw: 0.0,
-            rot_yw: 0.0,
-            rot_zw: 0.0,
             show_controls: true,
             zone_mode: ZoneMode::NineZones,
             visualization_rect: None,
@@ -81,15 +68,6 @@ impl PolytopesToy {
 
     fn reset_tetrahedron_rotations(&mut self) {
         self.tetrahedron_rotations.clear();
-    }
-
-    const fn reset_rotation_angles(&mut self) {
-        self.rot_xy = 0.0;
-        self.rot_xz = 0.0;
-        self.rot_yz = 0.0;
-        self.rot_xw = 0.0;
-        self.rot_yw = 0.0;
-        self.rot_zw = 0.0;
     }
 
     fn ensure_polytope_cached(&mut self) {
@@ -193,65 +171,6 @@ impl PolytopesToy {
             }
         });
     }
-
-    fn render_rotation_controls(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| {
-            ui.label("XY:");
-            ui.add(
-                egui::Slider::new(
-                    &mut self.rot_xy,
-                    -std::f32::consts::PI..=std::f32::consts::PI,
-                )
-                .text(""),
-            );
-            ui.label("XZ:");
-            ui.add(
-                egui::Slider::new(
-                    &mut self.rot_xz,
-                    -std::f32::consts::PI..=std::f32::consts::PI,
-                )
-                .text(""),
-            );
-        });
-
-        ui.horizontal(|ui| {
-            ui.label("YZ:");
-            ui.add(
-                egui::Slider::new(
-                    &mut self.rot_yz,
-                    -std::f32::consts::PI..=std::f32::consts::PI,
-                )
-                .text(""),
-            );
-            ui.label("XW:");
-            ui.add(
-                egui::Slider::new(
-                    &mut self.rot_xw,
-                    -std::f32::consts::PI..=std::f32::consts::PI,
-                )
-                .text(""),
-            );
-        });
-
-        ui.horizontal(|ui| {
-            ui.label("YW:");
-            ui.add(
-                egui::Slider::new(
-                    &mut self.rot_yw,
-                    -std::f32::consts::PI..=std::f32::consts::PI,
-                )
-                .text(""),
-            );
-            ui.label("ZW:");
-            ui.add(
-                egui::Slider::new(
-                    &mut self.rot_zw,
-                    -std::f32::consts::PI..=std::f32::consts::PI,
-                )
-                .text(""),
-            );
-        });
-    }
 }
 
 impl Toy for PolytopesToy {
@@ -265,7 +184,6 @@ impl Toy for PolytopesToy {
 
     fn reset(&mut self) {
         self.camera.reset();
-        self.reset_rotation_angles();
         self.tetrahedron_rotations.clear();
     }
 
@@ -283,7 +201,6 @@ impl Toy for PolytopesToy {
         if self.polytope_type != prev_type {
             self.ensure_polytope_cached();
             self.camera.reset();
-            self.reset_rotation_angles();
         }
 
         ui.label(format!(
@@ -309,10 +226,6 @@ impl Toy for PolytopesToy {
         ui.separator();
         ui.add_space(4.0);
 
-        ui.collapsing("4D Object Rotation", |ui| {
-            self.render_rotation_controls(ui);
-        });
-
         ui.add_space(4.0);
     }
 
@@ -324,14 +237,6 @@ impl Toy for PolytopesToy {
         draw_center_divider(ui, rect);
 
         let config = TesseractRenderConfig {
-            rotation_angles: ObjectRotationAngles {
-                xy: self.rot_xy,
-                xz: self.rot_xz,
-                yz: self.rot_yz,
-                xw: self.rot_xw,
-                yw: self.rot_yw,
-                zw: self.rot_zw,
-            },
             four_d: self.four_d,
             stereo: self.stereo,
         };
@@ -465,18 +370,9 @@ impl Toy for PolytopesToy {
         if self.cached_vertices.is_empty() {
             return None;
         }
-        let rotation = Rotation4D::from_6_plane_angles(
-            self.rot_xy,
-            self.rot_xz,
-            self.rot_yz,
-            self.rot_xw,
-            self.rot_yw,
-            self.rot_zw,
-        );
-        let first = rotation.rotate_vector(self.cached_vertices[0]);
-        let mut bounds = Bounds4D::from_point(first);
+        let mut bounds = Bounds4D::from_point(self.cached_vertices[0]);
         for v in &self.cached_vertices[1..] {
-            bounds = bounds.expanded_to(rotation.rotate_vector(*v));
+            bounds = bounds.expanded_to(*v);
         }
         Some(bounds)
     }

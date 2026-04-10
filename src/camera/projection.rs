@@ -1,7 +1,6 @@
 use nalgebra::{Matrix4, Rotation3, Vector3, Vector4};
 
 use crate::camera::Camera;
-use crate::rotation4d::Rotation4D;
 
 pub(crate) struct CameraProjection {
     mat_4d: Matrix4<f32>,
@@ -15,16 +14,6 @@ impl CameraProjection {
         Self {
             mat_4d: inv.to_matrix(),
             offset_4d: inv.rotate_vector(camera.position),
-            mat_3d: camera.rotation_4d.q_left().inverse().to_rotation_matrix(),
-        }
-    }
-
-    pub(crate) fn with_object_rotation(camera: &Camera, object_rotation: &Rotation4D) -> Self {
-        let camera_inv = camera.rotation_4d.inverse_q_right_only();
-        let combined = object_rotation.then(&camera_inv);
-        Self {
-            mat_4d: combined.to_matrix(),
-            offset_4d: camera_inv.rotate_vector(camera.position),
             mat_3d: camera.rotation_4d.q_left().inverse().to_rotation_matrix(),
         }
     }

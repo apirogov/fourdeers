@@ -4,9 +4,7 @@ pub mod tesseract;
 pub mod tetra;
 pub mod ui;
 
-pub use tesseract::{
-    ObjectRotationAngles, TesseractRenderConfig, TesseractRenderContext, TransformedVertex,
-};
+pub use tesseract::{TesseractRenderConfig, TesseractRenderContext, TransformedVertex};
 pub use tetra::{
     compass_vertex_label, render_tetrahedron, render_tetrahedron_with_projector, TetraLabelMode,
     TetraStyle,
@@ -624,7 +622,6 @@ mod tests {
             let indices: Vec<u16> = vec![];
 
             let config = TesseractRenderConfig {
-                rotation_angles: ObjectRotationAngles::default(),
                 four_d: FourDSettings::default(),
                 stereo: StereoSettings::default(),
             };

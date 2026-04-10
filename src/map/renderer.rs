@@ -7,8 +7,8 @@ use crate::geometry::{clip_polyhedron_by_plane, Bounds4D};
 use crate::polytopes::{create_polytope, PolytopeType};
 use crate::render::{
     create_stereo_projectors, draw_arrow_head, draw_background, draw_center_divider,
-    CompassFrameMode, FourDSettings, ObjectRotationAngles, ProjectionMode, StereoProjector,
-    StereoSettings, TesseractRenderConfig, TesseractRenderContext,
+    CompassFrameMode, FourDSettings, ProjectionMode, StereoProjector, StereoSettings,
+    TesseractRenderConfig, TesseractRenderContext,
 };
 use crate::tetrahedron::{compute_component_color, format_magnitude, TetrahedronGadget};
 use crate::toy::CompassWaypoint;
@@ -154,7 +154,6 @@ impl MapRenderer {
         _view_rect: egui::Rect,
     ) {
         let config = TesseractRenderConfig {
-            rotation_angles: ObjectRotationAngles::default(),
             four_d: FourDSettings {
                 w_thickness: self.w_thickness,
                 w_color_intensity: self.w_color_intensity,
