@@ -12,6 +12,7 @@ pub mod rotation4d;
 pub mod tetrahedron;
 pub mod toy;
 pub mod toys;
+pub mod view;
 
 #[cfg(test)]
 mod test_utils;

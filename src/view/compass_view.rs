@@ -1,0 +1,142 @@
+use eframe::egui;
+use nalgebra::{UnitQuaternion, Vector3, Vector4};
+
+use crate::camera::ROTATION_SENSITIVITY;
+use crate::input::{zone_from_rect, Zone, ZoneMode};
+use crate::render::{
+    draw_background, draw_center_divider, render_stereo_views, render_tap_zone_label,
+    render_tetrahedron_with_projector, CompassFrameMode, ProjectionMode, StereoSettings,
+};
+use crate::tetrahedron::{format_magnitude, magnitude_4d, TetrahedronGadget};
+use crate::toy::{CompassWaypoint, ViewAction};
+
+pub struct CompassView {
+    pub rotation: UnitQuaternion<f32>,
+    pub waypoint_index: usize,
+    pub frame_mode: CompassFrameMode,
+}
+
+impl CompassView {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            rotation: UnitQuaternion::identity(),
+            waypoint_index: 0,
+            frame_mode: CompassFrameMode::World,
+        }
+    }
+
+    pub fn render(
+        &self,
+        ui: &mut egui::Ui,
+        rect: egui::Rect,
+        vector_4d: Vector4<f32>,
+        waypoint_title: &str,
+        stereo: StereoSettings,
+    ) {
+        draw_background(ui, rect);
+        draw_center_divider(ui, rect);
+
+        let magnitude_label = format_magnitude(magnitude_4d(vector_4d));
+        let gadget =
+            TetrahedronGadget::from_4d_vector_with_quaternion(vector_4d, self.rotation, 1.0)
+                .with_base_label(magnitude_label)
+                .with_tip_label(waypoint_title);
+
+        render_stereo_views(
+            ui,
+            rect,
+            stereo.eye_separation,
+            stereo.projection_distance,
+            ProjectionMode::Orthographic,
+            |painter, projector, _view_rect| {
+                render_tetrahedron_with_projector(painter, &gadget, projector, self.frame_mode);
+            },
+        );
+    }
+
+    pub fn render_overlays(
+        &self,
+        left_painter: &egui::Painter,
+        left_rect: egui::Rect,
+        right_painter: &egui::Painter,
+        right_rect: egui::Rect,
+    ) {
+        let frame_label = self.frame_mode.display_label();
+        render_tap_zone_label(left_painter, left_rect, Zone::South, frame_label, None);
+        render_tap_zone_label(right_painter, right_rect, Zone::South, "Prev", None);
+        render_tap_zone_label(right_painter, right_rect, Zone::SouthEast, "Next", None);
+    }
+
+    pub fn handle_tap(
+        &mut self,
+        left_zone: Option<Zone>,
+        right_rect: egui::Rect,
+        pos: egui::Pos2,
+        waypoints_len: usize,
+    ) -> ViewAction {
+        if left_zone == Some(Zone::South) {
+            self.frame_mode = self.frame_mode.other();
+            return ViewAction::None;
+        }
+
+        if right_rect.contains(pos) {
+            let zone = zone_from_rect(right_rect, pos, ZoneMode::NineZones);
+            if zone == Some(Zone::South) {
+                self.cycle_waypoint(-1, waypoints_len);
+            }
+            if zone == Some(Zone::SouthEast) {
+                self.cycle_waypoint(1, waypoints_len);
+            }
+        }
+
+        ViewAction::None
+    }
+
+    pub fn handle_drag(&mut self, from: egui::Pos2, to: egui::Pos2) {
+        let delta = to - from;
+        let yaw_rot =
+            UnitQuaternion::from_axis_angle(&Vector3::y_axis(), delta.x * ROTATION_SENSITIVITY);
+        let pitch_rot =
+            UnitQuaternion::from_axis_angle(&Vector3::x_axis(), delta.y * ROTATION_SENSITIVITY);
+        let incremental = pitch_rot * yaw_rot;
+        self.rotation = incremental * self.rotation;
+    }
+
+    pub fn clamped_waypoint_index(&mut self, waypoints_len: usize) -> usize {
+        if waypoints_len == 0 {
+            return 0;
+        }
+        if self.waypoint_index >= waypoints_len {
+            self.waypoint_index = 0;
+        }
+        self.waypoint_index
+    }
+
+    pub fn cycle_waypoint(&mut self, direction: i32, waypoints_len: usize) {
+        if waypoints_len == 0 {
+            return;
+        }
+        let len = waypoints_len as i32;
+        let idx = self.waypoint_index as i32;
+        self.waypoint_index = (idx + direction).rem_euclid(len) as usize;
+    }
+
+    pub fn reset_waypoint(&mut self) {
+        self.waypoint_index = 0;
+    }
+
+    pub fn current_waypoint(&mut self, waypoints: &[CompassWaypoint]) -> Option<CompassWaypoint> {
+        if waypoints.is_empty() {
+            return None;
+        }
+        let idx = self.clamped_waypoint_index(waypoints.len());
+        Some(waypoints[idx].clone())
+    }
+}
+
+impl Default for CompassView {
+    fn default() -> Self {
+        Self::new()
+    }
+}

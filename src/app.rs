@@ -1,9 +1,8 @@
 //! Main application
 
 use eframe::egui;
-use nalgebra::{UnitQuaternion, Vector3, Vector4};
+use nalgebra::Vector4;
 
-use crate::camera::ROTATION_SENSITIVITY;
 use crate::colors::PANEL_FILL;
 use crate::input::render_zone_debug_overlay;
 use crate::input::{
@@ -12,12 +11,11 @@ use crate::input::{
 };
 use crate::map::MapView;
 use crate::render::{
-    draw_background, draw_center_divider, render_common_menu_half, render_stereo_views,
-    render_tap_zone_label, render_tetrahedron_with_projector, split_stereo_views, CompassFrameMode,
-    FourDSettings, ProjectionMode, StereoSettings,
+    render_common_menu_half, render_tap_zone_label, split_stereo_views, CompassFrameMode,
+    FourDSettings, StereoSettings,
 };
-use crate::tetrahedron::{format_magnitude, magnitude_4d, TetrahedronGadget};
 use crate::toy::{CompassWaypoint, ToyManager, ViewAction};
+use crate::view::CompassView;
 
 const DRAG_THRESHOLD: f32 = 10.0;
 const TAP_MAX_DISTANCE: f32 = 10.0;
@@ -43,49 +41,6 @@ pub struct CommonSettings {
     pub stereo: StereoSettings,
 }
 
-struct CompassState {
-    rotation: UnitQuaternion<f32>,
-    waypoint_index: usize,
-    frame_mode: CompassFrameMode,
-}
-
-impl CompassState {
-    fn new() -> Self {
-        Self {
-            rotation: UnitQuaternion::identity(),
-            waypoint_index: 0,
-            frame_mode: CompassFrameMode::World,
-        }
-    }
-
-    fn toggle_frame_mode(&mut self) {
-        self.frame_mode = self.frame_mode.other();
-    }
-
-    fn cycle_waypoint(&mut self, direction: i32, waypoints_len: usize) {
-        if waypoints_len == 0 {
-            return;
-        }
-        let len = waypoints_len as i32;
-        let idx = self.waypoint_index as i32;
-        self.waypoint_index = (idx + direction).rem_euclid(len) as usize;
-    }
-
-    fn clamped_waypoint_index(&mut self, waypoints_len: usize) -> usize {
-        if waypoints_len == 0 {
-            return 0;
-        }
-        if self.waypoint_index >= waypoints_len {
-            self.waypoint_index = 0;
-        }
-        self.waypoint_index
-    }
-
-    fn reset_waypoint(&mut self) {
-        self.waypoint_index = 0;
-    }
-}
-
 pub struct FourDeersApp {
     toy_manager: ToyManager,
     menu_open: bool,
@@ -98,7 +53,7 @@ pub struct FourDeersApp {
     last_drag_pos: Option<egui::Pos2>,
     visualization_rect: Option<egui::Rect>,
     active_view: ActiveView,
-    compass: CompassState,
+    compass: CompassView,
     map: MapView,
 }
 
@@ -117,7 +72,7 @@ impl FourDeersApp {
             last_drag_pos: None,
             visualization_rect: None,
             active_view: ActiveView::default(),
-            compass: CompassState::new(),
+            compass: CompassView::new(),
             map: MapView::new(),
         }
     }
@@ -143,7 +98,7 @@ impl eframe::App for FourDeersApp {
                     self.cycle_compass_waypoint(1);
                 }
                 if i.key_pressed(egui::Key::F) {
-                    self.compass.toggle_frame_mode();
+                    self.compass.frame_mode = self.compass.frame_mode.other();
                 }
             }
             if self.active_view == ActiveView::Map && i.key_pressed(egui::Key::F) {
@@ -165,24 +120,15 @@ impl eframe::App for FourDeersApp {
 impl FourDeersApp {
     fn current_compass_waypoint(&mut self) -> Option<CompassWaypoint> {
         let waypoints = self.toy_manager.active_toy().compass_waypoints();
-        if waypoints.is_empty() {
-            return None;
-        }
-        let idx = self.compass.clamped_waypoint_index(waypoints.len());
-        Some(waypoints[idx].clone())
+        self.compass.current_waypoint(&waypoints)
     }
 
-    #[allow(clippy::cast_possible_truncation)]
-    #[allow(clippy::cast_possible_wrap)]
     fn cycle_compass_waypoint(&mut self, direction: i32) {
         let waypoints = self.toy_manager.active_toy().compass_waypoints();
         self.compass.cycle_waypoint(direction, waypoints.len());
     }
 
     fn render_compass_scene(&mut self, ui: &mut egui::Ui, rect: egui::Rect) {
-        draw_background(ui, rect);
-        draw_center_divider(ui, rect);
-
         let (mut vector_4d, waypoint_title) =
             if let Some(waypoint) = self.current_compass_waypoint() {
                 let reference = self
@@ -211,32 +157,8 @@ impl FourDeersApp {
             }
         }
 
-        let magnitude_label = format_magnitude(magnitude_4d(vector_4d));
-        let gadget = TetrahedronGadget::from_4d_vector_with_quaternion(
-            vector_4d,
-            self.compass.rotation,
-            1.0,
-        )
-        .with_base_label(magnitude_label)
-        .with_tip_label(waypoint_title);
-
-        let eye_sep = self.settings.stereo.eye_separation;
-        let proj_dist = self.settings.stereo.projection_distance;
-        render_stereo_views(
-            ui,
-            rect,
-            eye_sep,
-            proj_dist,
-            ProjectionMode::Orthographic,
-            |painter, projector, _view_rect| {
-                render_tetrahedron_with_projector(
-                    painter,
-                    &gadget,
-                    projector,
-                    self.compass.frame_mode,
-                );
-            },
-        );
+        self.compass
+            .render(ui, rect, vector_4d, waypoint_title, self.settings.stereo);
     }
 
     fn render_map_scene(&mut self, ui: &mut egui::Ui, rect: egui::Rect) {
@@ -335,17 +257,7 @@ impl FourDeersApp {
         if let Some(last_pos) = self.last_drag_pos {
             match self.active_view {
                 ActiveView::Compass => {
-                    let delta = pos - last_pos;
-                    let yaw_rot = UnitQuaternion::from_axis_angle(
-                        &Vector3::y_axis(),
-                        delta.x * ROTATION_SENSITIVITY,
-                    );
-                    let pitch_rot = UnitQuaternion::from_axis_angle(
-                        &Vector3::x_axis(),
-                        delta.y * ROTATION_SENSITIVITY,
-                    );
-                    let incremental = pitch_rot * yaw_rot;
-                    self.compass.rotation = incremental * self.compass.rotation;
+                    self.compass.handle_drag(last_pos, pos);
                 }
                 ActiveView::Map => {
                     if matches!(self.drag_view, Some(DragView::Right)) {
@@ -507,10 +419,8 @@ impl FourDeersApp {
         );
 
         if self.active_view == ActiveView::Compass {
-            let frame_label = self.compass.frame_mode.display_label();
-            render_tap_zone_label(left_painter, left_rect, Zone::South, frame_label, None);
-            render_tap_zone_label(right_painter, right_rect, Zone::South, "Prev", None);
-            render_tap_zone_label(right_painter, right_rect, Zone::SouthEast, "Next", None);
+            self.compass
+                .render_overlays(left_painter, left_rect, right_painter, right_rect);
         }
 
         if self.active_view == ActiveView::Map {
@@ -749,20 +659,9 @@ impl FourDeersApp {
         right_rect: egui::Rect,
         pos: egui::Pos2,
     ) {
-        if left_zone == Some(Zone::South) {
-            self.compass.toggle_frame_mode();
-            return;
-        }
-
-        if right_rect.contains(pos) {
-            let zone = zone_from_rect(right_rect, pos, ZoneMode::NineZones);
-            if zone == Some(Zone::South) {
-                self.cycle_compass_waypoint(-1);
-            }
-            if zone == Some(Zone::SouthEast) {
-                self.cycle_compass_waypoint(1);
-            }
-        }
+        let waypoints_len = self.toy_manager.active_toy().compass_waypoints().len();
+        self.compass
+            .handle_tap(left_zone, right_rect, pos, waypoints_len);
     }
 
     fn handle_map_tap(&mut self, left_zone: Option<Zone>, right_rect: egui::Rect, pos: egui::Pos2) {
