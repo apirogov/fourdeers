@@ -51,7 +51,7 @@ pub fn render_stereo_views(
 
 #[cfg(test)]
 mod tests {
-    use crate::camera::Camera;
+    use crate::camera::{Camera, CameraProjection};
     use crate::render::{
         FourDSettings, StereoSettings, TesseractRenderConfig, TesseractRenderContext,
     };
@@ -86,7 +86,14 @@ mod tests {
                 stereo: StereoSettings::default(),
             };
 
-            let ctx = TesseractRenderContext::from_config(&test_verts, &indices, &camera, config);
+            let projection = CameraProjection::new(&camera);
+            let ctx = TesseractRenderContext::from_config(
+                &test_verts,
+                &indices,
+                &camera,
+                projection,
+                config,
+            );
             let transformed = ctx.transform_vertices();
 
             let qr_inv = camera.rotation_4d().inverse_q_right_only();

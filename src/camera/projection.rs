@@ -2,6 +2,7 @@ use nalgebra::{Matrix4, Rotation3, Vector3, Vector4};
 
 use crate::camera::Camera;
 
+#[derive(Clone)]
 pub(crate) struct CameraProjection {
     mat_4d: Matrix4<f32>,
     offset_4d: Vector4<f32>,

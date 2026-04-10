@@ -2,7 +2,7 @@ use eframe::egui;
 use nalgebra::{UnitQuaternion, Vector4};
 use std::collections::HashMap;
 
-use crate::camera::{Camera, Direction4D};
+use crate::camera::{Camera, CameraProjection, Direction4D};
 use crate::colors::LABEL_INACTIVE;
 use crate::input::{
     zone_to_movement_action, DragState, DragView, TapAnalysis, TetraId, Zone, ZoneMode,
@@ -60,10 +60,12 @@ impl SceneView {
             four_d: params.four_d,
             stereo: params.stereo,
         };
+        let projection = CameraProjection::new(params.camera);
         let ctx = TesseractRenderContext::from_config(
             params.vertices,
             params.indices,
             params.camera,
+            projection,
             config,
         );
 

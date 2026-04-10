@@ -116,6 +116,7 @@ impl MapRenderer {
             params.waypoints,
             params.geometry_bounds,
         );
+        let map_transform = CameraProjection::new(&self.camera);
         let views = create_stereo_projectors(
             rect,
             params.stereo.eye_separation,
@@ -128,10 +129,11 @@ impl MapRenderer {
             (&left_painter, &views.left_projector, views.left_rect),
             (&right_painter, &views.right_projector, views.right_rect),
         ] {
-            self.render_tesseract_wireframe(painter, projector, view_rect);
+            self.render_tesseract_wireframe(painter, projector, &map_transform, view_rect);
             self.render_slice_volume(
                 painter,
                 projector,
+                &map_transform,
                 params.scene_camera,
                 &bounds,
                 view_rect,
@@ -140,6 +142,7 @@ impl MapRenderer {
             self.render_waypoints(
                 painter,
                 projector,
+                &map_transform,
                 params.scene_camera,
                 params.waypoints,
                 &bounds,
@@ -148,6 +151,7 @@ impl MapRenderer {
             self.render_camera_position(
                 painter,
                 projector,
+                &map_transform,
                 params.scene_camera,
                 &bounds,
                 params.frame_mode,
@@ -156,6 +160,7 @@ impl MapRenderer {
         self.compute_waypoint_tap_zones(
             &views.left_projector,
             &views.right_projector,
+            &map_transform,
             params.scene_camera,
             params.waypoints,
             &bounds,
@@ -166,6 +171,7 @@ impl MapRenderer {
         &self,
         painter: &egui::Painter,
         projector: &StereoProjector,
+        map_transform: &CameraProjection,
         _view_rect: egui::Rect,
     ) {
         let config = TesseractRenderConfig {
@@ -179,6 +185,7 @@ impl MapRenderer {
             &self.tesseract_vertices,
             &self.tesseract_indices,
             &self.camera,
+            map_transform.clone(),
             config,
         );
         let transformed = ctx.transform_vertices();
@@ -275,6 +282,7 @@ impl MapRenderer {
         &self,
         painter: &egui::Painter,
         projector: &StereoProjector,
+        map_transform: &CameraProjection,
         scene_camera: &Camera,
         bounds: &Bounds4D,
         view_rect: egui::Rect,
@@ -283,7 +291,6 @@ impl MapRenderer {
         let norm_cam = normalize_to_tesseract(scene_camera.position, bounds);
         let w = scene_camera.slice_rotation().basis_w();
         let slice_normal = Vector4::new(w[0], w[1], w[2], w[3]);
-        let map_transform = CameraProjection::new(&self.camera);
         let near_z = -self.projection_distance + NEAR_MARGIN;
         let cross_section_4d = compute_slice_cross_section(
             &self.tesseract_vertices,
@@ -391,16 +398,17 @@ impl MapRenderer {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn render_waypoints(
         &self,
         painter: &egui::Painter,
         projector: &StereoProjector,
+        map_transform: &CameraProjection,
         scene_camera: &Camera,
         waypoints: &[CompassWaypoint],
         bounds: &Bounds4D,
         frame_mode: CompassFrameMode,
     ) {
-        let map_transform = CameraProjection::new(&self.camera);
         let slice_info = SliceInfo::new(scene_camera, self.w_thickness);
         for wp in waypoints {
             let norm_pos = normalize_to_tesseract(wp.position, bounds);
@@ -457,12 +465,12 @@ impl MapRenderer {
         &self,
         painter: &egui::Painter,
         projector: &StereoProjector,
+        map_transform: &CameraProjection,
         scene_camera: &Camera,
         bounds: &Bounds4D,
         frame_mode: CompassFrameMode,
     ) {
         let norm_cam = normalize_to_tesseract(scene_camera.position, bounds);
-        let map_transform = CameraProjection::new(&self.camera);
         let slice_info = SliceInfo::new(scene_camera, self.w_thickness);
         let s3d = map_transform.project(norm_cam).0;
         if s3d.z <= -self.projection_distance {
@@ -537,12 +545,12 @@ impl MapRenderer {
         &mut self,
         left_projector: &StereoProjector,
         right_projector: &StereoProjector,
+        map_transform: &CameraProjection,
         _scene_camera: &Camera,
         waypoints: &[CompassWaypoint],
         bounds: &Bounds4D,
     ) {
         self.waypoint_tap_zones.clear();
-        let map_transform = CameraProjection::new(&self.camera);
         for (idx, wp) in waypoints.iter().enumerate() {
             let norm_pos = normalize_to_tesseract(wp.position, bounds);
             let s3d = map_transform.project(norm_pos).0;

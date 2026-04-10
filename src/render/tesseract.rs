@@ -58,9 +58,9 @@ impl<'a> TesseractRenderContext<'a> {
         vertices: &'a [Vector4<f32>],
         indices: &'a [u16],
         camera: &'a Camera,
+        projection: CameraProjection,
         config: TesseractRenderConfig,
     ) -> Self {
-        let projection = CameraProjection::new(camera);
         let w_half = config.four_d.w_thickness * 0.5;
 
         Self {
