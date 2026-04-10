@@ -91,16 +91,14 @@ impl PolytopeType {
 #[must_use]
 pub fn create_polytope(kind: PolytopeType) -> (Vec<Vector4<f32>>, Vec<u16>) {
     match kind {
-        PolytopeType::FiveCell => create_5_cell(),
-        PolytopeType::EightCell => create_8_cell(),
-        PolytopeType::SixteenCell => create_16_cell(),
-        PolytopeType::TwentyFourCell => create_24_cell(),
-        PolytopeType::SixHundredCell => create_600_cell(),
-        PolytopeType::HundredTwentyCell => create_120_cell(),
+        PolytopeType::FiveCell => crate::polytopes_data::create_5_cell(),
+        PolytopeType::EightCell => crate::polytopes_data::create_8_cell(),
+        PolytopeType::SixteenCell => crate::polytopes_data::create_16_cell(),
+        PolytopeType::TwentyFourCell => crate::polytopes_data::create_24_cell(),
+        PolytopeType::SixHundredCell => crate::polytopes_data::create_600_cell(),
+        PolytopeType::HundredTwentyCell => crate::polytopes_data::create_120_cell(),
     }
 }
-
-include!("polytopes_data.rs");
 
 #[cfg(test)]
 mod tests {
@@ -165,7 +163,7 @@ mod tests {
     }
 
     macro_rules! polytope_tests {
-        ($name:ident, $create_fn:ident, $v:expr, $e:expr, $deg:expr, $anti:expr) => {
+        ($name:ident, $create_fn:path, $v:expr, $e:expr, $deg:expr, $anti:expr) => {
             #[test]
             fn $name() {
                 let (vertices, indices) = $create_fn();
@@ -196,12 +194,54 @@ mod tests {
         };
     }
 
-    polytope_tests!(test_5_cell, create_5_cell, 5, 10, 4, 0);
-    polytope_tests!(test_8_cell, create_8_cell, 16, 32, 4, 8);
-    polytope_tests!(test_16_cell, create_16_cell, 8, 24, 6, 4);
-    polytope_tests!(test_24_cell, create_24_cell, 24, 96, 8, 12);
-    polytope_tests!(test_600_cell, create_600_cell, 120, 720, 12, 60);
-    polytope_tests!(test_120_cell, create_120_cell, 600, 1200, 4, 300);
+    polytope_tests!(
+        test_5_cell,
+        crate::polytopes_data::create_5_cell,
+        5,
+        10,
+        4,
+        0
+    );
+    polytope_tests!(
+        test_8_cell,
+        crate::polytopes_data::create_8_cell,
+        16,
+        32,
+        4,
+        8
+    );
+    polytope_tests!(
+        test_16_cell,
+        crate::polytopes_data::create_16_cell,
+        8,
+        24,
+        6,
+        4
+    );
+    polytope_tests!(
+        test_24_cell,
+        crate::polytopes_data::create_24_cell,
+        24,
+        96,
+        8,
+        12
+    );
+    polytope_tests!(
+        test_600_cell,
+        crate::polytopes_data::create_600_cell,
+        120,
+        720,
+        12,
+        60
+    );
+    polytope_tests!(
+        test_120_cell,
+        crate::polytopes_data::create_120_cell,
+        600,
+        1200,
+        4,
+        300
+    );
 
     #[test]
     fn test_polytope_type_metadata() {

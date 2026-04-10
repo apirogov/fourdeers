@@ -7,6 +7,7 @@ pub mod geometry;
 pub mod input;
 pub mod map;
 pub mod polytopes;
+pub(crate) mod polytopes_data;
 pub mod render;
 pub mod rotation4d;
 pub mod tetrahedron;
