@@ -54,6 +54,7 @@ pub struct TransformedVertex {
 
 impl<'a> TesseractRenderContext<'a> {
     #[must_use]
+    #[allow(private_interfaces)]
     pub fn from_config(
         vertices: &'a [Vector4<f32>],
         indices: &'a [u16],

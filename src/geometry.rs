@@ -78,6 +78,7 @@ impl VertexDedup {
     }
 }
 
+#[derive(Clone)]
 pub(crate) struct ConvexPolyhedron {
     pub vertices: Vec<Vector3<f32>>,
     pub edges: Vec<[usize; 2]>,
