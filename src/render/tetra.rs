@@ -237,7 +237,7 @@ fn render_tetra_arrow(
         let arrow_head_size = gadget.arrow_head_size() * style.arrow_head_scale;
         if arrow_vec.length() > arrow_head_size {
             draw_arrow_head(
-                painter,
+                batch,
                 arrow_end,
                 arrow_vec,
                 arrow_head_size,

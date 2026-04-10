@@ -15,9 +15,10 @@ pub use style::{w_to_color, CompassFrameMode, FourDSettings};
 pub use tesseract::{TesseractRenderConfig, TesseractRenderContext, TransformedVertex};
 pub use tetra::{compass_vertex_label, TetraLabelMode, TetraStyle};
 pub(crate) use tetra::{render_tetrahedron, render_tetrahedron_with_projector};
+pub(crate) use ui::draw_arrow_head;
 pub use ui::{
-    draw_arrow_head, draw_background, draw_center_divider, render_common_menu_half,
-    render_dual_outlined_text, render_outlined_text, render_tap_zone_label,
+    draw_background, draw_center_divider, render_common_menu_half, render_dual_outlined_text,
+    render_outlined_text, render_tap_zone_label,
 };
 
 pub(crate) use projection::NEAR_PLANE_THRESHOLD;

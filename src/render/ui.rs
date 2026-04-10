@@ -69,8 +69,8 @@ pub fn render_common_menu_half(painter: &egui::Painter, rect: egui::Rect) {
     render_tap_zone_label(painter, rect, Zone::NorthWest, "Menu", None);
 }
 
-pub fn draw_arrow_head(
-    painter: &egui::Painter,
+pub(crate) fn draw_arrow_head(
+    batch: &mut crate::render::batch::LineBatch,
     tip: egui::Pos2,
     direction: egui::Vec2,
     head_size: f32,
@@ -82,11 +82,7 @@ pub fn draw_arrow_head(
     let arrow_left = arrow_base + perp * (head_size * ARROW_HEAD_HALF_WIDTH);
     let arrow_right = arrow_base - perp * (head_size * ARROW_HEAD_HALF_WIDTH);
 
-    painter.add(egui::Shape::convex_polygon(
-        vec![tip, arrow_left, arrow_right],
-        color,
-        egui::Stroke::NONE,
-    ));
+    batch.add_convex_polygon_filled(&[tip, arrow_left, arrow_right], color);
 }
 
 pub fn render_outlined_text(

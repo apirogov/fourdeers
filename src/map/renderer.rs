@@ -177,7 +177,6 @@ impl MapRenderer {
             let mut batch = LineBatch::new(SLICE_EDGE_STROKE_WIDTH);
             self.draw_slice_volume(
                 &mut batch,
-                painter,
                 projector,
                 &map_transform,
                 &frame_data.slice,
@@ -372,7 +371,6 @@ impl MapRenderer {
     fn draw_slice_volume(
         &self,
         batch: &mut LineBatch,
-        painter: &egui::Painter,
         projector: &StereoProjector,
         map_transform: &CameraProjection,
         data: &SliceVolumeData,
@@ -387,11 +385,12 @@ impl MapRenderer {
             Vec::new()
         };
         if screen_pts.len() >= 3 {
-            painter.add(egui::Shape::convex_polygon(
-                screen_pts,
+            batch.add_convex_polygon(
+                &screen_pts,
                 crate::colors::SLICE_GREEN_FILL,
-                egui::Stroke::new(SLICE_FILL_STROKE_WIDTH, SLICE_GREEN),
-            ));
+                SLICE_FILL_STROKE_WIDTH,
+                SLICE_GREEN,
+            );
             if let Some(poly) = &data.poly {
                 let rays =
                     compute_frustum_rays(scene_camera, view_rect, stereo, bounds, map_transform);
@@ -406,11 +405,12 @@ impl MapRenderer {
                 if clipped.vertices.len() >= 3 {
                     let vis_screen = convex_hull_screen(&clipped.vertices, projector);
                     if vis_screen.len() >= 3 {
-                        painter.add(egui::Shape::convex_polygon(
-                            vis_screen,
+                        batch.add_convex_polygon(
+                            &vis_screen,
                             crate::colors::VISIBILITY_DARK_GREEN_FILL,
-                            egui::Stroke::new(1.0, VISIBILITY_DARK_GREEN),
-                        ));
+                            1.0,
+                            VISIBILITY_DARK_GREEN,
+                        );
                     }
                 }
             }
@@ -514,7 +514,7 @@ impl MapRenderer {
                 );
                 if arrow_vec.length() > FORWARD_ARROW_HEAD_SIZE {
                     draw_arrow_head(
-                        painter,
+                        batch,
                         arrow_p.screen_pos,
                         arrow_vec,
                         FORWARD_ARROW_HEAD_SIZE,
