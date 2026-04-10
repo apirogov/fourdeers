@@ -17,7 +17,7 @@ use crate::render::{
     FourDSettings, ProjectionMode, StereoSettings,
 };
 use crate::tetrahedron::{format_magnitude, magnitude_4d, TetrahedronGadget};
-use crate::toy::{CompassWaypoint, ToyManager};
+use crate::toy::{CompassWaypoint, ToyManager, ViewAction};
 
 const DRAG_THRESHOLD: f32 = 10.0;
 const TAP_MAX_DISTANCE: f32 = 10.0;
@@ -528,7 +528,7 @@ impl FourDeersApp {
         left_rect: egui::Rect,
         right_rect: egui::Rect,
         left_menu_rect: egui::Rect,
-        right_menu_rect: egui::Rect,
+        _right_menu_rect: egui::Rect,
     ) {
         render_common_menu_half(left_painter, left_menu_rect);
         let map_label = if self.active_view == ActiveView::Map {
@@ -585,16 +585,12 @@ impl FourDeersApp {
         }
 
         if self.active_view == ActiveView::Main {
-            let dir_label = if self.toy_manager.active_toy().directions_visible() {
-                "Dir:On"
-            } else {
-                "Dir:Off"
-            };
-            render_tap_zone_label(left_painter, left_rect, Zone::NorthEast, dir_label, None);
-
-            self.toy_manager
-                .active_toy()
-                .render_toy_menu(right_painter, right_menu_rect);
+            self.toy_manager.active_toy().render_view_overlays(
+                left_painter,
+                left_rect,
+                right_painter,
+                right_rect,
+            );
         }
     }
 
@@ -823,18 +819,20 @@ impl FourDeersApp {
             return;
         }
 
-        if self.active_view == ActiveView::Main {
-            if let Some(Zone::NorthEast) = left_zone {
-                self.toy_manager.active_toy_mut().toggle_directions();
-                return;
-            }
-        }
-
         let Some(analysis) = self.analyze_tap_for_active_toy(visualization_rect, pos) else {
             return;
         };
 
-        self.toy_manager.active_toy_mut().handle_tap(&analysis);
+        let action = self.toy_manager.active_toy_mut().handle_tap(&analysis);
+        match action {
+            ViewAction::SwitchView(id) => {
+                self.toy_manager.active_toy_mut().set_active_view(&id);
+            }
+            ViewAction::ToggleMenu => {
+                self.menu_open = !self.menu_open;
+            }
+            ViewAction::None => {}
+        }
     }
 
     fn handle_compass_tap(

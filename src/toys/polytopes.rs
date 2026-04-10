@@ -16,7 +16,7 @@ use crate::render::{
     split_stereo_views, FourDSettings, StereoSettings, TesseractRenderConfig,
     TesseractRenderContext,
 };
-use crate::toy::{CompassWaypoint, Toy};
+use crate::toy::{CompassWaypoint, Toy, ViewAction};
 
 const TAP_MOVE_SPEED: f32 = 0.15;
 const HOLD_MOVE_SPEED: f32 = 0.08;
@@ -270,23 +270,27 @@ impl Toy for PolytopesToy {
         }
     }
 
-    fn render_toy_menu(&self, painter: &egui::Painter, rect: egui::Rect) {
+    fn render_view_overlays(
+        &self,
+        left_painter: &egui::Painter,
+        left_rect: egui::Rect,
+        right_painter: &egui::Painter,
+        right_rect: egui::Rect,
+    ) {
+        let dir_label = if self.show_directions {
+            "Dir:On"
+        } else {
+            "Dir:Off"
+        };
+        render_tap_zone_label(left_painter, left_rect, Zone::NorthEast, dir_label, None);
+
         let rot_label = if self.right_view_4d_rotation {
             "Rot:4D"
         } else {
             "Rot:3D"
         };
-        // Indicator in top-right of right view (gray since not interactive)
         let gray = Some(LABEL_INACTIVE);
-        render_tap_zone_label(painter, rect, Zone::NorthEast, rot_label, gray);
-    }
-
-    fn toggle_directions(&mut self) {
-        self.show_directions = !self.show_directions;
-    }
-
-    fn directions_visible(&self) -> bool {
-        self.show_directions
+        render_tap_zone_label(right_painter, right_rect, Zone::NorthEast, rot_label, gray);
     }
 
     fn set_stereo_settings(&mut self, settings: &crate::render::StereoSettings) {
@@ -297,16 +301,22 @@ impl Toy for PolytopesToy {
         self.four_d = *settings;
     }
 
-    fn handle_tap(&mut self, analysis: &TapAnalysis) {
-        // Toggle 4D rotation mode on right view center tap
+    fn handle_tap(&mut self, analysis: &TapAnalysis) -> ViewAction {
+        if analysis.is_left_view && analysis.zone == Zone::NorthEast {
+            self.show_directions = !self.show_directions;
+            return ViewAction::None;
+        }
+
         if !analysis.is_left_view && analysis.zone == Zone::Center {
             self.right_view_4d_rotation = !self.right_view_4d_rotation;
-            return;
+            return ViewAction::None;
         }
 
         if let Some(action) = Self::zone_to_action(analysis.zone, analysis.is_left_view) {
             self.apply_camera_action(action, TAP_MOVE_SPEED);
         }
+
+        ViewAction::None
     }
 
     fn handle_drag(&mut self, _is_left_view: bool, from: egui::Pos2, to: egui::Pos2) {

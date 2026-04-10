@@ -20,6 +20,15 @@ pub struct CompassWaypoint {
     pub position: Vector4<f32>,
 }
 
+/// Action returned by a view's input handler for the app to process.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub enum ViewAction {
+    #[default]
+    None,
+    SwitchView(String),
+    ToggleMenu,
+}
+
 /// The extension point for adding new interactive toys to the app.
 ///
 /// Each toy provides its own scene rendering, sidebar controls, input handling,
@@ -37,8 +46,8 @@ pub trait Toy {
     fn render_sidebar(&mut self, ui: &mut egui::Ui);
     /// Render the toy's 3D/4D scene into the given rect.
     fn render_scene(&mut self, ui: &mut egui::Ui, rect: egui::Rect, show_debug: bool);
-    /// Handle a single-finger tap in a zone.
-    fn handle_tap(&mut self, analysis: &TapAnalysis);
+    /// Handle a single-finger tap in a zone. Returns an action for the app to process.
+    fn handle_tap(&mut self, analysis: &TapAnalysis) -> ViewAction;
     /// Handle an ongoing drag gesture.
     fn handle_drag(&mut self, is_left_view: bool, from: egui::Pos2, to: egui::Pos2);
     /// Handle a held tap (long press).
@@ -95,17 +104,31 @@ pub trait Toy {
     /// Clear any ongoing interaction state (e.g. after a mode switch).
     fn clear_interaction_state(&mut self) {}
 
-    /// Render additional overlay labels on the tap-zone menu.
-    fn render_toy_menu(&self, _painter: &egui::Painter, _rect: egui::Rect) {}
+    /// Render overlay labels (navigation, view-specific controls) on both stereo halves.
+    fn render_view_overlays(
+        &self,
+        _left_painter: &egui::Painter,
+        _left_rect: egui::Rect,
+        _right_painter: &egui::Painter,
+        _right_rect: egui::Rect,
+    ) {
+    }
+
     /// Apply stereo settings from the shared controls.
     fn set_stereo_settings(&mut self, _settings: &StereoSettings) {}
     /// Apply 4D visualization settings from the shared controls.
     fn set_four_d_settings(&mut self, _settings: &FourDSettings) {}
-    /// Toggle the direction tetrahedra overlay on/off.
-    fn toggle_directions(&mut self) {}
-    /// Whether the direction tetrahedra overlay is currently visible.
+
+    /// Switch to a different view by id. No-op if the view doesn't exist.
+    fn set_active_view(&mut self, _id: &str) {}
+    /// The id of the currently active view.
     #[must_use]
-    fn directions_visible(&self) -> bool {
-        false
+    fn active_view_id(&self) -> &str {
+        "scene"
+    }
+    /// List of available views as (id, display_name) pairs.
+    #[must_use]
+    fn available_views(&self) -> Vec<(&str, &str)> {
+        Vec::new()
     }
 }

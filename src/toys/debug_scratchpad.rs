@@ -55,7 +55,9 @@ impl Toy for DebugScratchpadToy {
         );
     }
 
-    fn handle_tap(&mut self, _analysis: &TapAnalysis) {}
+    fn handle_tap(&mut self, _analysis: &TapAnalysis) -> crate::toy::ViewAction {
+        crate::toy::ViewAction::None
+    }
 
     fn handle_drag(&mut self, _is_left_view: bool, _from: egui::Pos2, _to: egui::Pos2) {}
 
