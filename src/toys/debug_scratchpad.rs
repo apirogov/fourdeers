@@ -4,7 +4,7 @@ use eframe::egui;
 
 use crate::render::{draw_background, FourDSettings, StereoSettings};
 use crate::toy::Toy;
-use crate::{DragView, TapAnalysis};
+use crate::DragView;
 
 pub struct DebugScratchpadToy {
     visualization_rect: Option<egui::Rect>,
@@ -55,13 +55,13 @@ impl Toy for DebugScratchpadToy {
         );
     }
 
-    fn handle_tap(&mut self, _analysis: &TapAnalysis) -> crate::toy::ViewAction {
+    fn handle_tap(&mut self, _pos: egui::Pos2, _vis_rect: egui::Rect) -> crate::toy::ViewAction {
         crate::toy::ViewAction::None
     }
 
     fn handle_drag(&mut self, _is_left_view: bool, _from: egui::Pos2, _to: egui::Pos2) {}
 
-    fn handle_hold(&mut self, _analysis: &TapAnalysis) {}
+    fn handle_hold(&mut self, _pos: egui::Pos2, _vis_rect: egui::Rect) {}
 
     fn handle_drag_start(&mut self, _drag_view: DragView) {}
 

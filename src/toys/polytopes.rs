@@ -5,14 +5,28 @@ use nalgebra::Vector4;
 
 use crate::camera::Camera;
 use crate::geometry::Bounds4D;
-use crate::input::{DragView, TapAnalysis, ZoneMode};
+use crate::input::{
+    analyze_tap_in_stereo_view_with_modes, zone_from_rect, DragView, Zone, ZoneMode,
+};
+use crate::map::MapView;
 use crate::polytopes::{create_polytope, PolytopeType};
-use crate::render::{FourDSettings, StereoSettings};
+use crate::render::{
+    render_tap_zone_label, split_stereo_views, CompassFrameMode, FourDSettings, StereoSettings,
+};
 use crate::toy::{CompassWaypoint, Toy, ViewAction};
 use crate::toys::scene_view::{SceneRenderParams, SceneView};
+use crate::view::CompassView;
 
 const POSITION_SLIDER_RANGE: std::ops::RangeInclusive<f32> = -10.0..=10.0;
 const W_SLIDER_RANGE: std::ops::RangeInclusive<f32> = -3.0..=3.0;
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+enum ActiveViewId {
+    #[default]
+    Scene,
+    Map,
+    Compass,
+}
 
 pub struct PolytopesToy {
     camera: Camera,
@@ -22,6 +36,9 @@ pub struct PolytopesToy {
     stereo: StereoSettings,
     four_d: FourDSettings,
     scene_view: SceneView,
+    map: MapView,
+    compass: CompassView,
+    active_view: ActiveViewId,
 }
 
 impl Default for PolytopesToy {
@@ -43,6 +60,9 @@ impl PolytopesToy {
             stereo: StereoSettings::new(),
             four_d: FourDSettings::default(),
             scene_view: SceneView::new(),
+            map: MapView::new(),
+            compass: CompassView::new(),
+            active_view: ActiveViewId::default(),
         }
     }
 
@@ -50,6 +70,14 @@ impl PolytopesToy {
         let (vertices, indices) = create_polytope(self.polytope_type);
         self.cached_vertices = vertices;
         self.cached_indices = indices;
+    }
+
+    fn toggle_view(&mut self, view: ActiveViewId) {
+        self.active_view = if self.active_view == view {
+            ActiveViewId::Scene
+        } else {
+            view
+        };
     }
 
     fn render_camera_controls(&mut self, ui: &mut egui::Ui) {
@@ -134,6 +162,74 @@ impl PolytopesToy {
             }
         });
     }
+
+    fn render_compass(&mut self, ui: &mut egui::Ui, rect: egui::Rect) {
+        let waypoints = self.compass_waypoints();
+        let reference = self.camera.position;
+        let (mut vector_4d, waypoint_title) =
+            if let Some(waypoint) = self.compass.current_waypoint(&waypoints) {
+                (waypoint.position - reference, waypoint.title)
+            } else {
+                (-reference, "Compass")
+            };
+
+        if matches!(self.compass.frame_mode, CompassFrameMode::Camera) {
+            vector_4d = self.camera.world_vector_to_camera_frame(vector_4d);
+        }
+
+        self.compass
+            .render(ui, rect, vector_4d, waypoint_title, self.stereo);
+    }
+
+    fn render_map(&mut self, ui: &mut egui::Ui, rect: egui::Rect) {
+        let waypoints = self.compass_waypoints();
+        let geometry_bounds = self.scene_geometry_bounds();
+        self.map.render(
+            ui,
+            rect,
+            Some(&self.camera),
+            &waypoints,
+            geometry_bounds,
+            self.stereo,
+        );
+    }
+
+    fn handle_scene_tap(&mut self, pos: egui::Pos2, vis_rect: egui::Rect) -> ViewAction {
+        let left_zone_mode = self.scene_view.zone_mode();
+        if let Some(analysis) =
+            analyze_tap_in_stereo_view_with_modes(vis_rect, pos, left_zone_mode, left_zone_mode)
+        {
+            self.scene_view.handle_tap(&analysis, &mut self.camera)
+        } else {
+            ViewAction::None
+        }
+    }
+
+    fn handle_map_tap(&mut self, left_zone: Option<Zone>, right_rect: egui::Rect, pos: egui::Pos2) {
+        let waypoints = self.compass_waypoints();
+        let geometry_bounds = self.scene_geometry_bounds();
+        let action = self.map.handle_tap(
+            left_zone,
+            right_rect,
+            pos,
+            Some(&self.camera),
+            &waypoints,
+            geometry_bounds,
+        );
+        if let ViewAction::SelectWaypoint(idx) = action {
+            self.compass.waypoint_index = idx;
+            self.active_view = ActiveViewId::Compass;
+        }
+    }
+
+    fn handle_scene_hold(&mut self, pos: egui::Pos2, vis_rect: egui::Rect) {
+        let left_zone_mode = self.scene_view.zone_mode();
+        if let Some(analysis) =
+            analyze_tap_in_stereo_view_with_modes(vis_rect, pos, left_zone_mode, left_zone_mode)
+        {
+            self.scene_view.handle_hold(&analysis, &mut self.camera);
+        }
+    }
 }
 
 impl Toy for PolytopesToy {
@@ -191,18 +287,28 @@ impl Toy for PolytopesToy {
     }
 
     fn render_scene(&mut self, ui: &mut egui::Ui, rect: egui::Rect, show_debug: bool) {
-        self.scene_view.render(
-            ui,
-            rect,
-            SceneRenderParams {
-                camera: &self.camera,
-                vertices: &self.cached_vertices,
-                indices: &self.cached_indices,
-                four_d: self.four_d,
-                stereo: self.stereo,
-                show_debug,
-            },
-        );
+        match self.active_view {
+            ActiveViewId::Scene => {
+                self.scene_view.render(
+                    ui,
+                    rect,
+                    SceneRenderParams {
+                        camera: &self.camera,
+                        vertices: &self.cached_vertices,
+                        indices: &self.cached_indices,
+                        four_d: self.four_d,
+                        stereo: self.stereo,
+                        show_debug,
+                    },
+                );
+            }
+            ActiveViewId::Map => {
+                self.render_map(ui, rect);
+            }
+            ActiveViewId::Compass => {
+                self.render_compass(ui, rect);
+            }
+        }
     }
 
     fn render_view_overlays(
@@ -212,8 +318,40 @@ impl Toy for PolytopesToy {
         right_painter: &egui::Painter,
         right_rect: egui::Rect,
     ) {
-        self.scene_view
-            .render_overlays(left_painter, left_rect, right_painter, right_rect);
+        let map_label = if self.active_view == ActiveViewId::Map {
+            "Close"
+        } else {
+            "Map"
+        };
+        render_tap_zone_label(left_painter, left_rect, Zone::West, map_label, None);
+
+        let compass_label = if self.active_view == ActiveViewId::Compass {
+            "Close"
+        } else {
+            "Compass"
+        };
+        render_tap_zone_label(
+            left_painter,
+            left_rect,
+            Zone::SouthWest,
+            compass_label,
+            None,
+        );
+
+        match self.active_view {
+            ActiveViewId::Scene => {
+                self.scene_view
+                    .render_overlays(left_painter, left_rect, right_painter, right_rect);
+            }
+            ActiveViewId::Map => {
+                self.map
+                    .render_overlays(left_painter, left_rect, right_painter, right_rect);
+            }
+            ActiveViewId::Compass => {
+                self.compass
+                    .render_overlays(left_painter, left_rect, right_painter, right_rect);
+            }
+        }
     }
 
     fn set_stereo_settings(&mut self, settings: &StereoSettings) {
@@ -224,24 +362,104 @@ impl Toy for PolytopesToy {
         self.four_d = *settings;
     }
 
-    fn handle_tap(&mut self, analysis: &TapAnalysis) -> ViewAction {
-        self.scene_view.handle_tap(analysis, &mut self.camera)
+    fn handle_tap(&mut self, pos: egui::Pos2, vis_rect: egui::Rect) -> ViewAction {
+        let (left_rect, right_rect) = split_stereo_views(vis_rect);
+        let left_zone = zone_from_rect(left_rect, pos, ZoneMode::NineZones);
+
+        match left_zone {
+            Some(Zone::West) => {
+                self.toggle_view(ActiveViewId::Map);
+                return ViewAction::None;
+            }
+            Some(Zone::SouthWest) => {
+                self.toggle_view(ActiveViewId::Compass);
+                return ViewAction::None;
+            }
+            _ => {}
+        }
+
+        match self.active_view {
+            ActiveViewId::Scene => self.handle_scene_tap(pos, vis_rect),
+            ActiveViewId::Map => {
+                self.handle_map_tap(left_zone, right_rect, pos);
+                ViewAction::None
+            }
+            ActiveViewId::Compass => {
+                let waypoints_len = self.compass_waypoints().len();
+                self.compass
+                    .handle_tap(left_zone, right_rect, pos, waypoints_len);
+                ViewAction::None
+            }
+        }
     }
 
-    fn handle_drag(&mut self, _is_left_view: bool, from: egui::Pos2, to: egui::Pos2) {
-        self.scene_view.handle_drag(&mut self.camera, from, to);
+    fn handle_drag(&mut self, is_left_view: bool, from: egui::Pos2, to: egui::Pos2) {
+        match self.active_view {
+            ActiveViewId::Scene => {
+                self.scene_view.handle_drag(&mut self.camera, from, to);
+            }
+            ActiveViewId::Map => {
+                if !is_left_view {
+                    self.map.handle_drag(from, to);
+                }
+            }
+            ActiveViewId::Compass => {
+                self.compass.handle_drag(from, to);
+            }
+        }
     }
 
-    fn handle_hold(&mut self, analysis: &TapAnalysis) {
-        self.scene_view.handle_hold(analysis, &mut self.camera);
+    fn handle_hold(&mut self, pos: egui::Pos2, vis_rect: egui::Rect) {
+        match self.active_view {
+            ActiveViewId::Scene => {
+                self.handle_scene_hold(pos, vis_rect);
+            }
+            ActiveViewId::Map => {
+                let (_, right_rect) = split_stereo_views(vis_rect);
+                self.map.handle_hold(right_rect, pos);
+            }
+            ActiveViewId::Compass => {}
+        }
     }
 
     fn handle_drag_start(&mut self, drag_view: DragView) {
-        self.scene_view.handle_drag_start(drag_view);
+        if self.active_view == ActiveViewId::Scene {
+            self.scene_view.handle_drag_start(drag_view);
+        }
     }
 
     fn handle_keyboard(&mut self, ctx: &egui::Context) {
-        self.scene_view.handle_keyboard(ctx, &mut self.camera);
+        ctx.input(|i| {
+            if i.key_pressed(egui::Key::C) {
+                self.toggle_view(ActiveViewId::Compass);
+            }
+            if i.key_pressed(egui::Key::G) {
+                self.toggle_view(ActiveViewId::Map);
+            }
+        });
+
+        match self.active_view {
+            ActiveViewId::Scene => {
+                self.scene_view.handle_keyboard(ctx, &mut self.camera);
+            }
+            ActiveViewId::Map => {
+                self.map.handle_keyboard(ctx);
+            }
+            ActiveViewId::Compass => {
+                let waypoints_len = self.compass_waypoints().len();
+                ctx.input(|i| {
+                    if i.key_pressed(egui::Key::ArrowLeft) {
+                        self.compass.cycle_waypoint(-1, waypoints_len);
+                    }
+                    if i.key_pressed(egui::Key::ArrowRight) {
+                        self.compass.cycle_waypoint(1, waypoints_len);
+                    }
+                    if i.key_pressed(egui::Key::F) {
+                        self.compass.frame_mode = self.compass.frame_mode.other();
+                    }
+                });
+            }
+        }
     }
 
     fn visualization_rect(&self) -> Option<egui::Rect> {
@@ -289,10 +507,36 @@ impl Toy for PolytopesToy {
     }
 
     fn zone_mode_for_view(&self, _is_left_view: bool) -> ZoneMode {
-        self.scene_view.zone_mode()
+        match self.active_view {
+            ActiveViewId::Scene => self.scene_view.zone_mode(),
+            _ => ZoneMode::NineZones,
+        }
     }
 
     fn clear_interaction_state(&mut self) {
-        self.scene_view.clear_interaction_state();
+        if self.active_view == ActiveViewId::Scene {
+            self.scene_view.clear_interaction_state();
+        }
+    }
+
+    fn set_active_view(&mut self, id: &str) {
+        match id {
+            "scene" => self.active_view = ActiveViewId::Scene,
+            "map" => self.active_view = ActiveViewId::Map,
+            "compass" => self.active_view = ActiveViewId::Compass,
+            _ => {}
+        }
+    }
+
+    fn active_view_id(&self) -> &str {
+        match self.active_view {
+            ActiveViewId::Scene => "scene",
+            ActiveViewId::Map => "map",
+            ActiveViewId::Compass => "compass",
+        }
+    }
+
+    fn available_views(&self) -> Vec<(&str, &str)> {
+        vec![("scene", "Scene"), ("map", "Map"), ("compass", "Compass")]
     }
 }

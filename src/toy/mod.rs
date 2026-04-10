@@ -5,7 +5,7 @@ use nalgebra::Vector4;
 
 use crate::camera::Camera;
 use crate::geometry::Bounds4D;
-use crate::input::{DragView, TapAnalysis, ZoneMode};
+use crate::input::{DragView, ZoneMode};
 use crate::render::{FourDSettings, StereoSettings};
 
 pub mod manager;
@@ -47,12 +47,12 @@ pub trait Toy {
     fn render_sidebar(&mut self, ui: &mut egui::Ui);
     /// Render the toy's 3D/4D scene into the given rect.
     fn render_scene(&mut self, ui: &mut egui::Ui, rect: egui::Rect, show_debug: bool);
-    /// Handle a single-finger tap in a zone. Returns an action for the app to process.
-    fn handle_tap(&mut self, analysis: &TapAnalysis) -> ViewAction;
+    /// Handle a single-finger tap. The toy performs its own zone analysis based on the active view.
+    fn handle_tap(&mut self, pos: egui::Pos2, vis_rect: egui::Rect) -> ViewAction;
     /// Handle an ongoing drag gesture.
     fn handle_drag(&mut self, is_left_view: bool, from: egui::Pos2, to: egui::Pos2);
-    /// Handle a held tap (long press).
-    fn handle_hold(&mut self, analysis: &TapAnalysis);
+    /// Handle a held tap (long press). The toy performs its own zone analysis.
+    fn handle_hold(&mut self, pos: egui::Pos2, vis_rect: egui::Rect);
     /// Called when a drag gesture starts.
     fn handle_drag_start(&mut self, drag_view: DragView);
 
