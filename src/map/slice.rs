@@ -108,11 +108,11 @@ mod tests {
     use crate::rotation4d::Rotation4D;
     use crate::test_utils::assert_approx_eq;
 
-    use super::super::transform::MapViewTransform;
     use super::super::{
         make_4d_rotated_camera, NEAR_MARGIN, TESSERACT_CROSS_SECTION_EDGE_COUNT,
         TESSERACT_CROSS_SECTION_VERTEX_COUNT, TESSERACT_EDGE_COUNT, TESSERACT_FACES,
     };
+    use crate::camera::CameraProjection;
 
     use super::*;
 
@@ -382,7 +382,7 @@ mod tests {
             compute_cross_section_edges(&vertices, &TESSERACT_FACES, slice_normal, slice_origin);
         let cross = compute_slice_cross_section(&vertices, &indices, slice_normal, slice_origin);
         let map_camera = make_4d_rotated_camera();
-        let map_transform = MapViewTransform::new(&map_camera);
+        let map_transform = CameraProjection::new(&map_camera);
         let proj = StereoProjector::new(
             egui::Pos2::new(200.0, 200.0),
             100.0,
@@ -393,7 +393,7 @@ mod tests {
         let cross_screen: Vec<egui::Pos2> = cross
             .iter()
             .filter_map(|p| {
-                let p3 = map_transform.project_to_3d(*p);
+                let p3 = map_transform.project(*p).0;
                 if p3.z > near_z {
                     proj.project_3d(p3.x, p3.y, p3.z)
                 } else {
@@ -403,8 +403,8 @@ mod tests {
             .map(|p| p.screen_pos)
             .collect();
         for [p0, p1] in &cs_edges {
-            let s0 = map_transform.project_to_3d(*p0);
-            let s1 = map_transform.project_to_3d(*p1);
+            let s0 = map_transform.project(*p0).0;
+            let s1 = map_transform.project(*p1).0;
             if s0.z <= near_z || s1.z <= near_z {
                 continue;
             }
@@ -605,7 +605,7 @@ mod tests {
         let cs_edges =
             compute_cross_section_edges(&vertices, &TESSERACT_FACES, slice_normal, slice_origin);
         let map_camera = make_4d_rotated_camera();
-        let map_transform = MapViewTransform::new(&map_camera);
+        let map_transform = CameraProjection::new(&map_camera);
         let proj = StereoProjector::new(
             egui::Pos2::new(200.0, 200.0),
             100.0,
@@ -616,7 +616,7 @@ mod tests {
         let cross_screen: Vec<egui::Pos2> = cross
             .iter()
             .filter_map(|p| {
-                let p3 = map_transform.project_to_3d(*p);
+                let p3 = map_transform.project(*p).0;
                 if p3.z > near_z {
                     proj.project_3d(p3.x, p3.y, p3.z)
                 } else {
@@ -626,8 +626,8 @@ mod tests {
             .map(|p| p.screen_pos)
             .collect();
         for [p0, p1] in &cs_edges {
-            let s0 = map_transform.project_to_3d(*p0);
-            let s1 = map_transform.project_to_3d(*p1);
+            let s0 = map_transform.project(*p0).0;
+            let s1 = map_transform.project(*p1).0;
             if s0.z <= near_z || s1.z <= near_z {
                 continue;
             }

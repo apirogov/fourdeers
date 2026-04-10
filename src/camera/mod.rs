@@ -36,6 +36,10 @@ use nalgebra::{UnitQuaternion, Vector3, Vector4};
 
 use crate::rotation4d::{Rotation4D, RotationPlane};
 
+pub mod projection;
+
+pub(crate) use projection::CameraProjection;
+
 pub const ROTATION_SENSITIVITY: f32 = 0.005;
 const DEFAULT_CAMERA_POSITION: Vector4<f32> = Vector4::new(0.0, 0.0, -5.0, 0.0);
 

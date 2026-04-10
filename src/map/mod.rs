@@ -23,8 +23,9 @@ pub mod bounds;
 pub mod helpers;
 pub mod renderer;
 pub mod slice;
-pub mod transform;
 pub mod visibility;
+
+pub(crate) use crate::camera::CameraProjection;
 
 pub use bounds::{compute_bounds, normalize_to_tesseract};
 pub use renderer::MapRenderer;

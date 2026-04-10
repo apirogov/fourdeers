@@ -1,7 +1,7 @@
 use eframe::egui;
 use nalgebra::{Vector3, Vector4};
 
-use crate::camera::Camera;
+use crate::camera::{Camera, CameraProjection};
 use crate::colors::ARROW_FORWARD;
 use crate::geometry::{clip_polyhedron_by_plane, Bounds4D};
 use crate::polytopes::{create_polytope, PolytopeType};
@@ -16,7 +16,6 @@ use crate::toy::CompassWaypoint;
 use super::bounds::{compute_bounds, direction_to_tesseract, normalize_to_tesseract};
 use super::helpers::{edge_axis, render_tetrahedron_in_map};
 use super::slice::{compute_cross_section_edges, compute_slice_cross_section, SliceInfo};
-use super::transform::MapViewTransform;
 use super::visibility::{
     build_cross_section_polyhedron, clip_segment_to_screen, compute_frustum_planes,
     compute_frustum_rays, convex_hull_screen,
@@ -270,7 +269,7 @@ impl MapRenderer {
         let norm_cam = normalize_to_tesseract(scene_camera.position, bounds);
         let w = scene_camera.slice_rotation().basis_w();
         let slice_normal = Vector4::new(w[0], w[1], w[2], w[3]);
-        let map_transform = MapViewTransform::new(&self.camera);
+        let map_transform = CameraProjection::new(&self.camera);
         let near_z = -self.projection_distance + NEAR_MARGIN;
         let cross_section_4d = compute_slice_cross_section(
             &self.tesseract_vertices,
@@ -281,7 +280,7 @@ impl MapRenderer {
         let cross_section_3d: Vec<Vector3<f32>> = cross_section_4d
             .iter()
             .filter_map(|p4d| {
-                let pt3d = map_transform.project_to_3d(*p4d);
+                let pt3d = map_transform.project(*p4d).0;
                 if pt3d.z > near_z {
                     Some(pt3d)
                 } else {
@@ -334,7 +333,7 @@ impl MapRenderer {
             // Key insight: because we work entirely in 2D screen space, the frustum cone is
             // defined purely by angular relationships which perspective projection preserves.
             // The exact far distance chosen in step 4 doesn't matter — only the direction.
-            let cam_3d = map_transform.project_to_3d(norm_cam);
+            let cam_3d = map_transform.project(norm_cam).0;
             if cam_3d.z > near_z {
                 let poly = build_cross_section_polyhedron(&cs_edges, &map_transform);
                 if poly.vertices.len() >= 3 {
@@ -387,7 +386,7 @@ impl MapRenderer {
         bounds: &Bounds4D,
         frame_mode: CompassFrameMode,
     ) {
-        let map_transform = MapViewTransform::new(&self.camera);
+        let map_transform = CameraProjection::new(&self.camera);
         let slice_info = SliceInfo::new(scene_camera, self.w_thickness);
         for wp in waypoints {
             let norm_pos = normalize_to_tesseract(wp.position, bounds);
@@ -395,7 +394,7 @@ impl MapRenderer {
                 CompassFrameMode::Camera => scene_camera.world_vector_to_camera_frame(norm_pos),
                 CompassFrameMode::World => norm_pos,
             };
-            let s3d = map_transform.project_to_3d(norm_pos);
+            let s3d = map_transform.project(norm_pos).0;
             if s3d.z <= -self.projection_distance {
                 continue;
             }
@@ -449,9 +448,9 @@ impl MapRenderer {
         frame_mode: CompassFrameMode,
     ) {
         let norm_cam = normalize_to_tesseract(scene_camera.position, bounds);
-        let map_transform = MapViewTransform::new(&self.camera);
+        let map_transform = CameraProjection::new(&self.camera);
         let slice_info = SliceInfo::new(scene_camera, self.w_thickness);
-        let s3d = map_transform.project_to_3d(norm_cam);
+        let s3d = map_transform.project(norm_cam).0;
         if s3d.z <= -self.projection_distance {
             return;
         }
@@ -484,7 +483,7 @@ impl MapRenderer {
 
         let forward_4d = scene_camera.project_camera_3d_to_world_4d(scene_camera.forward_vector());
         let forward_tess = direction_to_tesseract(forward_4d, bounds);
-        let forward_3d = map_transform.direction_to_3d(forward_tess);
+        let forward_3d = map_transform.project_direction(forward_tess);
         let forward_len = forward_3d.norm();
         if forward_len > 1e-10 {
             let forward_dir = forward_3d / forward_len;
@@ -529,10 +528,10 @@ impl MapRenderer {
         bounds: &Bounds4D,
     ) {
         self.waypoint_tap_zones.clear();
-        let map_transform = MapViewTransform::new(&self.camera);
+        let map_transform = CameraProjection::new(&self.camera);
         for (idx, wp) in waypoints.iter().enumerate() {
             let norm_pos = normalize_to_tesseract(wp.position, bounds);
-            let s3d = map_transform.project_to_3d(norm_pos);
+            let s3d = map_transform.project(norm_pos).0;
             if s3d.z <= -self.projection_distance {
                 continue;
             }

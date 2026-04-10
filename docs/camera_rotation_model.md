@@ -147,14 +147,21 @@ The same stored pair `(q_left, q_right)` is used in two distinct ways:
 v' = q_left * v * q_right^{-1}
 ```
 
-This is the full standard rotation. Used in `Rotation4D::rotate_point`, `basis_vectors`, `to_matrix`, etc. For projecting 4D vertices into 3D screen space (used by both the scene view and the map view), the rotation is decomposed as:
+This is the full standard rotation. Used in `Rotation4D::rotate_point`, `basis_vectors`, `to_matrix`, etc. For projecting 4D vertices into 3D screen space, the shared `CameraProjection` struct encapsulates the decomposition:
 
+```
+projection = CameraProjection::new(camera)              // or ::with_object_rotation for scene
+(xyz, w)    = projection.project(vertex)                 // position: mat_4d * v - offset, then mat_3d * r.xyz
+direction   = projection.project_direction(dir)          // direction: mat_4d * d, then mat_3d * r.xyz
+```
+
+Internally this computes:
 ```
 mat_4d = (I, q_right)^{-1}.to_matrix()     // undo tilt: applies q_right^{-1} from the right only
 mat_3d = q_left^{-1}.to_rotation_matrix()   // undo look: applies q_left^{-1} from the left only
 ```
 
-This maps 4D world positions → tilt-adjusted 4D → 3D (by using only XYZ components) → look-adjusted 3D. Both the scene renderer and the map renderer use this same pattern.
+Both the scene renderer and the map renderer use `CameraProjection` for this transformation.
 
 ### For movement (deriving translation directions)
 

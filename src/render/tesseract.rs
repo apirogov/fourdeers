@@ -4,7 +4,7 @@ use eframe::egui;
 use nalgebra::{UnitQuaternion, Vector4};
 use std::collections::HashMap;
 
-use crate::camera::{format_4d_vector, Camera};
+use crate::camera::{format_4d_vector, Camera, CameraProjection};
 use crate::input::{TetraId, Zone};
 use crate::rotation4d::Rotation4D;
 use crate::tetrahedron::{tetrahedron_layout, TetrahedronGadget};
@@ -22,9 +22,7 @@ const ZONE_LABEL_FONT_SIZE: f32 = 10.0;
 pub struct TesseractRenderContext<'a> {
     pub vertices: &'a [Vector4<f32>],
     pub indices: &'a [u16],
-    mat_4d: nalgebra::Matrix4<f32>,
-    offset_4d: nalgebra::Vector4<f32>,
-    mat_3d: nalgebra::Matrix4<f32>,
+    projection: CameraProjection,
     pub w_half: f32,
     pub camera: Camera,
     pub w_color_intensity: f32,
@@ -83,40 +81,13 @@ impl<'a> TesseractRenderContext<'a> {
             config.rotation_angles.zw,
         );
 
-        let inv_q_left = camera.rotation_4d.q_left().inverse();
+        let projection = CameraProjection::with_object_rotation(camera, &object_rotation);
         let w_half = config.four_d.w_thickness * 0.5;
-        let camera_4d_rotation_inverse = camera.rotation_4d.inverse_q_right_only();
-
-        let combined_4d = object_rotation.then(&camera_4d_rotation_inverse);
-        let mat_4d = combined_4d.to_matrix();
-        let offset_4d = camera_4d_rotation_inverse.rotate_vector(camera.position);
-
-        let cam_3d = inv_q_left.to_rotation_matrix();
-        let mat_3d = nalgebra::Matrix4::new(
-            cam_3d[(0, 0)],
-            cam_3d[(0, 1)],
-            cam_3d[(0, 2)],
-            0.0,
-            cam_3d[(1, 0)],
-            cam_3d[(1, 1)],
-            cam_3d[(1, 2)],
-            0.0,
-            cam_3d[(2, 0)],
-            cam_3d[(2, 1)],
-            cam_3d[(2, 2)],
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            1.0,
-        );
 
         Self {
             vertices,
             indices,
-            mat_4d,
-            offset_4d,
-            mat_3d,
+            projection,
             w_half,
             camera: camera.clone(),
             w_color_intensity: config.four_d.w_color_intensity,
@@ -129,14 +100,13 @@ impl<'a> TesseractRenderContext<'a> {
         self.vertices
             .iter()
             .map(|v| {
-                let p_4d = self.mat_4d * v - self.offset_4d;
-                let result = self.mat_3d * p_4d;
+                let (xyz, w) = self.projection.project(*v);
                 TransformedVertex {
-                    x: result.x,
-                    y: result.y,
-                    z: result.z,
-                    w: p_4d.w,
-                    in_slice: p_4d.w >= -self.w_half && p_4d.w <= self.w_half,
+                    x: xyz.x,
+                    y: xyz.y,
+                    z: xyz.z,
+                    w,
+                    in_slice: w >= -self.w_half && w <= self.w_half,
                 }
             })
             .collect()
