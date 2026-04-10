@@ -315,7 +315,7 @@ impl MapRenderer {
         };
         if screen_pts.len() >= 3 {
             painter.add(egui::Shape::convex_polygon(
-                screen_pts.clone(),
+                screen_pts,
                 crate::colors::SLICE_GREEN_FILL,
                 egui::Stroke::new(SLICE_FILL_STROKE_WIDTH, SLICE_GREEN),
             ));

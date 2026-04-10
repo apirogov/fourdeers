@@ -23,7 +23,7 @@ pub struct TesseractRenderContext<'a> {
     pub indices: &'a [u16],
     projection: CameraProjection,
     pub w_half: f32,
-    pub camera: Camera,
+    pub camera: &'a Camera,
     pub w_color_intensity: f32,
     pub projection_distance: f32,
 }
@@ -57,7 +57,7 @@ impl<'a> TesseractRenderContext<'a> {
     pub fn from_config(
         vertices: &'a [Vector4<f32>],
         indices: &'a [u16],
-        camera: &Camera,
+        camera: &'a Camera,
         config: TesseractRenderConfig,
     ) -> Self {
         let projection = CameraProjection::new(camera);
@@ -68,7 +68,7 @@ impl<'a> TesseractRenderContext<'a> {
             indices,
             projection,
             w_half,
-            camera: camera.clone(),
+            camera,
             w_color_intensity: config.four_d.w_color_intensity,
             projection_distance: config.stereo.projection_distance,
         }
