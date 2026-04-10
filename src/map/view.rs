@@ -4,7 +4,7 @@ use crate::camera::{Camera, Direction4D};
 use crate::colors::LABEL_INACTIVE;
 use crate::geometry::Bounds4D;
 use crate::input::{zone_from_rect, zone_to_movement_action, Zone, ZoneMode};
-use crate::map::{compute_bounds, MapRenderer};
+use crate::map::{compute_bounds, MapRenderParams, MapRenderer};
 use crate::render::{
     draw_background, draw_center_divider, render_tap_zone_label, CompassFrameMode, StereoSettings,
 };
@@ -43,11 +43,13 @@ impl MapView {
             self.renderer.render(
                 ui,
                 rect,
-                camera,
-                waypoints,
-                stereo,
-                self.frame_mode,
-                geometry_bounds,
+                &MapRenderParams {
+                    scene_camera: camera,
+                    waypoints,
+                    stereo,
+                    frame_mode: self.frame_mode,
+                    geometry_bounds,
+                },
             );
         } else {
             draw_background(ui, rect);

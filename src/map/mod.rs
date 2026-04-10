@@ -29,7 +29,7 @@ pub mod visibility;
 pub(crate) use crate::camera::CameraProjection;
 
 pub use bounds::{compute_bounds, normalize_to_tesseract};
-pub use renderer::MapRenderer;
+pub use renderer::{MapRenderParams, MapRenderer};
 pub use view::MapView;
 
 pub(super) const BOUNDS_PADDING_FACTOR: f32 = 0.2;

@@ -33,6 +33,14 @@ const SLICE_EDGE_STROKE_WIDTH: f32 = 2.0;
 const FORWARD_ARROW_STROKE_WIDTH: f32 = 2.0;
 const FORWARD_ARROW_HEAD_SIZE: f32 = 10.0;
 
+pub struct MapRenderParams<'a> {
+    pub scene_camera: &'a Camera,
+    pub waypoints: &'a [CompassWaypoint],
+    pub stereo: StereoSettings,
+    pub frame_mode: CompassFrameMode,
+    pub geometry_bounds: Option<Bounds4D>,
+}
+
 pub struct MapRenderer {
     camera: Camera,
     tesseract_vertices: Vec<Vector4<f32>>,
@@ -100,24 +108,18 @@ impl MapRenderer {
         self.camera.set_pitch_r(scene_camera.pitch_r());
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub fn render(
-        &mut self,
-        ui: &mut egui::Ui,
-        rect: egui::Rect,
-        scene_camera: &Camera,
-        waypoints: &[CompassWaypoint],
-        stereo: StereoSettings,
-        frame_mode: CompassFrameMode,
-        geometry_bounds: Option<Bounds4D>,
-    ) {
+    pub fn render(&mut self, ui: &mut egui::Ui, rect: egui::Rect, params: &MapRenderParams<'_>) {
         draw_background(ui, rect);
         draw_center_divider(ui, rect);
-        let bounds = compute_bounds(scene_camera, waypoints, geometry_bounds);
+        let bounds = compute_bounds(
+            params.scene_camera,
+            params.waypoints,
+            params.geometry_bounds,
+        );
         let views = create_stereo_projectors(
             rect,
-            stereo.eye_separation,
-            stereo.projection_distance,
+            params.stereo.eye_separation,
+            params.stereo.projection_distance,
             ProjectionMode::Perspective,
         );
         let left_painter = ui.painter().with_clip_rect(views.left_rect);
@@ -127,22 +129,35 @@ impl MapRenderer {
             (&right_painter, &views.right_projector, views.right_rect),
         ] {
             self.render_tesseract_wireframe(painter, projector, view_rect);
-            self.render_slice_volume(painter, projector, scene_camera, &bounds, view_rect, stereo);
+            self.render_slice_volume(
+                painter,
+                projector,
+                params.scene_camera,
+                &bounds,
+                view_rect,
+                params.stereo,
+            );
             self.render_waypoints(
                 painter,
                 projector,
-                scene_camera,
-                waypoints,
+                params.scene_camera,
+                params.waypoints,
                 &bounds,
-                frame_mode,
+                params.frame_mode,
             );
-            self.render_camera_position(painter, projector, scene_camera, &bounds, frame_mode);
+            self.render_camera_position(
+                painter,
+                projector,
+                params.scene_camera,
+                &bounds,
+                params.frame_mode,
+            );
         }
         self.compute_waypoint_tap_zones(
             &views.left_projector,
             &views.right_projector,
-            scene_camera,
-            waypoints,
+            params.scene_camera,
+            params.waypoints,
             &bounds,
         );
     }
