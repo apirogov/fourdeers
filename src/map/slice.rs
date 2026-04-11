@@ -112,12 +112,12 @@ mod tests {
 
     use crate::camera::Camera;
     use crate::polytopes::{create_polytope, PolytopeType};
-    use crate::render::{ProjectionMode, StereoProjector};
+    use crate::render::DEFAULT_PROJECTION_DISTANCE;
     use crate::rotation4d::Rotation4D;
     use crate::test_utils::assert_approx_eq;
 
     use super::super::{
-        make_4d_rotated_camera, NEAR_MARGIN, TESSERACT_CROSS_SECTION_EDGE_COUNT,
+        make_4d_rotated_camera, make_projector, NEAR_MARGIN, TESSERACT_CROSS_SECTION_EDGE_COUNT,
         TESSERACT_CROSS_SECTION_VERTEX_COUNT, TESSERACT_EDGE_COUNT, TESSERACT_FACES,
     };
     use crate::camera::CameraProjection;
@@ -391,13 +391,8 @@ mod tests {
         let cross = compute_slice_cross_section(&vertices, &indices, slice_normal, slice_origin);
         let map_camera = make_4d_rotated_camera();
         let map_transform = CameraProjection::new(&map_camera);
-        let proj = StereoProjector::new(
-            egui::Pos2::new(200.0, 200.0),
-            100.0,
-            3.0,
-            ProjectionMode::Perspective,
-        );
-        let near_z = -3.0 + NEAR_MARGIN;
+        let proj = make_projector();
+        let near_z = -DEFAULT_PROJECTION_DISTANCE + NEAR_MARGIN;
         let cross_screen: Vec<egui::Pos2> = cross
             .iter()
             .filter_map(|p| {
@@ -616,13 +611,8 @@ mod tests {
             compute_cross_section_edges(&vertices, &TESSERACT_FACES, slice_normal, slice_origin);
         let map_camera = make_4d_rotated_camera();
         let map_transform = CameraProjection::new(&map_camera);
-        let proj = StereoProjector::new(
-            egui::Pos2::new(200.0, 200.0),
-            100.0,
-            3.0,
-            ProjectionMode::Perspective,
-        );
-        let near_z = -3.0 + NEAR_MARGIN;
+        let proj = make_projector();
+        let near_z = -DEFAULT_PROJECTION_DISTANCE + NEAR_MARGIN;
         let cross_screen: Vec<egui::Pos2> = cross
             .iter()
             .filter_map(|p| {

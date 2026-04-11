@@ -8,9 +8,9 @@ use crate::input::{
     zone_to_movement_action, DragState, DragView, TapAnalysis, TetraId, Zone, ZoneMode,
 };
 use crate::render::{
-    draw_background, draw_center_divider, render_stereo_views, render_tap_zone_label,
-    split_stereo_views, FourDSettings, StereoSettings, TesseractRenderConfig,
-    TesseractRenderContext, W_THICKNESS_DRAG_SENSITIVITY, W_THICKNESS_MAX, W_THICKNESS_MIN,
+    adjust_w_thickness, draw_background, draw_center_divider, render_stereo_views,
+    render_tap_zone_label, split_stereo_views, FourDSettings, StereoSettings,
+    TesseractRenderConfig, TesseractRenderContext,
 };
 use crate::toy::ViewAction;
 
@@ -146,8 +146,7 @@ impl SceneView {
 
         match self.drag_state.drag_view {
             Some(DragView::Left) => {
-                *w_thickness = (*w_thickness + delta.x * W_THICKNESS_DRAG_SENSITIVITY)
-                    .clamp(W_THICKNESS_MIN, W_THICKNESS_MAX);
+                *w_thickness = adjust_w_thickness(*w_thickness, delta.x);
             }
             Some(DragView::Right) => {
                 if self.right_view_4d_rotation {

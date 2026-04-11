@@ -7,6 +7,10 @@ pub const W_THICKNESS_DRAG_SENSITIVITY: f32 = 0.02;
 pub const W_THICKNESS_MIN: f32 = 0.1;
 pub const W_THICKNESS_MAX: f32 = 5.0;
 
+pub fn adjust_w_thickness(w_thickness: f32, delta_x: f32) -> f32 {
+    (w_thickness + delta_x * W_THICKNESS_DRAG_SENSITIVITY).clamp(W_THICKNESS_MIN, W_THICKNESS_MAX)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CompassFrameMode {
     #[default]

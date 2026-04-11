@@ -39,6 +39,7 @@ pub(super) const NEAR_MARGIN: f32 = 0.5;
 pub(super) const TETRA_SCALE_WAYPOINT: f32 = 0.15;
 pub(super) const TETRA_SCALE_CAMERA: f32 = 0.2;
 pub(super) const FORWARD_ARROW_LENGTH: f32 = 0.4;
+pub(super) const MAP_TETRA_ARROW_STROKE_WIDTH: f32 = 2.0;
 pub(super) use crate::render::TESSERACT_EDGE_STROKE_WIDTH as EDGE_STROKE_WIDTH;
 pub(super) const TAP_RADIUS_MULTIPLIER: f32 = 5.0;
 pub(super) const TAP_RADIUS_MIN: f32 = 15.0;
@@ -99,7 +100,7 @@ pub(super) fn make_projector() -> StereoProjector {
     StereoProjector::new(
         egui::Pos2::new(200.0, 200.0),
         100.0,
-        3.0,
+        crate::render::DEFAULT_PROJECTION_DISTANCE,
         ProjectionMode::Perspective,
     )
 }

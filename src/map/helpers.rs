@@ -7,7 +7,7 @@ use crate::tetrahedron::TetrahedronGadget;
 
 use super::{
     EDGE_STROKE_WIDTH, MAP_ARROW_HEAD_SCALE, MAP_DISTANCE_FONT_SIZE, MAP_DISTANCE_LABEL_OFFSET_Y,
-    MAP_TIP_FONT_SIZE, MAP_TIP_LABEL_OFFSET_Y, MAP_VERTEX_FONT_SIZE,
+    MAP_TETRA_ARROW_STROKE_WIDTH, MAP_TIP_FONT_SIZE, MAP_TIP_LABEL_OFFSET_Y, MAP_VERTEX_FONT_SIZE,
 };
 
 pub(super) fn lerp_color(a: egui::Color32, b: egui::Color32, t: f32) -> egui::Color32 {
@@ -63,7 +63,7 @@ pub(super) fn render_tetrahedron_in_map(
         show_component_values: false,
         component_value_font_size: 0.0,
         component_value_normal_offset: 0.0,
-        arrow_stroke_width: 2.0,
+        arrow_stroke_width: MAP_TETRA_ARROW_STROKE_WIDTH,
         arrow_color: egui::Color32::from_rgba_unmultiplied(
             ARROW_PRIMARY.r(),
             ARROW_PRIMARY.g(),

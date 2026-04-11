@@ -11,8 +11,8 @@ use crate::input::{
 use crate::map::{MapRenderParams, MapView};
 use crate::polytopes::{create_polytope, PolytopeType};
 use crate::render::{
-    render_tap_zone_label, split_stereo_views, CompassFrameMode, FourDSettings, StereoSettings,
-    W_THICKNESS_DRAG_SENSITIVITY, W_THICKNESS_MAX, W_THICKNESS_MIN,
+    adjust_w_thickness, render_tap_zone_label, split_stereo_views, CompassFrameMode, FourDSettings,
+    StereoSettings,
 };
 use crate::toy::{CompassWaypoint, Toy, ViewAction};
 use crate::toys::scene_view::{SceneRenderParams, SceneView};
@@ -20,12 +20,6 @@ use crate::view::CompassView;
 
 const POSITION_SLIDER_RANGE: std::ops::RangeInclusive<f32> = -10.0..=10.0;
 const W_SLIDER_RANGE: std::ops::RangeInclusive<f32> = -3.0..=3.0;
-
-fn adjust_w_thickness(from: egui::Pos2, to: egui::Pos2, w_thickness: &mut f32) {
-    let delta = to - from;
-    *w_thickness = (*w_thickness + delta.x * W_THICKNESS_DRAG_SENSITIVITY)
-        .clamp(W_THICKNESS_MIN, W_THICKNESS_MAX);
-}
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 enum ActiveViewId {
@@ -439,7 +433,8 @@ impl Toy for PolytopesToy {
             }
             ActiveViewId::Map => {
                 if is_left_view {
-                    adjust_w_thickness(from, to, w_thickness);
+                    let delta = to - from;
+                    *w_thickness = adjust_w_thickness(*w_thickness, delta.x);
                 } else {
                     self.map.handle_drag(from, to);
                 }

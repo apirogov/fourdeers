@@ -169,7 +169,7 @@ mod tests {
     fn test_clip_segment_both_in_front() {
         let mt = CameraProjection::new(&Camera::new());
         let proj = make_projector();
-        let near_z = -3.0 + NEAR_MARGIN;
+        let near_z = -crate::render::DEFAULT_PROJECTION_DISTANCE + NEAR_MARGIN;
         let p0 = Vector4::new(0.0, 0.0, 0.0, 0.0);
         let p1 = Vector4::new(1.0, 0.0, 0.0, 0.0);
         assert!(clip_segment_to_screen(&mt, &proj, near_z, p0, p1).is_some());
@@ -240,7 +240,7 @@ mod tests {
         );
         let norm_cam = normalize_to_tesseract(scene_camera.position, &bounds);
         let cam_3d = map_transform.project(norm_cam).0;
-        let near_z = -3.0 + NEAR_MARGIN;
+        let near_z = -crate::render::DEFAULT_PROJECTION_DISTANCE + NEAR_MARGIN;
         if cam_3d.z <= near_z {
             return;
         }
@@ -286,7 +286,7 @@ mod tests {
         );
         let norm_cam = normalize_to_tesseract(scene_camera.position, &bounds);
         let cam_3d = map_transform.project(norm_cam).0;
-        let near_z = -3.0 + NEAR_MARGIN;
+        let near_z = -crate::render::DEFAULT_PROJECTION_DISTANCE + NEAR_MARGIN;
         if cam_3d.z <= near_z {
             return;
         }
