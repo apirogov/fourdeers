@@ -352,16 +352,32 @@ impl Toy for PolytopesToy {
 
         match self.active_view {
             ActiveViewId::Scene => {
-                self.scene_view
-                    .render_overlays(left_painter, left_rect, right_painter, right_rect);
+                self.scene_view.render_overlays(
+                    left_painter,
+                    left_rect,
+                    right_painter,
+                    right_rect,
+                    self.four_d.w_thickness,
+                    &self.camera,
+                );
             }
             ActiveViewId::Map => {
-                self.map
-                    .render_overlays(left_painter, left_rect, right_painter, right_rect);
+                self.map.render_overlays(
+                    left_painter,
+                    left_rect,
+                    right_painter,
+                    right_rect,
+                    self.four_d.w_thickness,
+                );
             }
             ActiveViewId::Compass => {
-                self.compass
-                    .render_overlays(left_painter, left_rect, right_painter, right_rect);
+                self.compass.render_overlays(
+                    left_painter,
+                    left_rect,
+                    right_painter,
+                    right_rect,
+                    self.four_d.w_thickness,
+                );
             }
         }
     }

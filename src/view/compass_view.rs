@@ -69,6 +69,7 @@ impl CompassView {
         left_rect: egui::Rect,
         right_painter: &egui::Painter,
         right_rect: egui::Rect,
+        _w_thickness: f32,
     ) {
         let frame_label = self.frame_mode.display_label();
         render_tap_zone_label(left_painter, left_rect, Zone::South, frame_label, None);

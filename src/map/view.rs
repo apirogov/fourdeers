@@ -43,6 +43,7 @@ impl MapView {
         left_rect: egui::Rect,
         right_painter: &egui::Painter,
         right_rect: egui::Rect,
+        w_thickness: f32,
     ) {
         let frame_label = self.frame_mode.display_label();
         render_tap_zone_label(left_painter, left_rect, Zone::South, frame_label, None);
@@ -52,7 +53,7 @@ impl MapView {
         } else {
             "Labels: Off"
         };
-        render_tap_zone_label(left_painter, left_rect, Zone::NorthEast, labels_label, None);
+        render_tap_zone_label(left_painter, left_rect, Zone::North, labels_label, None);
         render_tap_zone_label(left_painter, left_rect, Zone::SouthEast, "Reset", None);
 
         let rot_label = if self.rotation_3d { "Rot:3D" } else { "Rot:4D" };
@@ -61,6 +62,15 @@ impl MapView {
             right_rect,
             Zone::NorthEast,
             rot_label,
+            Some(LABEL_INACTIVE),
+        );
+
+        let w_label = format!("WØ: {:.1}", w_thickness);
+        render_tap_zone_label(
+            right_painter,
+            right_rect,
+            Zone::SouthEast,
+            &w_label,
             Some(LABEL_INACTIVE),
         );
     }
@@ -83,7 +93,7 @@ impl MapView {
                 self.frame_mode = self.frame_mode.other();
                 return ViewAction::None;
             }
-            Some(Zone::NorthEast) => {
+            Some(Zone::North) => {
                 self.renderer.toggle_labels();
                 return ViewAction::None;
             }

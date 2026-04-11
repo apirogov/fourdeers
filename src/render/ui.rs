@@ -6,6 +6,7 @@ use crate::colors::{LABEL_DEFAULT, OUTLINE_DEFAULT, VIEWPORT_BG};
 use crate::input::Zone;
 
 const TAP_LABEL_FONT_SIZE: f32 = 11.0;
+const TAP_LABEL_OFFSET: f32 = 4.0;
 const ARROW_HEAD_HALF_WIDTH: f32 = 0.5;
 const OUTLINE_OFFSET: f32 = 0.5;
 
@@ -28,30 +29,48 @@ pub fn render_tap_zone_label(
     text_color: Option<egui::Color32>,
 ) {
     let (label_pos, align) = match zone {
-        Zone::NorthWest => (view_rect.min, egui::Align2::LEFT_TOP),
+        Zone::NorthWest => (
+            egui::Pos2::new(
+                view_rect.min.x + TAP_LABEL_OFFSET,
+                view_rect.min.y + TAP_LABEL_OFFSET,
+            ),
+            egui::Align2::LEFT_TOP,
+        ),
         Zone::NorthEast => (
-            egui::Pos2::new(view_rect.max.x, view_rect.min.y),
+            egui::Pos2::new(
+                view_rect.max.x - TAP_LABEL_OFFSET,
+                view_rect.min.y + TAP_LABEL_OFFSET,
+            ),
             egui::Align2::RIGHT_TOP,
         ),
         Zone::SouthWest => (
-            egui::Pos2::new(view_rect.min.x, view_rect.max.y),
+            egui::Pos2::new(
+                view_rect.min.x + TAP_LABEL_OFFSET,
+                view_rect.max.y - TAP_LABEL_OFFSET,
+            ),
             egui::Align2::LEFT_BOTTOM,
         ),
-        Zone::SouthEast => (view_rect.max, egui::Align2::RIGHT_BOTTOM),
+        Zone::SouthEast => (
+            egui::Pos2::new(
+                view_rect.max.x - TAP_LABEL_OFFSET,
+                view_rect.max.y - TAP_LABEL_OFFSET,
+            ),
+            egui::Align2::RIGHT_BOTTOM,
+        ),
         Zone::North => (
-            egui::Pos2::new(view_rect.center().x, view_rect.min.y),
+            egui::Pos2::new(view_rect.center().x, view_rect.min.y + TAP_LABEL_OFFSET),
             egui::Align2::CENTER_TOP,
         ),
         Zone::South => (
-            egui::Pos2::new(view_rect.center().x, view_rect.max.y),
+            egui::Pos2::new(view_rect.center().x, view_rect.max.y - TAP_LABEL_OFFSET),
             egui::Align2::CENTER_BOTTOM,
         ),
         Zone::West => (
-            egui::Pos2::new(view_rect.min.x, view_rect.center().y),
+            egui::Pos2::new(view_rect.min.x + TAP_LABEL_OFFSET, view_rect.center().y),
             egui::Align2::LEFT_CENTER,
         ),
         Zone::East => (
-            egui::Pos2::new(view_rect.max.x, view_rect.center().y),
+            egui::Pos2::new(view_rect.max.x - TAP_LABEL_OFFSET, view_rect.center().y),
             egui::Align2::RIGHT_CENTER,
         ),
         Zone::Center => (view_rect.center(), egui::Align2::CENTER_CENTER),

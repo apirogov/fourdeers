@@ -28,7 +28,7 @@ pub struct SceneRenderParams<'a> {
 }
 
 pub struct SceneView {
-    pub show_directions: bool,
+    pub info_level: u8,
     pub right_view_4d_rotation: bool,
     pub zone_mode: ZoneMode,
     pub visualization_rect: Option<egui::Rect>,
@@ -40,7 +40,7 @@ impl SceneView {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            show_directions: false,
+            info_level: 0,
             right_view_4d_rotation: false,
             zone_mode: ZoneMode::NineZones,
             visualization_rect: None,
@@ -87,7 +87,7 @@ impl SceneView {
             ctx.render_zone_labels(&right_painter, right_rect);
         }
 
-        if self.show_directions {
+        if self.info_level == 2 {
             let right_rect = split_stereo_views(rect).1;
             let right_painter = ui.painter().with_clip_rect(right_rect);
             ctx.render_tetrahedron_gadget(&right_painter, right_rect, &self.tetrahedron_rotations);
@@ -100,26 +100,41 @@ impl SceneView {
         left_rect: egui::Rect,
         right_painter: &egui::Painter,
         right_rect: egui::Rect,
+        w_thickness: f32,
+        camera: &Camera,
     ) {
-        let dir_label = if self.show_directions {
-            "Dir:On"
-        } else {
-            "Dir:Off"
+        let info_label = match self.info_level {
+            0 => "UI:Min",
+            1 => "UI:Mid",
+            _ => "UI:Max",
         };
-        render_tap_zone_label(left_painter, left_rect, Zone::NorthEast, dir_label, None);
+        render_tap_zone_label(left_painter, left_rect, Zone::North, info_label, None);
 
-        let rot_label = if self.right_view_4d_rotation {
-            "Rot:4D"
-        } else {
-            "Rot:3D"
-        };
-        let gray = Some(LABEL_INACTIVE);
-        render_tap_zone_label(right_painter, right_rect, Zone::NorthEast, rot_label, gray);
+        if self.info_level >= 1 {
+            let gray = Some(LABEL_INACTIVE);
+
+            let rot_label = if self.right_view_4d_rotation {
+                "Rot:4D"
+            } else {
+                "Rot:3D"
+            };
+            render_tap_zone_label(right_painter, right_rect, Zone::NorthEast, rot_label, gray);
+
+            let w_label = format!("WØ: {:.1}", w_thickness);
+            render_tap_zone_label(right_painter, right_rect, Zone::SouthEast, &w_label, gray);
+
+            let pos = camera.position;
+            let pos_label = format!(
+                "X: {:.1} Y: {:.1} Z: {:.1} W: {:.1}",
+                pos.x, pos.y, pos.z, pos.w
+            );
+            render_tap_zone_label(right_painter, right_rect, Zone::South, &pos_label, gray);
+        }
     }
 
     pub fn handle_tap(&mut self, analysis: &TapAnalysis, camera: &mut Camera) -> ViewAction {
-        if analysis.is_left_view && analysis.zone == Zone::NorthEast {
-            self.show_directions = !self.show_directions;
+        if analysis.is_left_view && analysis.zone == Zone::North {
+            self.info_level = (self.info_level + 1) % 3;
             return ViewAction::None;
         }
 
