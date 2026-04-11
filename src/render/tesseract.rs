@@ -157,16 +157,7 @@ impl<'a> TesseractRenderContext<'a> {
         let basis = self.camera.rotation_4d().basis_vectors();
         let entries = compute_zone_layout(&basis, view_rect);
 
-        let label_offsets: [(f32, f32); 8] = [
-            (0.0, -0.5),
-            (0.0, 0.3),
-            (-0.5, 0.0),
-            (0.6, 0.0),
-            (0.0, 0.0),
-            (0.0, 0.0),
-            (0.0, 0.0),
-            (0.0, 0.0),
-        ];
+        let label_offsets: [(f32, f32); 4] = [(0.0, -0.5), (0.0, 0.3), (-0.5, 0.0), (0.6, 0.0)];
 
         let offset = tetrahedron_layout(view_rect).edge_offset;
 
