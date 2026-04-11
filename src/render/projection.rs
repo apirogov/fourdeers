@@ -160,6 +160,7 @@ pub fn render_stereo_views(
 }
 
 #[derive(Debug, Clone, Copy)]
+#[allow(clippy::excessive_precision)]
 pub struct StereoSettings {
     pub eye_separation: f32,
     pub projection_distance: f32,
@@ -174,7 +175,7 @@ impl Default for StereoSettings {
 
 impl StereoSettings {
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             eye_separation: 0.12,
             projection_distance: super::DEFAULT_PROJECTION_DISTANCE,

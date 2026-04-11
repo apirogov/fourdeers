@@ -197,7 +197,6 @@ impl SceneView {
         }
     }
 }
-
 impl Default for SceneView {
     fn default() -> Self {
         Self::new()

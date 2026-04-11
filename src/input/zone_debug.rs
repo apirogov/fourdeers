@@ -16,13 +16,6 @@ pub struct ZoneDebugOptions {
 
 impl Default for ZoneDebugOptions {
     fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl ZoneDebugOptions {
-    #[must_use]
-    pub const fn new() -> Self {
         Self {
             show_boundaries: true,
             show_labels: true,
@@ -31,7 +24,9 @@ impl ZoneDebugOptions {
             label_font_size: 10.0,
         }
     }
+}
 
+impl ZoneDebugOptions {
     #[must_use]
     pub const fn show_boundaries(mut self, show: bool) -> Self {
         self.show_boundaries = show;

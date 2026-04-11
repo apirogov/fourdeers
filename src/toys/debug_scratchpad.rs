@@ -6,13 +6,8 @@ use crate::render::{draw_background, FourDSettings, StereoSettings};
 use crate::toy::Toy;
 use crate::DragView;
 
+#[derive(Default)]
 pub struct DebugScratchpadToy;
-
-impl Default for DebugScratchpadToy {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 
 impl DebugScratchpadToy {
     #[must_use]

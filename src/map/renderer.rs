@@ -74,18 +74,13 @@ struct MapFrameData<'a> {
     camera: Option<PreparedCamera>,
 }
 
+#[derive(Default)]
 pub struct MapRenderer {
     camera: Camera,
     tesseract_vertices: Vec<Vector4<f32>>,
     tesseract_indices: Vec<u16>,
     labels_visible: bool,
     waypoint_tap_zones: Vec<(egui::Pos2, egui::Pos2, f32, usize)>,
-}
-
-impl Default for MapRenderer {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl MapRenderer {

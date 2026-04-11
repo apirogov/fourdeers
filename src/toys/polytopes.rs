@@ -29,6 +29,7 @@ enum ActiveViewId {
     Compass,
 }
 
+#[derive(Default)]
 pub struct PolytopesToy {
     camera: Camera,
     polytope_type: PolytopeType,
@@ -40,12 +41,6 @@ pub struct PolytopesToy {
     map: MapView,
     compass: CompassView,
     active_view: ActiveViewId,
-}
-
-impl Default for PolytopesToy {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl PolytopesToy {
