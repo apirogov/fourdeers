@@ -11,8 +11,8 @@ use crate::tetrahedron::{tetrahedron_layout, TetrahedronGadget};
 
 use super::ui::render_outlined_text;
 use super::{
-    w_to_color, FourDSettings, StereoProjector, StereoSettings, TetraStyle, BASE_LABEL_FONT_SIZE,
-    BASE_LABEL_OFFSET_Y, NEAR_PLANE_THRESHOLD, TESSERACT_EDGE_STROKE_WIDTH,
+    compute_vertex_alpha, w_to_color, FourDSettings, StereoProjector, StereoSettings, TetraStyle,
+    BASE_LABEL_FONT_SIZE, BASE_LABEL_OFFSET_Y, NEAR_PLANE_THRESHOLD, TESSERACT_EDGE_STROKE_WIDTH,
 };
 
 const EDGE_CLIP_MARGIN: f32 = 50.0;
@@ -141,12 +141,13 @@ impl<'a> TesseractRenderContext<'a> {
                 continue;
             }
 
-            let alpha = if t0.in_slice && t1.in_slice { 255 } else { 100 };
+            let alpha_a = compute_vertex_alpha(t0.w, self.w_half);
+            let alpha_b = compute_vertex_alpha(t1.w, self.w_half);
 
             let normalized_w0 = (t0.w / self.w_half).clamp(-1.0, 1.0);
             let normalized_w1 = (t1.w / self.w_half).clamp(-1.0, 1.0);
-            let color_a = w_to_color(normalized_w0, alpha, self.w_color_intensity);
-            let color_b = w_to_color(normalized_w1, alpha, self.w_color_intensity);
+            let color_a = w_to_color(normalized_w0, alpha_a, self.w_color_intensity);
+            let color_b = w_to_color(normalized_w1, alpha_b, self.w_color_intensity);
 
             batch.add_segment_with_gradient(s0, s1, color_a, color_b);
         }

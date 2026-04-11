@@ -6,9 +6,10 @@ use crate::colors::ARROW_FORWARD;
 use crate::geometry::{clip_polyhedron_by_plane, Bounds4D, ConvexPolyhedron};
 use crate::polytopes::{create_polytope, PolytopeType};
 use crate::render::{
-    batch::LineBatch, create_stereo_projectors, draw_arrow_head, draw_background,
-    draw_center_divider, CompassFrameMode, FourDSettings, ProjectionMode, StereoProjector,
-    StereoSettings, TesseractRenderConfig, TesseractRenderContext, TransformedVertex,
+    batch::LineBatch, compute_vertex_alpha, create_stereo_projectors, draw_arrow_head,
+    draw_background, draw_center_divider, CompassFrameMode, FourDSettings, ProjectionMode,
+    StereoProjector, StereoSettings, TesseractRenderConfig, TesseractRenderContext,
+    TransformedVertex,
 };
 use crate::tetrahedron::{compute_component_color, format_magnitude, TetrahedronGadget};
 use crate::toy::CompassWaypoint;
@@ -423,12 +424,14 @@ impl MapRenderer {
                 clip_segment_to_screen(map_transform, projector, data.near_z, *p0, *p1)
             {
                 let w_half = four_d.w_thickness * 0.5;
+                let alpha_a = compute_vertex_alpha(p0.w, w_half);
+                let alpha_b = compute_vertex_alpha(p1.w, w_half);
                 let normalized_w0 = (p0.w / w_half).clamp(-1.0, 1.0);
                 let normalized_w1 = (p1.w / w_half).clamp(-1.0, 1.0);
                 let color_a =
-                    crate::render::w_to_color(normalized_w0, 255, four_d.w_color_intensity);
+                    crate::render::w_to_color(normalized_w0, alpha_a, four_d.w_color_intensity);
                 let color_b =
-                    crate::render::w_to_color(normalized_w1, 255, four_d.w_color_intensity);
+                    crate::render::w_to_color(normalized_w1, alpha_b, four_d.w_color_intensity);
                 batch.add_segment_with_gradient(screen_seg.0, screen_seg.1, color_a, color_b);
             }
         }

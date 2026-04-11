@@ -7,11 +7,20 @@ pub const DEFAULT_EYE_SEPARATION: f32 = 0.12;
 pub const W_THICKNESS_DRAG_SENSITIVITY: f32 = 0.02;
 pub const W_THICKNESS_MIN: f32 = 0.1;
 pub const W_THICKNESS_MAX: f32 = 5.0;
+pub const MIN_VERTEX_ALPHA: u8 = 128;
 
 pub const W_COLOR_NEGATIVE: (f32, f32, f32) = (0.6, 0.2, 0.8);
 pub const W_COLOR_MIDPOINT: (f32, f32, f32) = (1.0, 1.0, 1.0);
 pub const W_COLOR_POSITIVE: (f32, f32, f32) = (1.0, 0.7, 0.0);
 pub const W_COLOR_LUT_SIZE: usize = 1024;
+
+#[must_use]
+pub fn compute_vertex_alpha(w: f32, w_half: f32) -> u8 {
+    let normalized = (w / w_half).clamp(-1.0, 1.0);
+    let t = normalized.abs();
+    let alpha = 255.0 * (1.0 - t) + MIN_VERTEX_ALPHA as f32 * t;
+    alpha as u8
+}
 
 const fn lerp(a: f32, b: f32, t: f32) -> f32 {
     a + (b - a) * t
