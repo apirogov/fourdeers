@@ -3,6 +3,9 @@ use eframe::egui;
 pub const DEFAULT_W_THICKNESS: f32 = 2.5;
 pub const DEFAULT_W_COLOR_INTENSITY: f32 = 0.35;
 pub const DEFAULT_PROJECTION_DISTANCE: f32 = 3.0;
+pub const W_THICKNESS_DRAG_SENSITIVITY: f32 = 0.02;
+pub const W_THICKNESS_MIN: f32 = 0.1;
+pub const W_THICKNESS_MAX: f32 = 5.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CompassFrameMode {

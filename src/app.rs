@@ -5,7 +5,10 @@ use eframe::egui;
 use crate::colors::PANEL_FILL;
 use crate::input::render_zone_debug_overlay;
 use crate::input::{DragView, ZoneDebugOptions, ZoneMode};
-use crate::render::{render_common_menu_half, split_stereo_views, FourDSettings, StereoSettings};
+use crate::render::{
+    render_common_menu_half, split_stereo_views, FourDSettings, StereoSettings, W_THICKNESS_MAX,
+    W_THICKNESS_MIN,
+};
 use crate::toy::{ToyManager, ViewAction};
 
 const DRAG_THRESHOLD: f32 = 10.0;
@@ -153,9 +156,12 @@ impl FourDeersApp {
     fn process_drag(&mut self, pos: egui::Pos2) {
         if let Some(last_pos) = self.last_drag_pos {
             let is_left_view = matches!(self.drag_view, Some(DragView::Left));
-            self.toy_manager
-                .active_toy_mut()
-                .handle_drag(is_left_view, last_pos, pos);
+            self.toy_manager.active_toy_mut().handle_drag(
+                is_left_view,
+                last_pos,
+                pos,
+                &mut self.settings.four_d.w_thickness,
+            );
         }
         self.last_drag_pos = Some(pos);
     }
@@ -310,8 +316,11 @@ impl FourDeersApp {
 
         ui.collapsing("4D Settings", |ui| {
             ui.add(
-                egui::Slider::new(&mut self.settings.four_d.w_thickness, 0.1..=5.0)
-                    .text("W Thickness"),
+                egui::Slider::new(
+                    &mut self.settings.four_d.w_thickness,
+                    W_THICKNESS_MIN..=W_THICKNESS_MAX,
+                )
+                .text("W Thickness"),
             );
             ui.label("Controls the range of W dimension visible in the slice");
 

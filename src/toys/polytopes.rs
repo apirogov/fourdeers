@@ -12,6 +12,7 @@ use crate::map::MapView;
 use crate::polytopes::{create_polytope, PolytopeType};
 use crate::render::{
     render_tap_zone_label, split_stereo_views, CompassFrameMode, FourDSettings, StereoSettings,
+    W_THICKNESS_DRAG_SENSITIVITY, W_THICKNESS_MAX, W_THICKNESS_MIN,
 };
 use crate::toy::{CompassWaypoint, Toy, ViewAction};
 use crate::toys::scene_view::{SceneRenderParams, SceneView};
@@ -19,6 +20,12 @@ use crate::view::CompassView;
 
 const POSITION_SLIDER_RANGE: std::ops::RangeInclusive<f32> = -10.0..=10.0;
 const W_SLIDER_RANGE: std::ops::RangeInclusive<f32> = -3.0..=3.0;
+
+fn adjust_w_thickness(from: egui::Pos2, to: egui::Pos2, w_thickness: &mut f32) {
+    let delta = to - from;
+    *w_thickness = (*w_thickness + delta.x * W_THICKNESS_DRAG_SENSITIVITY)
+        .clamp(W_THICKNESS_MIN, W_THICKNESS_MAX);
+}
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 enum ActiveViewId {
@@ -378,12 +385,18 @@ impl Toy for PolytopesToy {
         }
     }
 
-    fn set_stereo_settings(&mut self, settings: &StereoSettings) {
-        self.stereo = *settings;
-    }
-
     fn set_four_d_settings(&mut self, settings: &FourDSettings) {
         self.four_d = *settings;
+        self.map
+            .renderer
+            .sync_settings(settings, self.stereo.projection_distance);
+    }
+
+    fn set_stereo_settings(&mut self, settings: &StereoSettings) {
+        self.stereo = *settings;
+        self.map
+            .renderer
+            .sync_settings(&self.four_d, settings.projection_distance);
     }
 
     fn handle_tap(&mut self, pos: egui::Pos2, vis_rect: egui::Rect) -> ViewAction {
@@ -417,13 +430,22 @@ impl Toy for PolytopesToy {
         }
     }
 
-    fn handle_drag(&mut self, is_left_view: bool, from: egui::Pos2, to: egui::Pos2) {
+    fn handle_drag(
+        &mut self,
+        is_left_view: bool,
+        from: egui::Pos2,
+        to: egui::Pos2,
+        w_thickness: &mut f32,
+    ) {
         match self.active_view {
             ActiveViewId::Scene => {
-                self.scene_view.handle_drag(&mut self.camera, from, to);
+                self.scene_view
+                    .handle_drag(&mut self.camera, from, to, w_thickness);
             }
             ActiveViewId::Map => {
-                if !is_left_view {
+                if is_left_view {
+                    adjust_w_thickness(from, to, w_thickness);
+                } else {
                     self.map.handle_drag(from, to);
                 }
             }

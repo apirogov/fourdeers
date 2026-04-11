@@ -48,7 +48,13 @@ pub trait Toy {
     /// Handle a single-finger tap. The toy performs its own zone analysis based on the active view.
     fn handle_tap(&mut self, pos: egui::Pos2, vis_rect: egui::Rect) -> ViewAction;
     /// Handle an ongoing drag gesture.
-    fn handle_drag(&mut self, is_left_view: bool, from: egui::Pos2, to: egui::Pos2);
+    fn handle_drag(
+        &mut self,
+        is_left_view: bool,
+        from: egui::Pos2,
+        to: egui::Pos2,
+        w_thickness: &mut f32,
+    );
     /// Handle a held tap (long press). The toy performs its own zone analysis.
     fn handle_hold(&mut self, pos: egui::Pos2, vis_rect: egui::Rect);
     /// Called when a drag gesture starts.

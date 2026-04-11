@@ -10,7 +10,7 @@ use crate::input::{
 use crate::render::{
     draw_background, draw_center_divider, render_stereo_views, render_tap_zone_label,
     split_stereo_views, FourDSettings, StereoSettings, TesseractRenderConfig,
-    TesseractRenderContext,
+    TesseractRenderContext, W_THICKNESS_DRAG_SENSITIVITY, W_THICKNESS_MAX, W_THICKNESS_MIN,
 };
 use crate::toy::ViewAction;
 
@@ -135,13 +135,19 @@ impl SceneView {
         ViewAction::None
     }
 
-    pub fn handle_drag(&mut self, camera: &mut Camera, from: egui::Pos2, to: egui::Pos2) {
+    pub fn handle_drag(
+        &mut self,
+        camera: &mut Camera,
+        from: egui::Pos2,
+        to: egui::Pos2,
+        w_thickness: &mut f32,
+    ) {
         let delta = to - from;
 
         match self.drag_state.drag_view {
             Some(DragView::Left) => {
-                camera.rotate(delta.x, delta.y);
-                self.tetrahedron_rotations.clear();
+                *w_thickness = (*w_thickness + delta.x * W_THICKNESS_DRAG_SENSITIVITY)
+                    .clamp(W_THICKNESS_MIN, W_THICKNESS_MAX);
             }
             Some(DragView::Right) => {
                 if self.right_view_4d_rotation {

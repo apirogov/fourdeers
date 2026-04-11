@@ -106,6 +106,12 @@ impl MapRenderer {
         }
     }
 
+    pub fn sync_settings(&mut self, four_d: &FourDSettings, projection_distance: f32) {
+        self.w_thickness = four_d.w_thickness;
+        self.w_color_intensity = four_d.w_color_intensity;
+        self.projection_distance = projection_distance;
+    }
+
     pub const fn toggle_labels(&mut self) {
         self.labels_visible = !self.labels_visible;
     }

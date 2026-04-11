@@ -54,7 +54,14 @@ impl Toy for DebugScratchpadToy {
         crate::toy::ViewAction::None
     }
 
-    fn handle_drag(&mut self, _is_left_view: bool, _from: egui::Pos2, _to: egui::Pos2) {}
+    fn handle_drag(
+        &mut self,
+        _is_left_view: bool,
+        _from: egui::Pos2,
+        _to: egui::Pos2,
+        _w_thickness: &mut f32,
+    ) {
+    }
 
     fn handle_hold(&mut self, _pos: egui::Pos2, _vis_rect: egui::Rect) {}
 
