@@ -30,6 +30,17 @@ pub use style::{
 pub const STEREO_SCALE_FACTOR: f32 = 0.35;
 pub const TESSERACT_EDGE_STROKE_WIDTH: f32 = 2.5;
 pub(super) const ARROW_STROKE_WIDTH: f32 = 2.0;
+pub(super) const COMPASS_ARROW_STROKE_WIDTH: f32 = 3.0;
+pub(super) const COMPASS_ARROW_HEAD_SCALE: f32 = 20.0;
+pub(super) const ZONE_ARROW_HEAD_SCALE: f32 = 15.0;
+pub(super) const TIP_DOT_RADIUS: f32 = 4.0;
+pub(super) const COMPASS_TIP_LABEL_FONT_SIZE: f32 = 12.0;
+pub(super) const COMPASS_TIP_LABEL_OFFSET_Y: f32 = 15.0;
+pub(super) const ZONE_TIP_LABEL_FONT_SIZE: f32 = 10.0;
+pub(super) const ZONE_TIP_LABEL_OFFSET_Y: f32 = 12.0;
+pub(super) const COMPASS_VERTEX_LABEL_FONT_SIZE: f32 = 16.0;
+pub(super) const ZONE_VERTEX_LABEL_FONT_SIZE: f32 = 14.0;
+pub(super) const ZONE_EDGE_STROKE_WIDTH: f32 = 1.5;
 pub(super) const BASE_LABEL_FONT_SIZE: f32 = 11.0;
 pub(super) const BASE_LABEL_OFFSET_Y: f32 = 18.0;
 pub(super) const ARROW_END_DOT_RADIUS: f32 = 3.0;

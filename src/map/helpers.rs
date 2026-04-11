@@ -7,7 +7,8 @@ use crate::tetrahedron::TetrahedronGadget;
 
 use super::{
     EDGE_STROKE_WIDTH, MAP_ARROW_HEAD_SCALE, MAP_DISTANCE_FONT_SIZE, MAP_DISTANCE_LABEL_OFFSET_Y,
-    MAP_TETRA_ARROW_STROKE_WIDTH, MAP_TIP_FONT_SIZE, MAP_TIP_LABEL_OFFSET_Y, MAP_VERTEX_FONT_SIZE,
+    MAP_TETRA_ARROW_STROKE_WIDTH, MAP_TETRA_LABEL_NORMAL_OFFSET, MAP_TETRA_ORIGIN_DOT_RADIUS,
+    MAP_TETRA_TIP_DOT_RADIUS, MAP_TIP_FONT_SIZE, MAP_TIP_LABEL_OFFSET_Y, MAP_VERTEX_FONT_SIZE,
 };
 
 pub(super) fn lerp_color(a: egui::Color32, b: egui::Color32, t: f32) -> egui::Color32 {
@@ -53,7 +54,7 @@ pub(super) fn render_tetrahedron_in_map(
         } else {
             TetraLabelMode::Hidden
         },
-        label_normal_offset: 0.12,
+        label_normal_offset: MAP_TETRA_LABEL_NORMAL_OFFSET,
         outline_color: egui::Color32::from_rgba_unmultiplied(
             edge_color.r(),
             edge_color.g(),
@@ -71,9 +72,9 @@ pub(super) fn render_tetrahedron_in_map(
             a(alpha * 255.0),
         ),
         arrow_head_scale: MAP_ARROW_HEAD_SCALE,
-        origin_dot_radius: 2.0,
+        origin_dot_radius: MAP_TETRA_ORIGIN_DOT_RADIUS,
         origin_dot_color: ARROW_GLOW,
-        tip_dot_radius: 0.0,
+        tip_dot_radius: MAP_TETRA_TIP_DOT_RADIUS,
         tip_label_font_size: MAP_TIP_FONT_SIZE,
         tip_label_offset_y: -MAP_TIP_LABEL_OFFSET_Y,
         tip_label_color: egui::Color32::from_rgba_unmultiplied(255, 180, 80, a(alpha * 230.0)),

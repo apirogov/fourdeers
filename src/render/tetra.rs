@@ -12,8 +12,13 @@ use crate::tetrahedron::TetrahedronGadget;
 use super::ui::{draw_arrow_head, render_dual_outlined_text, render_outlined_text};
 use super::{
     CompassFrameMode, StereoProjector, ARROW_END_DOT_RADIUS, ARROW_STROKE_WIDTH,
-    BASE_LABEL_FONT_SIZE, BASE_LABEL_OFFSET_Y,
+    BASE_LABEL_FONT_SIZE, BASE_LABEL_OFFSET_Y, COMPASS_ARROW_HEAD_SCALE,
+    COMPASS_ARROW_STROKE_WIDTH, COMPASS_TIP_LABEL_FONT_SIZE, COMPASS_TIP_LABEL_OFFSET_Y,
+    COMPASS_VERTEX_LABEL_FONT_SIZE, TIP_DOT_RADIUS, ZONE_ARROW_HEAD_SCALE, ZONE_EDGE_STROKE_WIDTH,
+    ZONE_TIP_LABEL_FONT_SIZE, ZONE_TIP_LABEL_OFFSET_Y, ZONE_VERTEX_LABEL_FONT_SIZE,
 };
+
+const ORIGIN_DOT_RADIUS: f32 = 2.0;
 
 pub enum TetraLabelMode {
     Compass(CompassFrameMode),
@@ -51,7 +56,7 @@ impl TetraStyle {
         Self {
             edge_stroke_width: ARROW_STROKE_WIDTH,
             edge_color: OBJECT_TINT_NEGATIVE,
-            vertex_label_font_size: 16.0,
+            vertex_label_font_size: COMPASS_VERTEX_LABEL_FONT_SIZE,
             vertex_label_font_proportional: true,
             label_mode: TetraLabelMode::Compass(CompassFrameMode::World),
             label_normal_offset: 0.15,
@@ -59,14 +64,14 @@ impl TetraStyle {
             show_component_values: true,
             component_value_font_size: 11.0,
             component_value_normal_offset: 0.35,
-            arrow_stroke_width: 3.0,
+            arrow_stroke_width: COMPASS_ARROW_STROKE_WIDTH,
             arrow_color: ARROW_PRIMARY,
-            arrow_head_scale: 20.0,
+            arrow_head_scale: COMPASS_ARROW_HEAD_SCALE,
             origin_dot_radius: ARROW_END_DOT_RADIUS,
             origin_dot_color: ARROW_GLOW,
-            tip_dot_radius: 4.0,
-            tip_label_font_size: 12.0,
-            tip_label_offset_y: 15.0,
+            tip_dot_radius: TIP_DOT_RADIUS,
+            tip_label_font_size: COMPASS_TIP_LABEL_FONT_SIZE,
+            tip_label_offset_y: COMPASS_TIP_LABEL_OFFSET_Y,
             tip_label_color: ARROW_TIP,
             base_label_font_size: BASE_LABEL_FONT_SIZE,
             base_label_offset_y: BASE_LABEL_OFFSET_Y,
@@ -76,9 +81,9 @@ impl TetraStyle {
     #[must_use]
     pub fn zone_tetra() -> Self {
         Self {
-            edge_stroke_width: 1.5,
+            edge_stroke_width: ZONE_EDGE_STROKE_WIDTH,
             edge_color: crate::colors::OBJECT_TINT_POSITIVE,
-            vertex_label_font_size: 14.0,
+            vertex_label_font_size: ZONE_VERTEX_LABEL_FONT_SIZE,
             vertex_label_font_proportional: true,
             label_mode: TetraLabelMode::Raw,
             label_normal_offset: 0.0,
@@ -88,12 +93,12 @@ impl TetraStyle {
             component_value_normal_offset: 0.0,
             arrow_stroke_width: ARROW_STROKE_WIDTH,
             arrow_color: ARROW_PRIMARY,
-            arrow_head_scale: 15.0,
-            origin_dot_radius: 2.0,
+            arrow_head_scale: ZONE_ARROW_HEAD_SCALE,
+            origin_dot_radius: ORIGIN_DOT_RADIUS,
             origin_dot_color: ARROW_GLOW,
             tip_dot_radius: ARROW_END_DOT_RADIUS,
-            tip_label_font_size: 10.0,
-            tip_label_offset_y: 12.0,
+            tip_label_font_size: ZONE_TIP_LABEL_FONT_SIZE,
+            tip_label_offset_y: ZONE_TIP_LABEL_OFFSET_Y,
             tip_label_color: ARROW_TIP,
             base_label_font_size: BASE_LABEL_FONT_SIZE,
             base_label_offset_y: BASE_LABEL_OFFSET_Y,
