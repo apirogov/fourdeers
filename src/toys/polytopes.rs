@@ -8,7 +8,7 @@ use crate::geometry::Bounds4D;
 use crate::input::{
     analyze_tap_in_stereo_view_with_modes, zone_from_rect, DragView, Zone, ZoneMode,
 };
-use crate::map::MapView;
+use crate::map::{MapRenderParams, MapView};
 use crate::polytopes::{create_polytope, PolytopeType};
 use crate::render::{
     render_tap_zone_label, split_stereo_views, CompassFrameMode, FourDSettings, StereoSettings,
@@ -191,14 +191,15 @@ impl PolytopesToy {
     fn render_map(&mut self, ui: &mut egui::Ui, rect: egui::Rect) {
         let waypoints = self.compass_waypoints();
         let geometry_bounds = self.scene_geometry_bounds();
-        self.map.render(
-            ui,
-            rect,
-            Some(&self.camera),
-            &waypoints,
+        let params = MapRenderParams {
+            scene_camera: &self.camera,
+            waypoints: &waypoints,
+            stereo: self.stereo,
+            frame_mode: self.map.frame_mode,
             geometry_bounds,
-            self.stereo,
-        );
+            four_d: self.four_d,
+        };
+        self.map.render(ui, rect, &params);
     }
 
     fn handle_scene_tap(&mut self, pos: egui::Pos2, vis_rect: egui::Rect) -> ViewAction {
@@ -387,16 +388,10 @@ impl Toy for PolytopesToy {
 
     fn set_four_d_settings(&mut self, settings: &FourDSettings) {
         self.four_d = *settings;
-        self.map
-            .renderer
-            .sync_settings(settings, self.stereo.projection_distance);
     }
 
     fn set_stereo_settings(&mut self, settings: &StereoSettings) {
         self.stereo = *settings;
-        self.map
-            .renderer
-            .sync_settings(&self.four_d, settings.projection_distance);
     }
 
     fn handle_tap(&mut self, pos: egui::Pos2, vis_rect: egui::Rect) -> ViewAction {

@@ -4,10 +4,8 @@ use crate::camera::{Camera, Direction4D};
 use crate::colors::LABEL_INACTIVE;
 use crate::geometry::Bounds4D;
 use crate::input::{zone_from_rect, zone_to_movement_action, Zone, ZoneMode};
-use crate::map::{compute_bounds, MapRenderParams, MapRenderer};
-use crate::render::{
-    draw_background, draw_center_divider, render_tap_zone_label, CompassFrameMode, StereoSettings,
-};
+use crate::map::{compute_bounds, MapRenderer};
+use crate::render::{render_tap_zone_label, CompassFrameMode};
 use crate::toy::ViewAction;
 
 const MAP_HOLD_SPEED: f32 = 0.08;
@@ -34,27 +32,9 @@ impl MapView {
         &mut self,
         ui: &mut egui::Ui,
         rect: egui::Rect,
-        scene_camera: Option<&Camera>,
-        waypoints: &[crate::toy::CompassWaypoint],
-        geometry_bounds: Option<Bounds4D>,
-        stereo: StereoSettings,
+        params: &crate::map::MapRenderParams<'_>,
     ) {
-        if let Some(camera) = scene_camera {
-            self.renderer.render(
-                ui,
-                rect,
-                &MapRenderParams {
-                    scene_camera: camera,
-                    waypoints,
-                    stereo,
-                    frame_mode: self.frame_mode,
-                    geometry_bounds,
-                },
-            );
-        } else {
-            draw_background(ui, rect);
-            draw_center_divider(ui, rect);
-        }
+        self.renderer.render(ui, rect, params);
     }
 
     pub fn render_overlays(

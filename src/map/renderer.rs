@@ -39,6 +39,7 @@ pub struct MapRenderParams<'a> {
     pub stereo: StereoSettings,
     pub frame_mode: CompassFrameMode,
     pub geometry_bounds: Option<Bounds4D>,
+    pub four_d: FourDSettings,
 }
 
 struct PreparedWaypoint {
@@ -77,9 +78,6 @@ pub struct MapRenderer {
     camera: Camera,
     tesseract_vertices: Vec<Vector4<f32>>,
     tesseract_indices: Vec<u16>,
-    w_thickness: f32,
-    w_color_intensity: f32,
-    projection_distance: f32,
     labels_visible: bool,
     waypoint_tap_zones: Vec<(egui::Pos2, egui::Pos2, f32, usize)>,
 }
@@ -98,18 +96,9 @@ impl MapRenderer {
             camera: Camera::new(),
             tesseract_vertices: vertices,
             tesseract_indices: indices,
-            w_thickness: crate::render::DEFAULT_W_THICKNESS,
-            w_color_intensity: crate::render::DEFAULT_W_COLOR_INTENSITY,
-            projection_distance: crate::render::DEFAULT_PROJECTION_DISTANCE,
             labels_visible: false,
             waypoint_tap_zones: Vec::new(),
         }
-    }
-
-    pub fn sync_settings(&mut self, four_d: &FourDSettings, projection_distance: f32) {
-        self.w_thickness = four_d.w_thickness;
-        self.w_color_intensity = four_d.w_color_intensity;
-        self.projection_distance = projection_distance;
     }
 
     pub const fn toggle_labels(&mut self) {
@@ -177,8 +166,13 @@ impl MapRenderer {
                 painter.clip_rect(),
             );
             if self.labels_visible {
-                self.render_vertex_labels(painter, projector, &frame_data.transformed);
-                self.render_edge_labels(painter, projector, &frame_data.transformed);
+                self.render_vertex_labels(painter, projector, &frame_data.transformed, params);
+                self.render_edge_labels(
+                    painter,
+                    projector,
+                    &frame_data.transformed,
+                    params.stereo.projection_distance,
+                );
             }
             let mut batch = LineBatch::new(SLICE_EDGE_STROKE_WIDTH);
             self.draw_slice_volume(
@@ -201,6 +195,7 @@ impl MapRenderer {
             &views.left_projector,
             &views.right_projector,
             &frame_data.waypoints,
+            params.stereo.projection_distance,
         );
     }
 
@@ -211,11 +206,16 @@ impl MapRenderer {
         bounds: &Bounds4D,
         params: &MapRenderParams<'_>,
     ) -> MapFrameData<'a> {
-        let tesseract_ctx = self.build_tesseract_context(map_transform);
+        let tesseract_ctx = self.build_tesseract_context(map_transform, params);
         let transformed = tesseract_ctx.transform_vertices();
-        let slice = self.prepare_slice_volume(map_transform, scene_camera, bounds);
+        let slice = self.prepare_slice_volume(
+            map_transform,
+            scene_camera,
+            bounds,
+            params.stereo.projection_distance,
+        );
         let waypoints = self.prepare_waypoints(map_transform, scene_camera, bounds, params);
-        let camera = self.prepare_camera(map_transform, scene_camera, bounds, params.frame_mode);
+        let camera = self.prepare_camera(map_transform, scene_camera, bounds, params);
         MapFrameData {
             tesseract_ctx,
             transformed,
@@ -228,13 +228,12 @@ impl MapRenderer {
     fn build_tesseract_context<'a>(
         &'a self,
         map_transform: &CameraProjection,
+        params: &MapRenderParams<'_>,
     ) -> TesseractRenderContext<'a> {
         let config = TesseractRenderConfig {
-            four_d: FourDSettings {
-                w_thickness: self.w_thickness,
-                w_color_intensity: self.w_color_intensity,
-            },
-            stereo: StereoSettings::new().with_projection_distance(self.projection_distance),
+            four_d: params.four_d,
+            stereo: StereoSettings::new()
+                .with_projection_distance(params.stereo.projection_distance),
         };
         TesseractRenderContext::from_config(
             &self.tesseract_vertices,
@@ -250,11 +249,12 @@ impl MapRenderer {
         map_transform: &CameraProjection,
         scene_camera: &Camera,
         bounds: &Bounds4D,
+        projection_distance: f32,
     ) -> SliceVolumeData {
         let norm_cam = normalize_to_tesseract(scene_camera.position, bounds);
         let w = scene_camera.slice_rotation().basis_w();
         let slice_normal = Vector4::new(w[0], w[1], w[2], w[3]);
-        let near_z = -self.projection_distance + NEAR_MARGIN;
+        let near_z = -projection_distance + NEAR_MARGIN;
         let cross_section_4d = compute_slice_cross_section(
             &self.tesseract_vertices,
             &self.tesseract_indices,
@@ -305,7 +305,7 @@ impl MapRenderer {
         bounds: &Bounds4D,
         params: &MapRenderParams<'_>,
     ) -> Vec<PreparedWaypoint> {
-        let slice_info = SliceInfo::new(scene_camera, self.w_thickness);
+        let slice_info = SliceInfo::new(scene_camera, params.four_d.w_thickness);
         let mut result = Vec::new();
         for wp in params.waypoints {
             let norm_pos = normalize_to_tesseract(wp.position, bounds);
@@ -314,7 +314,7 @@ impl MapRenderer {
                 CompassFrameMode::World => norm_pos,
             };
             let s3d = map_transform.project(norm_pos).0;
-            if s3d.z <= -self.projection_distance {
+            if s3d.z <= -params.stereo.projection_distance {
                 continue;
             }
             let (edge_color, alpha) = slice_info.style_for_point(wp.position);
@@ -339,15 +339,15 @@ impl MapRenderer {
         map_transform: &CameraProjection,
         scene_camera: &Camera,
         bounds: &Bounds4D,
-        frame_mode: CompassFrameMode,
+        params: &MapRenderParams<'_>,
     ) -> Option<PreparedCamera> {
         let norm_cam = normalize_to_tesseract(scene_camera.position, bounds);
         let s3d = map_transform.project(norm_cam).0;
-        if s3d.z <= -self.projection_distance {
+        if s3d.z <= -params.stereo.projection_distance {
             return None;
         }
-        let slice_info = SliceInfo::new(scene_camera, self.w_thickness);
-        let vector_4d = match frame_mode {
+        let slice_info = SliceInfo::new(scene_camera, params.four_d.w_thickness);
+        let vector_4d = match params.frame_mode {
             CompassFrameMode::Camera => scene_camera.world_vector_to_camera_frame(norm_cam),
             CompassFrameMode::World => norm_cam,
         };
@@ -537,13 +537,14 @@ impl MapRenderer {
         painter: &egui::Painter,
         projector: &StereoProjector,
         transformed: &[TransformedVertex],
+        params: &MapRenderParams<'_>,
     ) {
-        let w_half = self.w_thickness * 0.5;
+        let w_half = params.four_d.w_thickness * 0.5;
         for (i, tv) in transformed.iter().enumerate() {
             if !tv.in_slice {
                 continue;
             }
-            if tv.z <= -self.projection_distance {
+            if tv.z <= -params.stereo.projection_distance {
                 continue;
             }
             let Some(p) = projector.project_3d(tv.x, tv.y, tv.z) else {
@@ -565,7 +566,8 @@ impl MapRenderer {
                 );
             }
             let normalized_w = (tv.w / w_half).clamp(-1.0, 1.0);
-            let dot_color = crate::render::w_to_color(normalized_w, 180, self.w_color_intensity);
+            let dot_color =
+                crate::render::w_to_color(normalized_w, 180, params.four_d.w_color_intensity);
             painter.circle_filled(p.screen_pos, MAP_WAYPOINT_DOT_RADIUS, dot_color);
         }
     }
@@ -575,9 +577,10 @@ impl MapRenderer {
         painter: &egui::Painter,
         projector: &StereoProjector,
         transformed: &[TransformedVertex],
+        projection_distance: f32,
     ) {
         let font_id = egui::FontId::monospace(MAP_AXIS_FONT_SIZE);
-        let near_plane = self.projection_distance;
+        let near_plane = projection_distance;
         for chunk in self.tesseract_indices.chunks(2) {
             if chunk.len() != 2 {
                 continue;
@@ -618,6 +621,7 @@ impl MapRenderer {
         left_projector: &StereoProjector,
         right_projector: &StereoProjector,
         waypoints: &[PreparedWaypoint],
+        projection_distance: f32,
     ) {
         self.waypoint_tap_zones.clear();
         for (idx, wp) in waypoints.iter().enumerate() {
@@ -627,7 +631,7 @@ impl MapRenderer {
             let Some(right_p) = right_projector.project_3d(wp.s3d.x, wp.s3d.y, wp.s3d.z) else {
                 continue;
             };
-            let z_offset = self.projection_distance + wp.s3d.z;
+            let z_offset = projection_distance + wp.s3d.z;
             if z_offset <= crate::render::NEAR_PLANE_THRESHOLD {
                 continue;
             }
