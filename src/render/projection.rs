@@ -177,7 +177,7 @@ impl StereoSettings {
     #[must_use]
     pub const fn new() -> Self {
         Self {
-            eye_separation: 0.12,
+            eye_separation: super::DEFAULT_EYE_SEPARATION,
             projection_distance: super::DEFAULT_PROJECTION_DISTANCE,
             projection_mode: ProjectionMode::Perspective,
         }
