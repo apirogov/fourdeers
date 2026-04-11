@@ -37,6 +37,29 @@ impl LineBatch {
         self.mesh.add_triangle(idx + 2, idx + 1, idx + 3);
     }
 
+    pub fn add_segment_with_gradient(
+        &mut self,
+        a: egui::Pos2,
+        b: egui::Pos2,
+        color_a: egui::Color32,
+        color_b: egui::Color32,
+    ) {
+        let dir = b - a;
+        let len = dir.length();
+        if len < 1e-10 {
+            return;
+        }
+        let half_w = self.stroke_width * 0.5;
+        let normal = egui::Vec2::new(-dir.y, dir.x) / len * half_w;
+        let idx = self.mesh.vertices.len() as u32;
+        self.mesh.colored_vertex(a + normal, color_a);
+        self.mesh.colored_vertex(a - normal, color_a);
+        self.mesh.colored_vertex(b + normal, color_b);
+        self.mesh.colored_vertex(b - normal, color_b);
+        self.mesh.add_triangle(idx, idx + 1, idx + 2);
+        self.mesh.add_triangle(idx + 2, idx + 1, idx + 3);
+    }
+
     pub fn add_segment_with_width(
         &mut self,
         a: egui::Pos2,

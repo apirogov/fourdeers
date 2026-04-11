@@ -141,13 +141,14 @@ impl<'a> TesseractRenderContext<'a> {
                 continue;
             }
 
-            let w_avg = f32::midpoint(t0.w, t1.w);
             let alpha = if t0.in_slice && t1.in_slice { 255 } else { 100 };
 
-            let normalized_w = (w_avg / self.w_half).clamp(-1.0, 1.0);
-            let color = w_to_color(normalized_w, alpha, self.w_color_intensity);
+            let normalized_w0 = (t0.w / self.w_half).clamp(-1.0, 1.0);
+            let normalized_w1 = (t1.w / self.w_half).clamp(-1.0, 1.0);
+            let color_a = w_to_color(normalized_w0, alpha, self.w_color_intensity);
+            let color_b = w_to_color(normalized_w1, alpha, self.w_color_intensity);
 
-            batch.add_segment(s0, s1, color);
+            batch.add_segment_with_gradient(s0, s1, color_a, color_b);
         }
 
         batch.submit(painter);

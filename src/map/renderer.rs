@@ -179,6 +179,7 @@ impl MapRenderer {
                 params.stereo,
                 params.scene_camera,
                 &bounds,
+                params.four_d,
             );
             self.draw_waypoints(&mut batch, painter, projector, &frame_data.waypoints);
             if let Some(cam) = frame_data.camera.as_ref() {
@@ -379,6 +380,7 @@ impl MapRenderer {
         stereo: StereoSettings,
         scene_camera: &Camera,
         bounds: &Bounds4D,
+        four_d: FourDSettings,
     ) {
         let screen_pts = if data.cross_section_3d.len() >= 3 {
             convex_hull_screen(&data.cross_section_3d, projector)
@@ -420,7 +422,14 @@ impl MapRenderer {
             if let Some(screen_seg) =
                 clip_segment_to_screen(map_transform, projector, data.near_z, *p0, *p1)
             {
-                batch.add_segment(screen_seg.0, screen_seg.1, SLICE_GREEN);
+                let w_half = four_d.w_thickness * 0.5;
+                let normalized_w0 = (p0.w / w_half).clamp(-1.0, 1.0);
+                let normalized_w1 = (p1.w / w_half).clamp(-1.0, 1.0);
+                let color_a =
+                    crate::render::w_to_color(normalized_w0, 255, four_d.w_color_intensity);
+                let color_b =
+                    crate::render::w_to_color(normalized_w1, 255, four_d.w_color_intensity);
+                batch.add_segment_with_gradient(screen_seg.0, screen_seg.1, color_a, color_b);
             }
         }
     }
