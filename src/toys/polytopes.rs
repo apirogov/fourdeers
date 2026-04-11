@@ -87,25 +87,16 @@ impl PolytopesToy {
 
         ui.horizontal(|ui| {
             ui.label("X:");
-            ui.add(
-                egui::Slider::new(&mut self.camera.position.x, POSITION_SLIDER_RANGE.clone())
-                    .text(""),
-            );
+            ui.add(egui::Slider::new(&mut self.camera.position.x, POSITION_SLIDER_RANGE).text(""));
             ui.label("Y:");
-            ui.add(
-                egui::Slider::new(&mut self.camera.position.y, POSITION_SLIDER_RANGE.clone())
-                    .text(""),
-            );
+            ui.add(egui::Slider::new(&mut self.camera.position.y, POSITION_SLIDER_RANGE).text(""));
         });
 
         ui.horizontal(|ui| {
             ui.label("Z:");
-            ui.add(
-                egui::Slider::new(&mut self.camera.position.z, POSITION_SLIDER_RANGE.clone())
-                    .text(""),
-            );
+            ui.add(egui::Slider::new(&mut self.camera.position.z, POSITION_SLIDER_RANGE).text(""));
             ui.label("W:");
-            ui.add(egui::Slider::new(&mut self.camera.position.w, W_SLIDER_RANGE.clone()).text(""));
+            ui.add(egui::Slider::new(&mut self.camera.position.w, W_SLIDER_RANGE).text(""));
         });
 
         ui.horizontal(|ui| {
