@@ -11,8 +11,9 @@ use crate::tetrahedron::{tetrahedron_layout, TetrahedronGadget};
 
 use super::ui::render_outlined_text;
 use super::{
-    compute_vertex_alpha, w_to_color, FourDSettings, StereoProjector, StereoSettings, TetraStyle,
-    BASE_LABEL_FONT_SIZE, BASE_LABEL_OFFSET_Y, NEAR_PLANE_THRESHOLD, TESSERACT_EDGE_STROKE_WIDTH,
+    compute_vertex_alpha, truncate_segment_to_slice, w_to_color, FourDSettings, StereoProjector,
+    StereoSettings, TetraStyle, BASE_LABEL_FONT_SIZE, BASE_LABEL_OFFSET_Y, NEAR_PLANE_THRESHOLD,
+    TESSERACT_EDGE_STROKE_WIDTH,
 };
 
 const EDGE_CLIP_MARGIN: f32 = 50.0;
@@ -45,6 +46,7 @@ struct TetraRenderSpec<'a> {
     base_label: Option<&'a str>,
 }
 
+#[derive(Clone)]
 pub struct TransformedVertex {
     pub x: f32,
     pub y: f32,
@@ -118,16 +120,24 @@ impl<'a> TesseractRenderContext<'a> {
             let t0 = &transformed[chunk[0] as usize];
             let t1 = &transformed[chunk[1] as usize];
 
-            if !t0.in_slice && !t1.in_slice {
+            let Some(truncated) = truncate_segment_to_slice(
+                Vector4::new(t0.x, t0.y, t0.z, t0.w),
+                Vector4::new(t1.x, t1.y, t1.z, t1.w),
+                self.w_half,
+            ) else {
+                continue;
+            };
+
+            if truncated[0][2] <= -near_plane && truncated[1][2] <= -near_plane {
                 continue;
             }
 
-            if t0.z <= -near_plane && t1.z <= -near_plane {
-                continue;
-            }
-
-            let s0 = projector.project_3d(t0.x, t0.y, t0.z).map(|p| p.screen_pos);
-            let s1 = projector.project_3d(t1.x, t1.y, t1.z).map(|p| p.screen_pos);
+            let s0 = projector
+                .project_3d(truncated[0][0], truncated[0][1], truncated[0][2])
+                .map(|p| p.screen_pos);
+            let s1 = projector
+                .project_3d(truncated[1][0], truncated[1][1], truncated[1][2])
+                .map(|p| p.screen_pos);
 
             let (Some(s0), Some(s1)) = (s0, s1) else {
                 continue;
@@ -141,11 +151,11 @@ impl<'a> TesseractRenderContext<'a> {
                 continue;
             }
 
-            let alpha_a = compute_vertex_alpha(t0.w, self.w_half);
-            let alpha_b = compute_vertex_alpha(t1.w, self.w_half);
+            let alpha_a = compute_vertex_alpha(truncated[0][3], self.w_half);
+            let alpha_b = compute_vertex_alpha(truncated[1][3], self.w_half);
 
-            let normalized_w0 = (t0.w / self.w_half).clamp(-1.0, 1.0);
-            let normalized_w1 = (t1.w / self.w_half).clamp(-1.0, 1.0);
+            let normalized_w0 = (truncated[0][3] / self.w_half).clamp(-1.0, 1.0);
+            let normalized_w1 = (truncated[1][3] / self.w_half).clamp(-1.0, 1.0);
             let color_a = w_to_color(normalized_w0, alpha_a, self.w_color_intensity);
             let color_b = w_to_color(normalized_w1, alpha_b, self.w_color_intensity);
 

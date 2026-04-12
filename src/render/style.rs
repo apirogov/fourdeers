@@ -22,6 +22,52 @@ pub fn compute_vertex_alpha(w: f32, w_half: f32) -> u8 {
     alpha as u8
 }
 
+pub fn truncate_segment_to_slice(
+    p0: nalgebra::Vector4<f32>,
+    p1: nalgebra::Vector4<f32>,
+    w_half: f32,
+) -> Option<[nalgebra::Vector4<f32>; 2]> {
+    let in_a = p0[3] >= -w_half && p0[3] <= w_half;
+    let in_b = p1[3] >= -w_half && p1[3] <= w_half;
+
+    if in_a && in_b {
+        return Some([p0, p1]);
+    }
+
+    if !in_a && !in_b {
+        let w_min = p0[3].min(p1[3]);
+        let w_max = p0[3].max(p1[3]);
+        if w_max < -w_half || w_min > w_half {
+            return None;
+        }
+    }
+
+    let w_diff = p1[3] - p0[3];
+    if w_diff.abs() < 1e-10 {
+        return None;
+    }
+
+    let t = if !in_a {
+        if p0[3] < -w_half {
+            (-w_half - p0[3]) / w_diff
+        } else {
+            (w_half - p0[3]) / w_diff
+        }
+    } else if p1[3] < -w_half {
+        (-w_half - p0[3]) / w_diff
+    } else {
+        (w_half - p0[3]) / w_diff
+    };
+    let t = t.clamp(0.0, 1.0);
+
+    let lerped = p0 + (p1 - p0) * t;
+    if !in_a {
+        Some([lerped, p1])
+    } else {
+        Some([p0, lerped])
+    }
+}
+
 const fn lerp(a: f32, b: f32, t: f32) -> f32 {
     a + (b - a) * t
 }
@@ -118,6 +164,7 @@ pub fn w_to_color(normalized_w: f32, alpha: u8, _intensity: f32) -> egui::Color3
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nalgebra::Vector4;
 
     #[test]
     fn test_w_to_color_zero_w() {
@@ -179,5 +226,49 @@ mod tests {
     fn test_compass_frame_mode_other() {
         assert_eq!(CompassFrameMode::World.other(), CompassFrameMode::Camera);
         assert_eq!(CompassFrameMode::Camera.other(), CompassFrameMode::World);
+    }
+
+    #[test]
+    fn test_truncate_both_inside() {
+        let p0 = Vector4::new(0.0, 0.0, 0.0, 0.0);
+        let p1 = Vector4::new(1.0, 0.0, 0.0, 0.5);
+        let w_half = 1.25;
+        let result = truncate_segment_to_slice(p0, p1, w_half);
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_truncate_both_outside_spans_through() {
+        let p0 = Vector4::new(0.0, 0.0, 0.0, -3.0);
+        let p1 = Vector4::new(1.0, 0.0, 0.0, 3.0);
+        let w_half = 1.25;
+        let result = truncate_segment_to_slice(p0, p1, w_half);
+        assert!(
+            result.is_some(),
+            "edge spanning through slice should not be filtered"
+        );
+    }
+
+    #[test]
+    fn test_truncate_both_outside_no_overlap() {
+        let p0 = Vector4::new(0.0, 0.0, 0.0, 5.0);
+        let p1 = Vector4::new(1.0, 0.0, 0.0, 6.0);
+        let w_half = 1.25;
+        let result = truncate_segment_to_slice(p0, p1, w_half);
+        assert!(
+            result.is_none(),
+            "edge entirely outside slice should be filtered"
+        );
+    }
+
+    #[test]
+    fn test_truncate_one_inside_one_outside() {
+        let p0 = Vector4::new(0.0, 0.0, 0.0, 0.0);
+        let p1 = Vector4::new(1.0, 0.0, 0.0, 3.0);
+        let w_half = 1.25;
+        let result = truncate_segment_to_slice(p0, p1, w_half);
+        assert!(result.is_some());
+        let truncated = result.unwrap();
+        assert!(truncated[0][3] >= -w_half && truncated[0][3] <= w_half);
     }
 }
