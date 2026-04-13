@@ -6,7 +6,7 @@ use nalgebra::Vector4;
 use crate::camera::Camera;
 use crate::geometry::Bounds4D;
 use crate::input::{
-    analyze_tap_in_stereo_view_with_modes, zone_from_rect, DragView, Zone, ZoneMode,
+    analyze_tap_in_stereo_view_with_modes, zone_from_rect, DragView, TapAnalysis, Zone, ZoneMode,
 };
 use crate::map::{MapRenderParams, MapView};
 use crate::polytopes::{create_polytope, PolytopeType};
@@ -182,40 +182,15 @@ impl PolytopesToy {
         self.map.render(ui, rect, &params);
     }
 
-    fn handle_scene_tap(&mut self, pos: egui::Pos2, vis_rect: egui::Rect) -> ViewAction {
-        let left_zone_mode = self.scene_view.zone_mode();
-        if let Some(analysis) =
-            analyze_tap_in_stereo_view_with_modes(vis_rect, pos, left_zone_mode, left_zone_mode)
-        {
-            self.scene_view.handle_tap(&analysis, &mut self.camera)
-        } else {
-            ViewAction::None
-        }
-    }
-
-    fn handle_map_tap(&mut self, left_zone: Option<Zone>, right_rect: egui::Rect, pos: egui::Pos2) {
+    fn handle_map_tap(&mut self, analysis: &TapAnalysis) {
         let waypoints = self.compass_waypoints();
         let geometry_bounds = self.scene_geometry_bounds();
-        let action = self.map.handle_tap(
-            left_zone,
-            right_rect,
-            pos,
-            Some(&self.camera),
-            &waypoints,
-            geometry_bounds,
-        );
+        let action = self
+            .map
+            .handle_tap(analysis, Some(&self.camera), &waypoints, geometry_bounds);
         if let ViewAction::SelectWaypoint(idx) = action {
             self.compass.waypoint_index = idx;
             self.active_view = ActiveViewId::Compass;
-        }
-    }
-
-    fn handle_scene_hold(&mut self, pos: egui::Pos2, vis_rect: egui::Rect) {
-        let left_zone_mode = self.scene_view.zone_mode();
-        if let Some(analysis) =
-            analyze_tap_in_stereo_view_with_modes(vis_rect, pos, left_zone_mode, left_zone_mode)
-        {
-            self.scene_view.handle_hold(&analysis, &mut self.camera);
         }
     }
 
@@ -391,7 +366,7 @@ impl Toy for PolytopesToy {
     }
 
     fn handle_tap(&mut self, pos: egui::Pos2, vis_rect: egui::Rect) -> ViewAction {
-        let (left_rect, right_rect) = split_stereo_views(vis_rect);
+        let (left_rect, _right_rect) = split_stereo_views(vis_rect);
         let left_zone = zone_from_rect(left_rect, pos, ZoneMode::NineZones);
 
         match left_zone {
@@ -406,16 +381,29 @@ impl Toy for PolytopesToy {
             _ => {}
         }
 
+        let left_zone_mode = match self.active_view {
+            ActiveViewId::Scene => self.scene_view.zone_mode(),
+            _ => ZoneMode::NineZones,
+        };
+
+        let analysis =
+            analyze_tap_in_stereo_view_with_modes(vis_rect, pos, left_zone_mode, left_zone_mode);
+
+        if analysis.is_none() {
+            return ViewAction::None;
+        }
+
+        let analysis = analysis.unwrap();
+
         match self.active_view {
-            ActiveViewId::Scene => self.handle_scene_tap(pos, vis_rect),
+            ActiveViewId::Scene => self.scene_view.handle_tap(&analysis, &mut self.camera),
             ActiveViewId::Map => {
-                self.handle_map_tap(left_zone, right_rect, pos);
+                self.handle_map_tap(&analysis);
                 ViewAction::None
             }
             ActiveViewId::Compass => {
                 let waypoints_len = self.compass_waypoints().len();
-                self.compass
-                    .handle_tap(left_zone, right_rect, pos, waypoints_len);
+                self.compass.handle_tap(&analysis, waypoints_len);
                 ViewAction::None
             }
         }
@@ -448,15 +436,23 @@ impl Toy for PolytopesToy {
     }
 
     fn handle_hold(&mut self, pos: egui::Pos2, vis_rect: egui::Rect) {
-        match self.active_view {
-            ActiveViewId::Scene => {
-                self.handle_scene_hold(pos, vis_rect);
+        let left_zone_mode = match self.active_view {
+            ActiveViewId::Scene => self.scene_view.zone_mode(),
+            _ => ZoneMode::NineZones,
+        };
+
+        if let Some(analysis) =
+            analyze_tap_in_stereo_view_with_modes(vis_rect, pos, left_zone_mode, left_zone_mode)
+        {
+            match self.active_view {
+                ActiveViewId::Scene => {
+                    self.scene_view.handle_hold(&analysis, &mut self.camera);
+                }
+                ActiveViewId::Map => {
+                    self.map.handle_hold(&analysis);
+                }
+                ActiveViewId::Compass => {}
             }
-            ActiveViewId::Map => {
-                let (_, right_rect) = split_stereo_views(vis_rect);
-                self.map.handle_hold(right_rect, pos);
-            }
-            ActiveViewId::Compass => {}
         }
     }
 

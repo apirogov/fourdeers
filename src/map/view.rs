@@ -1,16 +1,13 @@
 use eframe::egui;
 
-use crate::camera::{Camera, Direction4D};
+use crate::camera::Camera;
 use crate::colors::LABEL_INACTIVE;
 use crate::geometry::Bounds4D;
-use crate::input::{zone_from_rect, zone_to_movement_action, Zone, ZoneMode};
+use crate::input::TAP_MOVE_SPEED;
+use crate::input::{zone_to_movement_action, TapAnalysis, Zone, HOLD_MOVE_SPEED};
 use crate::map::{compute_bounds, MapRenderer};
 use crate::render::{render_tap_zone_label, CompassFrameMode};
 use crate::toy::ViewAction;
-
-const MAP_HOLD_SPEED: f32 = 0.08;
-const MAP_TAP_SPEED: f32 = 0.3;
-const MAP_KEYBOARD_SPEED: f32 = 0.05;
 
 pub struct MapView {
     pub renderer: MapRenderer,
@@ -77,46 +74,39 @@ impl MapView {
 
     pub fn handle_tap(
         &mut self,
-        left_zone: Option<Zone>,
-        right_rect: egui::Rect,
-        pos: egui::Pos2,
+        analysis: &TapAnalysis,
         scene_camera: Option<&Camera>,
         waypoints: &[crate::toy::CompassWaypoint],
         geometry_bounds: Option<Bounds4D>,
     ) -> ViewAction {
-        if let Some(wp_index) = self.renderer.find_tapped_waypoint(pos) {
-            return ViewAction::SelectWaypoint(wp_index);
-        }
-
-        match left_zone {
-            Some(Zone::South) => {
-                self.frame_mode = self.frame_mode.other();
-                return ViewAction::None;
-            }
-            Some(Zone::North) => {
-                self.renderer.toggle_labels();
-                return ViewAction::None;
-            }
-            Some(Zone::SouthEast) => {
-                if let Some(camera) = scene_camera {
-                    let bounds = compute_bounds(camera, waypoints, geometry_bounds);
-                    self.renderer.reset_to_fit(camera, &bounds);
+        if analysis.is_left_view {
+            match analysis.zone {
+                Zone::South => {
+                    self.frame_mode = self.frame_mode.other();
+                    return ViewAction::None;
                 }
-                return ViewAction::None;
+                Zone::North => {
+                    self.renderer.toggle_labels();
+                    return ViewAction::None;
+                }
+                Zone::SouthEast => {
+                    if let Some(camera) = scene_camera {
+                        let bounds = compute_bounds(camera, waypoints, geometry_bounds);
+                        self.renderer.reset_to_fit(camera, &bounds);
+                    }
+                    return ViewAction::None;
+                }
+                _ => {}
             }
-            _ => {}
-        }
-
-        if right_rect.contains(pos) {
-            let zone = zone_from_rect(right_rect, pos, ZoneMode::NineZones);
-            if zone == Some(Zone::Center) {
+        } else {
+            if analysis.zone == Zone::Center {
                 self.rotation_3d = !self.rotation_3d;
                 return ViewAction::None;
             }
-        }
 
-        if let Some(action) = Self::tap_to_movement_action(right_rect, pos) {
-            self.renderer.apply_action(action, MAP_TAP_SPEED);
+            if let Some(action) = zone_to_movement_action(analysis.zone) {
+                self.renderer.apply_action(action, TAP_MOVE_SPEED);
+            }
         }
 
         ViewAction::None
@@ -131,25 +121,23 @@ impl MapView {
         }
     }
 
-    pub fn handle_hold(&mut self, right_rect: egui::Rect, pos: egui::Pos2) {
-        if let Some(action) = Self::tap_to_movement_action(right_rect, pos) {
-            self.renderer.apply_action(action, MAP_HOLD_SPEED);
+    pub fn handle_hold(&mut self, analysis: &TapAnalysis) {
+        if !analysis.is_left_view {
+            if let Some(action) = zone_to_movement_action(analysis.zone) {
+                self.renderer.apply_action(action, HOLD_MOVE_SPEED);
+            }
         }
     }
 
     pub fn handle_keyboard(&mut self, ctx: &egui::Context) {
-        let renderer = &mut self.renderer;
-        crate::input::handle_movement_keys(ctx, MAP_KEYBOARD_SPEED, |action, speed| {
-            renderer.apply_action(action, speed);
+        ctx.input(|i| {
+            if i.key_pressed(egui::Key::F) {
+                self.frame_mode = self.frame_mode.other();
+            }
+            if i.key_pressed(egui::Key::L) {
+                self.renderer.toggle_labels();
+            }
         });
-    }
-
-    fn tap_to_movement_action(right_rect: egui::Rect, pos: egui::Pos2) -> Option<Direction4D> {
-        if !right_rect.contains(pos) {
-            return None;
-        }
-        let zone = zone_from_rect(right_rect, pos, ZoneMode::NineZones)?;
-        zone_to_movement_action(zone)
     }
 }
 

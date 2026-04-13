@@ -7,6 +7,13 @@ use eframe::egui;
 
 use crate::camera::Direction4D;
 
+/// Movement speed for tap/click actions.
+pub const TAP_MOVE_SPEED: f32 = 0.15;
+/// Movement speed for hold/long-press actions.
+pub const HOLD_MOVE_SPEED: f32 = 0.08;
+/// Movement speed for keyboard actions.
+pub const KEYBOARD_MOVE_SPEED: f32 = 0.15;
+
 pub fn handle_movement_keys(
     ctx: &egui::Context,
     speed: f32,

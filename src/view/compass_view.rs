@@ -2,7 +2,7 @@ use eframe::egui;
 use nalgebra::{UnitQuaternion, Vector3, Vector4};
 
 use crate::camera::ROTATION_SENSITIVITY;
-use crate::input::{zone_from_rect, Zone, ZoneMode};
+use crate::input::{TapAnalysis, Zone};
 use crate::render::{
     draw_background, draw_center_divider, render_stereo_views, render_tap_zone_label,
     render_tetrahedron_with_projector, CompassFrameMode, ProjectionMode, StereoSettings,
@@ -77,24 +77,17 @@ impl CompassView {
         render_tap_zone_label(right_painter, right_rect, Zone::SouthEast, "Next", None);
     }
 
-    pub fn handle_tap(
-        &mut self,
-        left_zone: Option<Zone>,
-        right_rect: egui::Rect,
-        pos: egui::Pos2,
-        waypoints_len: usize,
-    ) -> ViewAction {
-        if left_zone == Some(Zone::South) {
-            self.frame_mode = self.frame_mode.other();
-            return ViewAction::None;
-        }
-
-        if right_rect.contains(pos) {
-            let zone = zone_from_rect(right_rect, pos, ZoneMode::NineZones);
-            if zone == Some(Zone::South) {
+    pub fn handle_tap(&mut self, analysis: &TapAnalysis, waypoints_len: usize) -> ViewAction {
+        if analysis.is_left_view {
+            if analysis.zone == Zone::South {
+                self.frame_mode = self.frame_mode.other();
+                return ViewAction::None;
+            }
+        } else {
+            if analysis.zone == Zone::South {
                 self.cycle_waypoint(-1, waypoints_len);
             }
-            if zone == Some(Zone::SouthEast) {
+            if analysis.zone == Zone::SouthEast {
                 self.cycle_waypoint(1, waypoints_len);
             }
         }

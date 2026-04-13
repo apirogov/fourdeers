@@ -6,17 +6,15 @@ use crate::camera::{Camera, CameraProjection, Direction4D};
 use crate::colors::LABEL_INACTIVE;
 use crate::input::{
     zone_to_movement_action, DragState, DragView, TapAnalysis, TetraId, Zone, ZoneMode,
+    HOLD_MOVE_SPEED,
 };
+use crate::input::{KEYBOARD_MOVE_SPEED, TAP_MOVE_SPEED};
 use crate::render::{
     adjust_w_thickness, draw_background, draw_center_divider, render_stereo_views,
     render_tap_zone_label, split_stereo_views, FourDSettings, StereoSettings,
     TesseractRenderConfig, TesseractRenderContext,
 };
 use crate::toy::ViewAction;
-
-const TAP_MOVE_SPEED: f32 = 0.15;
-const HOLD_MOVE_SPEED: f32 = 0.08;
-const KEYBOARD_MOVE_SPEED: f32 = 0.15;
 
 pub struct SceneRenderParams<'a> {
     pub camera: &'a Camera,
@@ -190,6 +188,12 @@ impl SceneView {
     }
 
     pub fn handle_keyboard(&mut self, ctx: &egui::Context, camera: &mut Camera) {
+        ctx.input(|i| {
+            if i.key_pressed(egui::Key::U) {
+                self.info_level = (self.info_level + 1) % 3;
+            }
+        });
+
         crate::input::handle_movement_keys(ctx, KEYBOARD_MOVE_SPEED, |action, speed| {
             self.apply_camera_action(camera, action, speed);
         });

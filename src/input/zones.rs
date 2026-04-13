@@ -107,8 +107,6 @@ pub struct TapAnalysis {
     pub view_rect: egui::Rect,
     pub zone: Zone,
     pub zone_mode: ZoneMode,
-    pub norm_x: f32,
-    pub norm_y: f32,
 }
 
 /// Identifies a specific tetrahedron by its view half and zone.
@@ -152,16 +150,11 @@ pub fn analyze_tap_in_stereo_view_with_modes(
 
     let zone = zone_from_rect(view_rect, tap_pos, zone_mode)?;
 
-    let norm_x = (tap_pos.x - view_rect.min.x) / view_rect.width();
-    let norm_y = (tap_pos.y - view_rect.min.y) / view_rect.height();
-
     Some(TapAnalysis {
         is_left_view,
         view_rect,
         zone,
         zone_mode,
-        norm_x,
-        norm_y,
     })
 }
 
