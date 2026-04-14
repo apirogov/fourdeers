@@ -3,6 +3,7 @@
 use eframe::egui;
 use nalgebra::Vector4;
 
+use crate::gpu::GpuRenderer;
 use crate::input::{DragView, PointerAnalysis, ZoneMode};
 use crate::render::{FourDSettings, StereoSettings};
 
@@ -32,7 +33,7 @@ pub enum ViewAction {
 /// Each toy provides its own scene rendering, sidebar controls, input handling,
 /// and view management. The toy owns its views (scene, map, compass) and dispatches
 /// internally based on the active view.
-pub trait Toy {
+pub(crate) trait Toy {
     /// Human-readable name for display in the UI.
     fn name(&self) -> &str;
     /// Unique identifier used for toy switching and persistence.
@@ -44,7 +45,13 @@ pub trait Toy {
     /// Render the toy's sidebar controls in the menu panel.
     fn render_sidebar(&mut self, ui: &mut egui::Ui);
     /// Render the toy's active view into the given rect.
-    fn render_scene(&mut self, ui: &mut egui::Ui, rect: egui::Rect, show_debug: bool);
+    fn render_scene(
+        &mut self,
+        ui: &mut egui::Ui,
+        rect: egui::Rect,
+        show_debug: bool,
+        gpu: Option<&GpuRenderer>,
+    );
     /// Handle pointer events (tap, hold) with unified analysis.
     fn handle_pointer(&mut self, analysis: PointerAnalysis) -> ViewAction;
     /// Handle an ongoing drag gesture, directly mutating w_thickness.

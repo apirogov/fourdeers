@@ -215,9 +215,12 @@ impl FourDeersApp {
                 .active_toy_mut()
                 .set_four_d_settings(&self.settings.four_d);
 
-            self.toy_manager
-                .active_toy_mut()
-                .render_scene(ui, rect, self.settings.show_debug);
+            self.toy_manager.active_toy_mut().render_scene(
+                ui,
+                rect,
+                self.settings.show_debug,
+                self.gpu_renderer.as_ref(),
+            );
 
             let (left_rect, right_rect) = split_stereo_views(rect);
             let left_painter = ui.painter().with_clip_rect(left_rect);

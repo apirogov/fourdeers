@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use super::Toy;
 
 #[must_use]
-pub fn create_all_toys() -> HashMap<String, Box<dyn Toy>> {
+pub(crate) fn create_all_toys() -> HashMap<String, Box<dyn Toy>> {
     let mut toys = HashMap::new();
 
     let polytopes = crate::toys::polytopes::PolytopesToy::new();

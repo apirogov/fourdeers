@@ -2,6 +2,7 @@
 
 use eframe::egui;
 
+use crate::gpu::GpuRenderer;
 use crate::input::PointerAnalysis;
 use crate::render::{draw_background, FourDSettings, StereoSettings};
 use crate::toy::Toy;
@@ -33,7 +34,13 @@ impl Toy for DebugScratchpadToy {
         ui.label("This toy is intentionally empty.");
     }
 
-    fn render_scene(&mut self, ui: &mut egui::Ui, rect: egui::Rect, _show_debug: bool) {
+    fn render_scene(
+        &mut self,
+        ui: &mut egui::Ui,
+        rect: egui::Rect,
+        _show_debug: bool,
+        _gpu: Option<&GpuRenderer>,
+    ) {
         draw_background(ui, rect);
 
         let painter = ui.painter().with_clip_rect(rect);

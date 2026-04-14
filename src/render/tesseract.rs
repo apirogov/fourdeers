@@ -5,14 +5,16 @@ use nalgebra::{UnitQuaternion, Vector4};
 use std::collections::HashMap;
 
 use crate::camera::{format_4d_vector, Camera, CameraProjection};
+use crate::gpu::GpuVertex;
 use crate::input::{TetraId, Zone};
 use crate::render::batch::LineBatch;
+use crate::render::projection::StereoProjector;
 use crate::tetrahedron::{tetrahedron_layout, TetrahedronGadget};
 
 use super::ui::render_outlined_text;
 use super::{
-    compute_vertex_alpha, truncate_segment_to_slice, w_to_color, FourDSettings, StereoProjector,
-    StereoSettings, TetraStyle, BASE_LABEL_FONT_SIZE, BASE_LABEL_OFFSET_Y, NEAR_PLANE_THRESHOLD,
+    compute_vertex_alpha, truncate_segment_to_slice, w_to_color, FourDSettings, StereoSettings,
+    TetraStyle, BASE_LABEL_FONT_SIZE, BASE_LABEL_OFFSET_Y, NEAR_PLANE_THRESHOLD,
     TESSERACT_EDGE_STROKE_WIDTH,
 };
 
@@ -163,6 +165,89 @@ impl<'a> TesseractRenderContext<'a> {
         }
 
         batch.submit(painter);
+    }
+
+    pub(crate) fn collect_edge_vertices(
+        &self,
+        projector: &StereoProjector,
+        transformed: &[TransformedVertex],
+        clip_rect: egui::Rect,
+    ) -> (Vec<GpuVertex>, Vec<u32>) {
+        let stroke_width = TESSERACT_EDGE_STROKE_WIDTH;
+        let half_w = stroke_width * 0.5;
+        let near_plane = self.projection_distance;
+        let margin = EDGE_CLIP_MARGIN;
+        let x_min = clip_rect.min.x - margin;
+        let x_max = clip_rect.max.x + margin;
+        let y_min = clip_rect.min.y - margin;
+        let y_max = clip_rect.max.y + margin;
+
+        let mut vertices = Vec::new();
+        let mut indices = Vec::new();
+
+        for chunk in self.indices.chunks(2) {
+            if chunk.len() != 2 {
+                continue;
+            }
+
+            let t0 = &transformed[chunk[0] as usize];
+            let t1 = &transformed[chunk[1] as usize];
+
+            let Some(truncated) = truncate_segment_to_slice(
+                Vector4::new(t0.x, t0.y, t0.z, t0.w),
+                Vector4::new(t1.x, t1.y, t1.z, t1.w),
+                self.w_half,
+            ) else {
+                continue;
+            };
+
+            if truncated[0][2] <= -near_plane && truncated[1][2] <= -near_plane {
+                continue;
+            }
+
+            let s0 = projector
+                .project_3d(truncated[0][0], truncated[0][1], truncated[0][2])
+                .map(|p| p.screen_pos);
+            let s1 = projector
+                .project_3d(truncated[1][0], truncated[1][1], truncated[1][2])
+                .map(|p| p.screen_pos);
+
+            let (Some(s0), Some(s1)) = (s0, s1) else {
+                continue;
+            };
+
+            let seg_x_min = s0.x.min(s1.x);
+            let seg_x_max = s0.x.max(s1.x);
+            let seg_y_min = s0.y.min(s1.y);
+            let seg_y_max = s0.y.max(s1.y);
+            if seg_x_max < x_min || seg_x_min > x_max || seg_y_max < y_min || seg_y_min > y_max {
+                continue;
+            }
+
+            let alpha_a = compute_vertex_alpha(truncated[0][3], self.w_half);
+            let alpha_b = compute_vertex_alpha(truncated[1][3], self.w_half);
+
+            let normalized_w0 = (truncated[0][3] / self.w_half).clamp(-1.0, 1.0);
+            let normalized_w1 = (truncated[1][3] / self.w_half).clamp(-1.0, 1.0);
+            let color_a = w_to_color(normalized_w0, alpha_a, self.w_color_intensity);
+            let color_b = w_to_color(normalized_w1, alpha_b, self.w_color_intensity);
+
+            let dir = s1 - s0;
+            let len = dir.length();
+            if len < 1e-10 {
+                continue;
+            }
+            let normal = egui::Vec2::new(-dir.y, dir.x) / len * half_w;
+
+            let idx = vertices.len() as u32;
+            vertices.push(GpuVertex::new(s0 + normal, color_a));
+            vertices.push(GpuVertex::new(s0 - normal, color_a));
+            vertices.push(GpuVertex::new(s1 + normal, color_b));
+            vertices.push(GpuVertex::new(s1 - normal, color_b));
+            indices.extend_from_slice(&[idx, idx + 1, idx + 2, idx + 2, idx + 1, idx + 3]);
+        }
+
+        (vertices, indices)
     }
 
     pub fn render_zone_labels(&self, painter: &egui::Painter, view_rect: egui::Rect) {

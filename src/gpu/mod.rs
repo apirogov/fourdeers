@@ -2,15 +2,15 @@ pub(crate) mod callback;
 pub(crate) mod pipeline;
 pub(crate) mod vertex;
 
-use eframe::{egui, egui_wgpu, wgpu};
+pub(crate) use vertex::GpuVertex;
+
+use eframe::{egui, egui_wgpu};
 use egui_wgpu::RenderState;
 
 use self::callback::GpuCallback;
 use self::pipeline::GpuPipeline;
 
-pub(crate) struct GpuRenderer {
-    target_format: wgpu::TextureFormat,
-}
+pub(crate) struct GpuRenderer;
 
 impl GpuRenderer {
     pub fn new(rs: &RenderState) -> Self {
@@ -19,7 +19,7 @@ impl GpuRenderer {
         let pipeline = GpuPipeline::new(&rs.device, target_format);
         rs.renderer.write().callback_resources.insert(pipeline);
 
-        Self { target_format }
+        Self
     }
 
     pub fn submit(
@@ -37,9 +37,5 @@ impl GpuRenderer {
         let callback = GpuCallback::new(vertices, indices, screen_size);
         let cb = egui_wgpu::Callback::new_paint_callback(rect, callback);
         painter.add(egui::Shape::Callback(cb));
-    }
-
-    pub fn target_format(&self) -> wgpu::TextureFormat {
-        self.target_format
     }
 }

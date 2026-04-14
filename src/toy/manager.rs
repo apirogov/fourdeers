@@ -27,7 +27,7 @@ impl ToyManager {
     ///
     /// Panics if the active toy ID does not correspond to a registered toy.
     #[must_use]
-    pub fn active_toy(&self) -> &dyn Toy {
+    pub(crate) fn active_toy(&self) -> &dyn Toy {
         self.toys
             .get(&self.active_toy_id)
             .map(std::convert::AsRef::as_ref)
@@ -39,7 +39,7 @@ impl ToyManager {
     /// # Panics
     ///
     /// Panics if the active toy ID does not correspond to a registered toy.
-    pub fn active_toy_mut(&mut self) -> &mut dyn Toy {
+    pub(crate) fn active_toy_mut(&mut self) -> &mut dyn Toy {
         self.toys
             .get_mut(&self.active_toy_id)
             .map(std::convert::AsMut::as_mut)

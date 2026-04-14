@@ -4,14 +4,15 @@ use std::collections::HashMap;
 
 use crate::camera::{Camera, CameraProjection, Direction4D};
 use crate::colors::LABEL_INACTIVE;
+use crate::gpu::GpuRenderer;
 use crate::input::{
     zone_to_movement_action, DragState, DragView, PointerAnalysis, TetraId, Zone, ZoneMode,
     HOLD_MOVE_SPEED,
 };
 use crate::input::{KEYBOARD_MOVE_SPEED, TAP_MOVE_SPEED};
 use crate::render::{
-    adjust_w_thickness, draw_background, draw_center_divider, render_stereo_views,
-    render_tap_zone_label, split_stereo_views, FourDSettings, StereoSettings,
+    adjust_w_thickness, create_stereo_projectors, draw_background, draw_center_divider,
+    render_stereo_views, render_tap_zone_label, split_stereo_views, FourDSettings, StereoSettings,
     TesseractRenderConfig, TesseractRenderContext,
 };
 use crate::toy::ViewAction;
@@ -47,7 +48,13 @@ impl SceneView {
         }
     }
 
-    pub fn render(&mut self, ui: &mut egui::Ui, rect: egui::Rect, params: SceneRenderParams<'_>) {
+    pub(crate) fn render(
+        &mut self,
+        ui: &mut egui::Ui,
+        rect: egui::Rect,
+        params: SceneRenderParams<'_>,
+        gpu: Option<&GpuRenderer>,
+    ) {
         draw_background(ui, rect);
 
         self.visualization_rect = Some(rect);
@@ -68,16 +75,50 @@ impl SceneView {
         );
 
         let transformed = ctx.transform_vertices();
-        render_stereo_views(
-            ui,
-            rect,
-            params.stereo.eye_separation,
-            params.stereo.projection_distance,
-            params.stereo.projection_mode,
-            |painter, projector, view_rect| {
-                ctx.render_edges(painter, projector, &transformed, view_rect);
-            },
-        );
+
+        if let Some(gpu) = gpu {
+            let views = create_stereo_projectors(
+                rect,
+                params.stereo.eye_separation,
+                params.stereo.projection_distance,
+                params.stereo.projection_mode,
+            );
+
+            let screen_size = [rect.width(), rect.height()];
+
+            let (left_verts, left_idx) =
+                ctx.collect_edge_vertices(&views.left_projector, &transformed, views.left_rect);
+            let left_painter = ui.painter().with_clip_rect(views.left_rect);
+            gpu.submit(
+                &left_painter,
+                views.left_rect,
+                left_verts,
+                left_idx,
+                screen_size,
+            );
+
+            let (right_verts, right_idx) =
+                ctx.collect_edge_vertices(&views.right_projector, &transformed, views.right_rect);
+            let right_painter = ui.painter().with_clip_rect(views.right_rect);
+            gpu.submit(
+                &right_painter,
+                views.right_rect,
+                right_verts,
+                right_idx,
+                screen_size,
+            );
+        } else {
+            render_stereo_views(
+                ui,
+                rect,
+                params.stereo.eye_separation,
+                params.stereo.projection_distance,
+                params.stereo.projection_mode,
+                |painter, projector, view_rect| {
+                    ctx.render_edges(painter, projector, &transformed, view_rect);
+                },
+            );
+        }
 
         if params.show_debug {
             let right_rect = split_stereo_views(rect).1;

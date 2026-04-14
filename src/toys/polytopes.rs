@@ -5,6 +5,7 @@ use nalgebra::Vector4;
 
 use crate::camera::Camera;
 use crate::geometry::Bounds4D;
+use crate::gpu::GpuRenderer;
 use crate::input::{DragView, PointerAnalysis, Zone, ZoneMode};
 use crate::map::{MapRenderParams, MapView};
 use crate::polytopes::{create_polytope, PolytopeType};
@@ -256,7 +257,13 @@ impl Toy for PolytopesToy {
         ui.add_space(4.0);
     }
 
-    fn render_scene(&mut self, ui: &mut egui::Ui, rect: egui::Rect, show_debug: bool) {
+    fn render_scene(
+        &mut self,
+        ui: &mut egui::Ui,
+        rect: egui::Rect,
+        show_debug: bool,
+        gpu: Option<&GpuRenderer>,
+    ) {
         match self.active_view {
             ActiveViewId::Scene => {
                 self.scene_view.render(
@@ -270,6 +277,7 @@ impl Toy for PolytopesToy {
                         stereo: self.stereo,
                         show_debug,
                     },
+                    gpu,
                 );
             }
             ActiveViewId::Map => {
