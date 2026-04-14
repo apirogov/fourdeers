@@ -390,12 +390,13 @@ impl Toy for PolytopesToy {
             ui.label("");
             ui.label("Views:");
             ui.label("  M: Menu | C: Compass | G: Map");
-            ui.label("  U: Debug info (scene view)");
+            ui.label("  U: UI info (scene view)");
             ui.label("");
             ui.label("Waypoints:");
             ui.label("  Arrow Left/Right: cycle (compass)");
             ui.label("  J: Jump to waypoint");
             ui.label("  F: Toggle frame mode");
+            ui.label("  L: Toggle labels (map)");
         });
 
         ui.add_space(8.0);
