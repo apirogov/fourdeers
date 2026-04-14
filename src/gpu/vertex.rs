@@ -9,12 +9,18 @@ pub(crate) struct GpuVertex {
 }
 
 impl GpuVertex {
-    const WHITE_UV: egui::Pos2 = egui::Pos2::new(0.0, 0.0);
-
     pub fn new(pos: egui::Pos2, color: egui::Color32) -> Self {
         Self {
             pos: [pos.x, pos.y],
-            uv: [Self::WHITE_UV.x, Self::WHITE_UV.y],
+            uv: [0.0, 0.0],
+            color: bytemuck::cast(color),
+        }
+    }
+
+    pub fn with_uv(pos: egui::Pos2, uv: [f32; 2], color: egui::Color32) -> Self {
+        Self {
+            pos: [pos.x, pos.y],
+            uv,
             color: bytemuck::cast(color),
         }
     }

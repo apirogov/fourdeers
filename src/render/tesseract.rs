@@ -240,10 +240,10 @@ impl<'a> TesseractRenderContext<'a> {
             let normal = egui::Vec2::new(-dir.y, dir.x) / len * half_w;
 
             let idx = vertices.len() as u32;
-            vertices.push(GpuVertex::new(s0 + normal, color_a));
-            vertices.push(GpuVertex::new(s0 - normal, color_a));
-            vertices.push(GpuVertex::new(s1 + normal, color_b));
-            vertices.push(GpuVertex::new(s1 - normal, color_b));
+            vertices.push(GpuVertex::with_uv(s0 + normal, [0.0, 1.0], color_a));
+            vertices.push(GpuVertex::with_uv(s0 - normal, [0.0, 0.0], color_a));
+            vertices.push(GpuVertex::with_uv(s1 + normal, [1.0, 1.0], color_b));
+            vertices.push(GpuVertex::with_uv(s1 - normal, [1.0, 0.0], color_b));
             indices.extend_from_slice(&[idx, idx + 1, idx + 2, idx + 2, idx + 1, idx + 3]);
         }
 

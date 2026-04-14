@@ -28,13 +28,14 @@ impl GpuRenderer {
         rect: egui::Rect,
         vertices: Vec<vertex::GpuVertex>,
         indices: Vec<u32>,
-        screen_size: [f32; 2],
     ) {
         if indices.is_empty() {
             return;
         }
 
-        let callback = GpuCallback::new(vertices, indices, screen_size);
+        let rect_origin = [rect.min.x, rect.min.y];
+        let rect_size = [rect.width(), rect.height()];
+        let callback = GpuCallback::new(vertices, indices, rect_origin, rect_size);
         let cb = egui_wgpu::Callback::new_paint_callback(rect, callback);
         painter.add(egui::Shape::Callback(cb));
     }

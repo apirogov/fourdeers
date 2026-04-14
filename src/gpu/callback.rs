@@ -30,16 +30,23 @@ pub(crate) struct GpuCallback {
     id: u64,
     vertices: Vec<GpuVertex>,
     indices: Vec<u32>,
-    screen_size: [f32; 2],
+    rect_origin: [f32; 2],
+    rect_size: [f32; 2],
 }
 
 impl GpuCallback {
-    pub fn new(vertices: Vec<GpuVertex>, indices: Vec<u32>, screen_size: [f32; 2]) -> Self {
+    pub fn new(
+        vertices: Vec<GpuVertex>,
+        indices: Vec<u32>,
+        rect_origin: [f32; 2],
+        rect_size: [f32; 2],
+    ) -> Self {
         Self {
             id: NEXT_CALLBACK_ID.fetch_add(1, Ordering::Relaxed),
             vertices,
             indices,
-            screen_size,
+            rect_origin,
+            rect_size,
         }
     }
 }
@@ -65,8 +72,8 @@ impl CallbackTrait for GpuCallback {
             &pipeline.uniform_buffer,
             0,
             bytemuck::cast_slice(&[super::pipeline::Uniforms {
-                screen_size: self.screen_size,
-                ..Default::default()
+                rect_origin: self.rect_origin,
+                rect_size: self.rect_size,
             }]),
         );
 

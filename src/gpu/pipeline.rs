@@ -10,10 +10,19 @@ pub(crate) struct GpuPipeline {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Default, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub(crate) struct Uniforms {
-    pub screen_size: [f32; 2],
-    pub(crate) _padding: [f32; 2],
+    pub rect_origin: [f32; 2],
+    pub rect_size: [f32; 2],
+}
+
+impl Default for Uniforms {
+    fn default() -> Self {
+        Self {
+            rect_origin: [0.0, 0.0],
+            rect_size: [1.0, 1.0],
+        }
+    }
 }
 
 impl GpuPipeline {
@@ -46,10 +55,7 @@ impl GpuPipeline {
 
         let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("fourdeers_uniforms"),
-            contents: bytemuck::cast_slice(&[Uniforms {
-                screen_size: [1.0, 1.0],
-                ..Default::default()
-            }]),
+            contents: bytemuck::cast_slice(&[Uniforms::default()]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 

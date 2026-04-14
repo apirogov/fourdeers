@@ -84,29 +84,15 @@ impl SceneView {
                 params.stereo.projection_mode,
             );
 
-            let screen_size = [rect.width(), rect.height()];
-
             let (left_verts, left_idx) =
                 ctx.collect_edge_vertices(&views.left_projector, &transformed, views.left_rect);
             let left_painter = ui.painter().with_clip_rect(views.left_rect);
-            gpu.submit(
-                &left_painter,
-                views.left_rect,
-                left_verts,
-                left_idx,
-                screen_size,
-            );
+            gpu.submit(&left_painter, views.left_rect, left_verts, left_idx);
 
             let (right_verts, right_idx) =
                 ctx.collect_edge_vertices(&views.right_projector, &transformed, views.right_rect);
             let right_painter = ui.painter().with_clip_rect(views.right_rect);
-            gpu.submit(
-                &right_painter,
-                views.right_rect,
-                right_verts,
-                right_idx,
-                screen_size,
-            );
+            gpu.submit(&right_painter, views.right_rect, right_verts, right_idx);
         } else {
             render_stereo_views(
                 ui,
