@@ -3,7 +3,6 @@
 use eframe::egui;
 use nalgebra::Vector4;
 
-use crate::gpu::GpuRenderer;
 use crate::input::{DragView, PointerAnalysis, ZoneMode};
 use crate::render::{FourDSettings, StereoSettings};
 
@@ -45,13 +44,7 @@ pub(crate) trait Toy {
     /// Render the toy's sidebar controls in the menu panel.
     fn render_sidebar(&mut self, ui: &mut egui::Ui);
     /// Render the toy's active view into the given rect.
-    fn render_scene(
-        &mut self,
-        ui: &mut egui::Ui,
-        rect: egui::Rect,
-        show_debug: bool,
-        gpu: Option<&GpuRenderer>,
-    );
+    fn render_scene(&mut self, ui: &mut egui::Ui, rect: egui::Rect, show_debug: bool);
     /// Handle pointer events (tap, hold) with unified analysis.
     fn handle_pointer(&mut self, analysis: PointerAnalysis) -> ViewAction;
     /// Handle an ongoing drag gesture, directly mutating w_thickness.

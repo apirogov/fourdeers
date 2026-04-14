@@ -3,7 +3,6 @@
 use eframe::egui;
 
 use crate::colors::PANEL_FILL;
-use crate::gpu::GpuRenderer;
 use crate::input::render_zone_debug_overlay;
 use crate::input::{analyze_pointer_initial, DragView, PointerAnalysis, ZoneDebugOptions};
 use crate::render::{
@@ -30,7 +29,6 @@ pub struct CommonSettings {
 
 pub struct FourDeersApp {
     toy_manager: ToyManager,
-    gpu_renderer: Option<GpuRenderer>,
     menu_open: bool,
     settings: CommonSettings,
     last_tap_time: Option<f64>,
@@ -44,11 +42,9 @@ pub struct FourDeersApp {
 
 impl FourDeersApp {
     #[must_use]
-    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        let gpu_renderer = cc.wgpu_render_state.as_ref().and_then(GpuRenderer::try_new);
+    pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
         Self {
             toy_manager: ToyManager::new(),
-            gpu_renderer,
             menu_open: false,
             settings: CommonSettings::default(),
             last_tap_time: None,
@@ -215,12 +211,9 @@ impl FourDeersApp {
                 .active_toy_mut()
                 .set_four_d_settings(&self.settings.four_d);
 
-            self.toy_manager.active_toy_mut().render_scene(
-                ui,
-                rect,
-                self.settings.show_debug,
-                self.gpu_renderer.as_ref(),
-            );
+            self.toy_manager
+                .active_toy_mut()
+                .render_scene(ui, rect, self.settings.show_debug);
 
             let (left_rect, right_rect) = split_stereo_views(rect);
             let left_painter = ui.painter().with_clip_rect(left_rect);

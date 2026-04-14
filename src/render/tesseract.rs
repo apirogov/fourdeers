@@ -167,6 +167,7 @@ impl<'a> TesseractRenderContext<'a> {
         batch.submit(painter);
     }
 
+    #[allow(dead_code)]
     pub(crate) fn collect_edge_vertices(
         &self,
         projector: &StereoProjector,

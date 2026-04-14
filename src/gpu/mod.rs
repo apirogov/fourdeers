@@ -1,5 +1,8 @@
+#[allow(dead_code)]
 pub(crate) mod callback;
+#[allow(dead_code)]
 pub(crate) mod pipeline;
+#[allow(dead_code)]
 pub(crate) mod vertex;
 
 pub(crate) use vertex::GpuVertex;
@@ -10,8 +13,10 @@ use egui_wgpu::RenderState;
 use self::callback::GpuCallback;
 use self::pipeline::GpuPipeline;
 
+#[allow(dead_code)]
 pub(crate) struct GpuRenderer;
 
+#[allow(dead_code)]
 impl GpuRenderer {
     pub fn try_new(rs: &RenderState) -> Option<Self> {
         let target_format = rs.target_format;
