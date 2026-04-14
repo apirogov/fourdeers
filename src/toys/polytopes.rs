@@ -1,4 +1,4 @@
-//! Tesseract visualization toy
+//! Multi-polytope scene with all 6 regular convex 4-polytopes
 
 use eframe::egui;
 use nalgebra::Vector4;
@@ -15,6 +15,37 @@ use crate::view::CompassView;
 
 const POSITION_SLIDER_RANGE: std::ops::RangeInclusive<f32> = -10.0..=10.0;
 const W_SLIDER_RANGE: std::ops::RangeInclusive<f32> = -3.0..=3.0;
+const JUMP_DISTANCE: f32 = 5.0;
+
+const POLYTOPE_POSITIONS: [(PolytopeType, [f32; 4]); 6] = [
+    (PolytopeType::FiveCell, [-8.0, 4.0, 6.0, 3.0]),
+    (PolytopeType::EightCell, [2.0, 0.0, 0.0, 0.0]),
+    (PolytopeType::SixteenCell, [-4.0, -8.0, 8.0, -4.0]),
+    (PolytopeType::TwentyFourCell, [10.0, 5.0, -4.0, 5.0]),
+    (PolytopeType::SixHundredCell, [-6.0, -6.0, 12.0, -2.0]),
+    (PolytopeType::HundredTwentyCell, [6.0, 10.0, 4.0, -7.0]),
+];
+
+struct ScenePolytope {
+    polytope_type: PolytopeType,
+    position: Vector4<f32>,
+    world_vertices: Vec<Vector4<f32>>,
+    indices: Vec<u16>,
+}
+
+impl ScenePolytope {
+    fn new(polytope_type: PolytopeType, position: Vector4<f32>) -> Self {
+        let (base_vertices, indices) = create_polytope(polytope_type);
+        let world_vertices: Vec<Vector4<f32>> =
+            base_vertices.into_iter().map(|v| v + position).collect();
+        Self {
+            polytope_type,
+            position,
+            world_vertices,
+            indices,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 enum ActiveViewId {
@@ -27,9 +58,9 @@ enum ActiveViewId {
 #[derive(Default)]
 pub struct PolytopesToy {
     camera: Camera,
-    polytope_type: PolytopeType,
-    cached_vertices: Vec<Vector4<f32>>,
-    cached_indices: Vec<u16>,
+    polytopes: Vec<ScenePolytope>,
+    merged_vertices: Vec<Vector4<f32>>,
+    merged_indices: Vec<u16>,
     stereo: StereoSettings,
     four_d: FourDSettings,
     scene_view: SceneView,
@@ -41,13 +72,13 @@ pub struct PolytopesToy {
 impl PolytopesToy {
     #[must_use]
     pub fn new() -> Self {
-        let polytope_type = PolytopeType::EightCell;
-        let (cached_vertices, cached_indices) = create_polytope(polytope_type);
+        let polytopes = Self::build_scene();
+        let (merged_vertices, merged_indices) = Self::merge_geometry(&polytopes);
         Self {
             camera: Camera::new(),
-            polytope_type,
-            cached_vertices,
-            cached_indices,
+            polytopes,
+            merged_vertices,
+            merged_indices,
             stereo: StereoSettings::new(),
             four_d: FourDSettings::default(),
             scene_view: SceneView::new(),
@@ -57,10 +88,31 @@ impl PolytopesToy {
         }
     }
 
-    fn ensure_polytope_cached(&mut self) {
-        let (vertices, indices) = create_polytope(self.polytope_type);
-        self.cached_vertices = vertices;
-        self.cached_indices = indices;
+    fn build_scene() -> Vec<ScenePolytope> {
+        POLYTOPE_POSITIONS
+            .iter()
+            .map(|&(pt, pos)| ScenePolytope::new(pt, Vector4::from(pos)))
+            .collect()
+    }
+
+    fn merge_geometry(polytopes: &[ScenePolytope]) -> (Vec<Vector4<f32>>, Vec<u16>) {
+        let mut vertices = Vec::new();
+        let mut indices = Vec::new();
+        let mut vertex_offset: u32 = 0;
+        for p in polytopes {
+            vertices.extend_from_slice(&p.world_vertices);
+            indices.extend(p.indices.iter().map(|i| vertex_offset + *i as u32));
+            vertex_offset += p.world_vertices.len() as u32;
+        }
+        let merged_indices: Vec<u16> = indices
+            .into_iter()
+            .map(|i| {
+                let result = i as u16;
+                assert_eq!(result as u32, i, "index overflow in merged geometry");
+                result
+            })
+            .collect();
+        (vertices, merged_indices)
     }
 
     fn toggle_view(&mut self, view: ActiveViewId) {
@@ -69,6 +121,18 @@ impl PolytopesToy {
         } else {
             view
         };
+    }
+
+    fn jump_to_selected_waypoint(&mut self) {
+        let waypoints = self.compass_waypoints();
+        if let Some(wp) = self.compass.current_waypoint(&waypoints) {
+            self.camera.position = wp.position + Vector4::new(0.0, 0.0, -JUMP_DISTANCE, 0.0);
+            self.camera.set_yaw_l(0.0);
+            self.camera.set_pitch_l(0.0);
+            self.camera.set_yaw_r(0.0);
+            self.camera.set_pitch_r(0.0);
+            self.active_view = ActiveViewId::Scene;
+        }
     }
 
     fn render_camera_controls(&mut self, ui: &mut egui::Ui) {
@@ -178,25 +242,22 @@ impl PolytopesToy {
     }
 
     fn compass_waypoints(&self) -> Vec<CompassWaypoint> {
-        vec![
-            CompassWaypoint {
-                title: "Origin",
-                position: Vector4::new(0.0, 0.0, 0.0, 0.0),
-            },
-            CompassWaypoint {
-                title: "TestPoint",
-                position: Vector4::new(1.0, 2.0, 3.0, 4.0),
-            },
-        ]
+        self.polytopes
+            .iter()
+            .map(|p| CompassWaypoint {
+                title: p.polytope_type.short_name(),
+                position: p.position,
+            })
+            .collect()
     }
 
     fn scene_geometry_bounds(&self) -> Option<Bounds4D> {
-        if self.cached_vertices.is_empty() {
-            return None;
-        }
-        let mut bounds = Bounds4D::from_point(self.cached_vertices[0]);
-        for v in &self.cached_vertices[1..] {
-            bounds = bounds.expanded_to(*v);
+        let first_vertex = self.polytopes.first()?.world_vertices.first()?;
+        let mut bounds = Bounds4D::from_point(*first_vertex);
+        for p in &self.polytopes {
+            for v in &p.world_vertices {
+                bounds = bounds.expanded_to(*v);
+            }
         }
         Some(bounds)
     }
@@ -217,31 +278,33 @@ impl Toy for PolytopesToy {
     }
 
     fn render_sidebar(&mut self, ui: &mut egui::Ui) {
-        ui.label("4D Polytope Visualization");
+        ui.label("4D Polytope Scene");
 
-        let prev_type = self.polytope_type;
-        egui::ComboBox::from_label("")
-            .selected_text(self.polytope_type.to_string())
-            .show_ui(ui, |ui| {
-                for poly_type in PolytopeType::all() {
-                    ui.selectable_value(&mut self.polytope_type, poly_type, poly_type.to_string());
-                }
-            });
-        if self.polytope_type != prev_type {
-            self.ensure_polytope_cached();
-            self.camera.reset();
-        }
-
+        let total_vertices: usize = self.polytopes.iter().map(|p| p.world_vertices.len()).sum();
+        let total_edges: usize = self.polytopes.iter().map(|p| p.indices.len() / 2).sum();
         ui.label(format!(
-            "{} vertices, {} edges",
-            self.polytope_type.vertex_count(),
-            self.polytope_type.edge_count()
+            "{} polytopes \u{2022} {} vertices \u{2022} {} edges",
+            self.polytopes.len(),
+            total_vertices,
+            total_edges
         ));
 
         ui.separator();
 
         ui.collapsing("Controls", |ui| {
-            ui.label("Arrows Up/Down: Y | Arrows Left/Right: X | PgUp/Dn: Z | ,/. : W");
+            ui.label("Movement (hold):");
+            ui.label("  Arrows: Up/Down/Left/Right");
+            ui.label("  PgUp/PgDn: Forward/Backward");
+            ui.label("  Comma/Period: Ana/Kata");
+            ui.label("");
+            ui.label("Views:");
+            ui.label("  M: Menu | C: Compass | G: Map");
+            ui.label("  U: Debug info (scene view)");
+            ui.label("");
+            ui.label("Waypoints:");
+            ui.label("  Arrow Left/Right: cycle (compass)");
+            ui.label("  J: Jump to waypoint");
+            ui.label("  F: Toggle frame mode");
         });
 
         ui.add_space(8.0);
@@ -251,8 +314,6 @@ impl Toy for PolytopesToy {
         });
 
         ui.separator();
-        ui.add_space(4.0);
-
         ui.add_space(4.0);
     }
 
@@ -264,8 +325,8 @@ impl Toy for PolytopesToy {
                     rect,
                     SceneRenderParams {
                         camera: &self.camera,
-                        vertices: &self.cached_vertices,
-                        indices: &self.cached_indices,
+                        vertices: &self.merged_vertices,
+                        indices: &self.merged_indices,
                         four_d: self.four_d,
                         stereo: self.stereo,
                         show_debug,
@@ -365,6 +426,15 @@ impl Toy for PolytopesToy {
             }
         }
 
+        if matches!(self.active_view, ActiveViewId::Compass) && !analysis.is_left_view {
+            if let Some(zone) = analysis.zone {
+                if !analysis.is_hold && zone == Zone::North {
+                    self.jump_to_selected_waypoint();
+                    return ViewAction::None;
+                }
+            }
+        }
+
         match self.active_view {
             ActiveViewId::Scene => self.scene_view.handle_pointer(&analysis, &mut self.camera),
             ActiveViewId::Map => {
@@ -404,6 +474,9 @@ impl Toy for PolytopesToy {
             }
             if i.key_pressed(egui::Key::G) {
                 self.toggle_view(ActiveViewId::Map);
+            }
+            if i.key_pressed(egui::Key::J) {
+                self.jump_to_selected_waypoint();
             }
         });
 

@@ -73,6 +73,7 @@ impl CompassView {
     ) {
         let frame_label = self.frame_mode.display_label();
         render_tap_zone_label(left_painter, left_rect, Zone::South, frame_label, None);
+        render_tap_zone_label(right_painter, right_rect, Zone::North, "Jump", None);
         render_tap_zone_label(right_painter, right_rect, Zone::South, "Prev", None);
         render_tap_zone_label(right_painter, right_rect, Zone::SouthEast, "Next", None);
     }
