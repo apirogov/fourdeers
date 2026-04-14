@@ -100,29 +100,25 @@ pub enum DragView {
     Right,
 }
 
-/// Result of analyzing a tap within a stereo view rect.
+/// Result of analyzing a pointer event within a stereo view rect.
 #[derive(Debug, Clone)]
-pub struct TapAnalysis {
+pub struct PointerAnalysis {
     pub is_left_view: bool,
-    pub view_rect: egui::Rect,
-    pub zone: Zone,
-    pub zone_mode: ZoneMode,
-}
-
-/// Identifies a specific tetrahedron by its view half and zone.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct TetraId {
-    pub is_left_view: bool,
-    pub zone: Zone,
+    pub norm_pos: egui::Vec2,
+    pub zone: Option<Zone>,
+    pub drag_delta: egui::Vec2,
+    pub drag_view: Option<DragView>,
+    pub is_hold: bool,
+    pub is_drag: bool,
 }
 
 #[must_use]
-pub fn analyze_tap_in_stereo_view_with_modes(
+pub fn analyze_pointer_initial(
     visualization_rect: egui::Rect,
     tap_pos: egui::Pos2,
     left_zone_mode: ZoneMode,
     right_zone_mode: ZoneMode,
-) -> Option<TapAnalysis> {
+) -> Option<PointerAnalysis> {
     if !visualization_rect.contains(tap_pos) {
         return None;
     }
@@ -150,12 +146,27 @@ pub fn analyze_tap_in_stereo_view_with_modes(
 
     let zone = zone_from_rect(view_rect, tap_pos, zone_mode)?;
 
-    Some(TapAnalysis {
+    // Normalized position within the view rect (0.0 to 1.0)
+    let norm_x = (tap_pos.x - view_rect.min.x) / view_rect.width();
+    let norm_y = (tap_pos.y - view_rect.min.y) / view_rect.height();
+    let norm_pos = egui::vec2(norm_x, norm_y);
+
+    Some(PointerAnalysis {
         is_left_view,
-        view_rect,
-        zone,
-        zone_mode,
+        norm_pos,
+        zone: Some(zone),
+        drag_delta: egui::Vec2::ZERO,
+        drag_view: None,
+        is_hold: false,
+        is_drag: false,
     })
+}
+
+/// Identifies a specific tetrahedron by its view half and zone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TetraId {
+    pub is_left_view: bool,
+    pub zone: Zone,
 }
 
 #[must_use]
@@ -234,41 +245,39 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_analyze_tap_in_stereo_view_with_modes() {
-        let vis_rect = egui::Rect {
-            min: egui::pos2(0.0, 0.0),
-            max: egui::pos2(200.0, 100.0),
-        };
-
-        let left = analyze_tap_in_stereo_view_with_modes(
-            vis_rect,
-            egui::pos2(10.0, 10.0),
+    fn test_analyze_pointer_initial_includes_geometry() {
+        let visualization_rect =
+            egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(200.0, 100.0));
+        let tap_pos = egui::pos2(50.0, 25.0);
+        let analysis = analyze_pointer_initial(
+            visualization_rect,
+            tap_pos,
             ZoneMode::NineZones,
-            ZoneMode::FourZones,
+            ZoneMode::NineZones,
         )
-        .expect("left analysis");
-        assert!(left.is_left_view);
-        assert_eq!(left.zone_mode, ZoneMode::NineZones);
-        assert_eq!(left.zone, Zone::NorthWest);
+        .unwrap();
+        assert_eq!(analysis.is_left_view, true);
+        assert_eq!(analysis.zone, Some(Zone::North)); // top-middle of left half
+        assert_eq!(analysis.norm_pos.x, 0.5);
+        assert_eq!(analysis.norm_pos.y, 0.25);
+        assert_eq!(analysis.drag_delta, egui::Vec2::ZERO);
+        assert_eq!(analysis.drag_view, None);
+        assert_eq!(analysis.is_hold, false);
+        assert_eq!(analysis.is_drag, false);
+    }
 
-        let right = analyze_tap_in_stereo_view_with_modes(
-            vis_rect,
-            egui::pos2(150.0, 10.0),
+    #[test]
+    fn test_analyze_pointer_initial_outside() {
+        let visualization_rect =
+            egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(200.0, 100.0));
+        let tap_pos = egui::pos2(-10.0, 50.0);
+        let analysis = analyze_pointer_initial(
+            visualization_rect,
+            tap_pos,
             ZoneMode::NineZones,
-            ZoneMode::FourZones,
-        )
-        .expect("right analysis");
-        assert!(!right.is_left_view);
-        assert_eq!(right.zone_mode, ZoneMode::FourZones);
-        assert_eq!(right.zone, Zone::North);
-
-        let outside = analyze_tap_in_stereo_view_with_modes(
-            vis_rect,
-            egui::pos2(-10.0, 50.0),
             ZoneMode::NineZones,
-            ZoneMode::FourZones,
         );
-        assert!(outside.is_none());
+        assert!(analysis.is_none());
     }
 
     #[test]

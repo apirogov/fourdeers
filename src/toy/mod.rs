@@ -3,7 +3,7 @@
 use eframe::egui;
 use nalgebra::Vector4;
 
-use crate::input::{DragView, ZoneMode};
+use crate::input::{DragView, PointerAnalysis, ZoneMode};
 use crate::render::{FourDSettings, StereoSettings};
 
 pub mod manager;
@@ -45,18 +45,10 @@ pub trait Toy {
     fn render_sidebar(&mut self, ui: &mut egui::Ui);
     /// Render the toy's active view into the given rect.
     fn render_scene(&mut self, ui: &mut egui::Ui, rect: egui::Rect, show_debug: bool);
-    /// Handle a single-finger tap. The toy performs its own zone analysis based on the active view.
-    fn handle_tap(&mut self, pos: egui::Pos2, vis_rect: egui::Rect) -> ViewAction;
-    /// Handle an ongoing drag gesture.
-    fn handle_drag(
-        &mut self,
-        is_left_view: bool,
-        from: egui::Pos2,
-        to: egui::Pos2,
-        w_thickness: &mut f32,
-    );
-    /// Handle a held tap (long press). The toy performs its own zone analysis.
-    fn handle_hold(&mut self, pos: egui::Pos2, vis_rect: egui::Rect);
+    /// Handle pointer events (tap, hold) with unified analysis.
+    fn handle_pointer(&mut self, analysis: PointerAnalysis) -> ViewAction;
+    /// Handle an ongoing drag gesture, directly mutating w_thickness.
+    fn handle_drag(&mut self, analysis: PointerAnalysis, w_thickness: &mut f32) -> ViewAction;
     /// Called when a drag gesture starts.
     fn handle_drag_start(&mut self, drag_view: DragView);
 

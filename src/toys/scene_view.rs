@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use crate::camera::{Camera, CameraProjection, Direction4D};
 use crate::colors::LABEL_INACTIVE;
 use crate::input::{
-    zone_to_movement_action, DragState, DragView, TapAnalysis, TetraId, Zone, ZoneMode,
+    zone_to_movement_action, DragState, DragView, PointerAnalysis, TetraId, Zone, ZoneMode,
     HOLD_MOVE_SPEED,
 };
 use crate::input::{KEYBOARD_MOVE_SPEED, TAP_MOVE_SPEED};
@@ -130,19 +130,34 @@ impl SceneView {
         }
     }
 
-    pub fn handle_tap(&mut self, analysis: &TapAnalysis, camera: &mut Camera) -> ViewAction {
-        if analysis.is_left_view && analysis.zone == Zone::North {
-            self.info_level = (self.info_level + 1) % 3;
-            return ViewAction::None;
-        }
+    pub fn handle_pointer(
+        &mut self,
+        analysis: &PointerAnalysis,
+        camera: &mut Camera,
+    ) -> ViewAction {
+        if let Some(zone) = analysis.zone {
+            // Only allow toggle actions on tap (not hold)
+            if !analysis.is_hold {
+                if analysis.is_left_view && zone == Zone::North {
+                    self.info_level = (self.info_level + 1) % 3;
+                    return ViewAction::None;
+                }
 
-        if !analysis.is_left_view && analysis.zone == Zone::Center {
-            self.right_view_4d_rotation = !self.right_view_4d_rotation;
-            return ViewAction::None;
-        }
+                if !analysis.is_left_view && zone == Zone::Center {
+                    self.right_view_4d_rotation = !self.right_view_4d_rotation;
+                    return ViewAction::None;
+                }
+            }
 
-        if let Some(action) = Self::zone_to_action(analysis.zone, analysis.is_left_view) {
-            self.apply_camera_action(camera, action, TAP_MOVE_SPEED);
+            // Movement actions work on both tap and hold
+            if let Some(action) = Self::zone_to_action(zone, analysis.is_left_view) {
+                let speed = if analysis.is_hold {
+                    HOLD_MOVE_SPEED
+                } else {
+                    TAP_MOVE_SPEED
+                };
+                self.apply_camera_action(camera, action, speed);
+            }
         }
 
         ViewAction::None
@@ -150,14 +165,13 @@ impl SceneView {
 
     pub fn handle_drag(
         &mut self,
+        analysis: &PointerAnalysis,
         camera: &mut Camera,
-        from: egui::Pos2,
-        to: egui::Pos2,
         w_thickness: &mut f32,
-    ) {
-        let delta = to - from;
+    ) -> ViewAction {
+        let delta = analysis.drag_delta;
 
-        match self.drag_state.drag_view {
+        match analysis.drag_view {
             Some(DragView::Left) => {
                 *w_thickness = adjust_w_thickness(*w_thickness, delta.x);
             }
@@ -171,12 +185,7 @@ impl SceneView {
             }
             None => {}
         }
-    }
-
-    pub fn handle_hold(&mut self, analysis: &TapAnalysis, camera: &mut Camera) {
-        if let Some(action) = Self::zone_to_action(analysis.zone, analysis.is_left_view) {
-            self.apply_camera_action(camera, action, HOLD_MOVE_SPEED);
-        }
+        ViewAction::None
     }
 
     pub fn handle_drag_start(&mut self, drag_view: DragView) {

@@ -52,8 +52,8 @@ pub mod zones;
 
 pub use zone_debug::{render_zone_debug_overlay, ZoneDebugOptions};
 pub use zones::{
-    analyze_tap_in_stereo_view_with_modes, zone_from_rect, zone_to_movement_action, DragView,
-    TapAnalysis, TetraId, Zone, ZoneMode,
+    analyze_pointer_initial, zone_from_rect, zone_to_movement_action, DragView, PointerAnalysis,
+    TetraId, Zone, ZoneMode,
 };
 
 /// Tracks the active drag gesture state.

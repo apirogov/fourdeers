@@ -2,7 +2,7 @@ use eframe::egui;
 use nalgebra::{UnitQuaternion, Vector3, Vector4};
 
 use crate::camera::ROTATION_SENSITIVITY;
-use crate::input::{TapAnalysis, Zone};
+use crate::input::{PointerAnalysis, Zone};
 use crate::render::{
     draw_background, draw_center_divider, render_stereo_views, render_tap_zone_label,
     render_tetrahedron_with_projector, CompassFrameMode, ProjectionMode, StereoSettings,
@@ -77,32 +77,42 @@ impl CompassView {
         render_tap_zone_label(right_painter, right_rect, Zone::SouthEast, "Next", None);
     }
 
-    pub fn handle_tap(&mut self, analysis: &TapAnalysis, waypoints_len: usize) -> ViewAction {
-        if analysis.is_left_view {
-            if analysis.zone == Zone::South {
-                self.frame_mode = self.frame_mode.other();
-                return ViewAction::None;
-            }
-        } else {
-            if analysis.zone == Zone::South {
-                self.cycle_waypoint(-1, waypoints_len);
-            }
-            if analysis.zone == Zone::SouthEast {
-                self.cycle_waypoint(1, waypoints_len);
+    pub fn handle_pointer(
+        &mut self,
+        analysis: &PointerAnalysis,
+        waypoints_len: usize,
+    ) -> ViewAction {
+        if let Some(zone) = analysis.zone {
+            // Only allow toggle actions on tap (not hold)
+            if !analysis.is_hold {
+                if analysis.is_left_view {
+                    if zone == Zone::South {
+                        self.frame_mode = self.frame_mode.other();
+                        return ViewAction::None;
+                    }
+                } else {
+                    if zone == Zone::South {
+                        self.cycle_waypoint(-1, waypoints_len);
+                    }
+                    if zone == Zone::SouthEast {
+                        self.cycle_waypoint(1, waypoints_len);
+                    }
+                }
             }
         }
 
         ViewAction::None
     }
 
-    pub fn handle_drag(&mut self, from: egui::Pos2, to: egui::Pos2) {
-        let delta = to - from;
+    pub fn handle_drag(&mut self, analysis: &PointerAnalysis) -> ViewAction {
+        let delta = analysis.drag_delta;
         let yaw_rot =
             UnitQuaternion::from_axis_angle(&Vector3::y_axis(), delta.x * ROTATION_SENSITIVITY);
         let pitch_rot =
             UnitQuaternion::from_axis_angle(&Vector3::x_axis(), delta.y * ROTATION_SENSITIVITY);
         let incremental = pitch_rot * yaw_rot;
         self.rotation = incremental * self.rotation;
+        ViewAction::None
     }
 
     pub fn clamped_waypoint_index(&mut self, waypoints_len: usize) -> usize {

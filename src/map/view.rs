@@ -3,10 +3,11 @@ use eframe::egui;
 use crate::camera::Camera;
 use crate::colors::LABEL_INACTIVE;
 use crate::geometry::Bounds4D;
-use crate::input::TAP_MOVE_SPEED;
-use crate::input::{zone_to_movement_action, TapAnalysis, Zone, HOLD_MOVE_SPEED};
+use crate::input::{
+    zone_to_movement_action, DragView, PointerAnalysis, Zone, HOLD_MOVE_SPEED, TAP_MOVE_SPEED,
+};
 use crate::map::{compute_bounds, MapRenderer};
-use crate::render::{render_tap_zone_label, CompassFrameMode};
+use crate::render::{adjust_w_thickness, render_tap_zone_label, CompassFrameMode};
 use crate::toy::ViewAction;
 
 pub struct MapView {
@@ -72,61 +73,76 @@ impl MapView {
         );
     }
 
-    pub fn handle_tap(
+    pub fn handle_pointer(
         &mut self,
-        analysis: &TapAnalysis,
+        analysis: &PointerAnalysis,
         scene_camera: Option<&Camera>,
         waypoints: &[crate::toy::CompassWaypoint],
         geometry_bounds: Option<Bounds4D>,
     ) -> ViewAction {
         if analysis.is_left_view {
-            match analysis.zone {
-                Zone::South => {
-                    self.frame_mode = self.frame_mode.other();
-                    return ViewAction::None;
-                }
-                Zone::North => {
-                    self.renderer.toggle_labels();
-                    return ViewAction::None;
-                }
-                Zone::SouthEast => {
-                    if let Some(camera) = scene_camera {
-                        let bounds = compute_bounds(camera, waypoints, geometry_bounds);
-                        self.renderer.reset_to_fit(camera, &bounds);
+            if let Some(zone) = analysis.zone {
+                // Only allow toggle actions on tap (not hold)
+                if !analysis.is_hold {
+                    match zone {
+                        Zone::South => {
+                            self.frame_mode = self.frame_mode.other();
+                            return ViewAction::None;
+                        }
+                        Zone::North => {
+                            self.renderer.toggle_labels();
+                            return ViewAction::None;
+                        }
+                        Zone::SouthEast => {
+                            if let Some(camera) = scene_camera {
+                                let bounds = compute_bounds(camera, waypoints, geometry_bounds);
+                                self.renderer.reset_to_fit(camera, &bounds);
+                            }
+                            return ViewAction::None;
+                        }
+                        _ => {}
                     }
-                    return ViewAction::None;
                 }
-                _ => {}
             }
         } else {
-            if analysis.zone == Zone::Center {
+            // Rotation toggle only on tap (not hold)
+            if !analysis.is_hold && analysis.zone == Some(Zone::Center) {
                 self.rotation_3d = !self.rotation_3d;
                 return ViewAction::None;
             }
 
-            if let Some(action) = zone_to_movement_action(analysis.zone) {
-                self.renderer.apply_action(action, TAP_MOVE_SPEED);
+            if let Some(zone) = analysis.zone {
+                if let Some(action) = zone_to_movement_action(zone) {
+                    let speed = if analysis.is_hold {
+                        HOLD_MOVE_SPEED
+                    } else {
+                        TAP_MOVE_SPEED
+                    };
+                    self.renderer.apply_action(action, speed);
+                }
             }
         }
 
         ViewAction::None
     }
 
-    pub fn handle_drag(&mut self, from: egui::Pos2, to: egui::Pos2) {
-        let delta = to - from;
-        if self.rotation_3d {
-            self.renderer.rotate_3d(delta.x, delta.y);
-        } else {
-            self.renderer.rotate_4d(delta.x, delta.y);
-        }
-    }
+    pub fn handle_drag(&mut self, analysis: &PointerAnalysis, w_thickness: &mut f32) -> ViewAction {
+        let delta = analysis.drag_delta;
 
-    pub fn handle_hold(&mut self, analysis: &TapAnalysis) {
-        if !analysis.is_left_view {
-            if let Some(action) = zone_to_movement_action(analysis.zone) {
-                self.renderer.apply_action(action, HOLD_MOVE_SPEED);
+        match analysis.drag_view {
+            Some(DragView::Left) => {
+                *w_thickness = adjust_w_thickness(*w_thickness, delta.x);
             }
+            Some(DragView::Right) => {
+                if self.rotation_3d {
+                    self.renderer.rotate_3d(delta.x, delta.y);
+                } else {
+                    self.renderer.rotate_4d(delta.x, delta.y);
+                }
+            }
+            None => {}
         }
+        ViewAction::None
     }
 
     pub fn handle_keyboard(&mut self, ctx: &egui::Context) {

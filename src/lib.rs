@@ -23,6 +23,6 @@ mod wasm;
 
 pub use app::FourDeersApp;
 pub use camera::Camera;
-pub use input::{DragView, TapAnalysis, TetraId, Zone};
+pub use input::{DragView, PointerAnalysis, TetraId, Zone};
 pub use polytopes::PolytopeType;
 pub use toy::Toy;

@@ -5,15 +5,10 @@ use nalgebra::Vector4;
 
 use crate::camera::Camera;
 use crate::geometry::Bounds4D;
-use crate::input::{
-    analyze_tap_in_stereo_view_with_modes, zone_from_rect, DragView, TapAnalysis, Zone, ZoneMode,
-};
+use crate::input::{DragView, PointerAnalysis, Zone, ZoneMode};
 use crate::map::{MapRenderParams, MapView};
 use crate::polytopes::{create_polytope, PolytopeType};
-use crate::render::{
-    adjust_w_thickness, render_tap_zone_label, split_stereo_views, CompassFrameMode, FourDSettings,
-    StereoSettings,
-};
+use crate::render::{render_tap_zone_label, CompassFrameMode, FourDSettings, StereoSettings};
 use crate::toy::{CompassWaypoint, Toy, ViewAction};
 use crate::toys::scene_view::{SceneRenderParams, SceneView};
 use crate::view::CompassView;
@@ -180,18 +175,6 @@ impl PolytopesToy {
             four_d: self.four_d,
         };
         self.map.render(ui, rect, &params);
-    }
-
-    fn handle_map_tap(&mut self, analysis: &TapAnalysis) {
-        let waypoints = self.compass_waypoints();
-        let geometry_bounds = self.scene_geometry_bounds();
-        let action = self
-            .map
-            .handle_tap(analysis, Some(&self.camera), &waypoints, geometry_bounds);
-        if let ViewAction::SelectWaypoint(idx) = action {
-            self.compass.waypoint_index = idx;
-            self.active_view = ActiveViewId::Compass;
-        }
     }
 
     fn compass_waypoints(&self) -> Vec<CompassWaypoint> {
@@ -365,94 +348,46 @@ impl Toy for PolytopesToy {
         self.stereo = *settings;
     }
 
-    fn handle_tap(&mut self, pos: egui::Pos2, vis_rect: egui::Rect) -> ViewAction {
-        let (left_rect, _right_rect) = split_stereo_views(vis_rect);
-        let left_zone = zone_from_rect(left_rect, pos, ZoneMode::NineZones);
-
-        match left_zone {
-            Some(Zone::West) => {
-                self.toggle_view(ActiveViewId::Map);
-                return ViewAction::None;
+    fn handle_pointer(&mut self, analysis: PointerAnalysis) -> ViewAction {
+        if analysis.is_left_view && !analysis.is_hold {
+            if let Some(zone) = analysis.zone {
+                match zone {
+                    Zone::West => {
+                        self.toggle_view(ActiveViewId::Map);
+                        return ViewAction::None;
+                    }
+                    Zone::SouthWest => {
+                        self.toggle_view(ActiveViewId::Compass);
+                        return ViewAction::None;
+                    }
+                    _ => {}
+                }
             }
-            Some(Zone::SouthWest) => {
-                self.toggle_view(ActiveViewId::Compass);
-                return ViewAction::None;
-            }
-            _ => {}
         }
-
-        let left_zone_mode = match self.active_view {
-            ActiveViewId::Scene => self.scene_view.zone_mode(),
-            _ => ZoneMode::NineZones,
-        };
-
-        let analysis =
-            analyze_tap_in_stereo_view_with_modes(vis_rect, pos, left_zone_mode, left_zone_mode);
-
-        if analysis.is_none() {
-            return ViewAction::None;
-        }
-
-        let analysis = analysis.unwrap();
 
         match self.active_view {
-            ActiveViewId::Scene => self.scene_view.handle_tap(&analysis, &mut self.camera),
+            ActiveViewId::Scene => self.scene_view.handle_pointer(&analysis, &mut self.camera),
             ActiveViewId::Map => {
-                self.handle_map_tap(&analysis);
-                ViewAction::None
+                let waypoints = self.compass_waypoints();
+                let geometry_bounds = self.scene_geometry_bounds();
+                self.map
+                    .handle_pointer(&analysis, Some(&self.camera), &waypoints, geometry_bounds)
             }
             ActiveViewId::Compass => {
                 let waypoints_len = self.compass_waypoints().len();
-                self.compass.handle_tap(&analysis, waypoints_len);
-                ViewAction::None
+                self.compass.handle_pointer(&analysis, waypoints_len)
             }
         }
     }
 
-    fn handle_drag(
-        &mut self,
-        is_left_view: bool,
-        from: egui::Pos2,
-        to: egui::Pos2,
-        w_thickness: &mut f32,
-    ) {
+    fn handle_drag(&mut self, analysis: PointerAnalysis, w_thickness: &mut f32) -> ViewAction {
         match self.active_view {
             ActiveViewId::Scene => {
                 self.scene_view
-                    .handle_drag(&mut self.camera, from, to, w_thickness);
+                    .handle_drag(&analysis, &mut self.camera, w_thickness)
             }
-            ActiveViewId::Map => {
-                if is_left_view {
-                    let delta = to - from;
-                    *w_thickness = adjust_w_thickness(*w_thickness, delta.x);
-                } else {
-                    self.map.handle_drag(from, to);
-                }
-            }
-            ActiveViewId::Compass => {
-                self.compass.handle_drag(from, to);
-            }
-        }
-    }
-
-    fn handle_hold(&mut self, pos: egui::Pos2, vis_rect: egui::Rect) {
-        let left_zone_mode = match self.active_view {
-            ActiveViewId::Scene => self.scene_view.zone_mode(),
-            _ => ZoneMode::NineZones,
-        };
-
-        if let Some(analysis) =
-            analyze_tap_in_stereo_view_with_modes(vis_rect, pos, left_zone_mode, left_zone_mode)
-        {
-            match self.active_view {
-                ActiveViewId::Scene => {
-                    self.scene_view.handle_hold(&analysis, &mut self.camera);
-                }
-                ActiveViewId::Map => {
-                    self.map.handle_hold(&analysis);
-                }
-                ActiveViewId::Compass => {}
-            }
+            ActiveViewId::Map => self.map.handle_drag(&analysis, w_thickness),
+            ActiveViewId::Compass => self.compass.handle_drag(&analysis),
         }
     }
 

@@ -4,7 +4,7 @@ use eframe::egui;
 
 use crate::colors::PANEL_FILL;
 use crate::input::render_zone_debug_overlay;
-use crate::input::{DragView, ZoneDebugOptions, ZoneMode};
+use crate::input::{analyze_pointer_initial, DragView, PointerAnalysis, ZoneDebugOptions};
 use crate::render::{
     render_common_menu_half, split_stereo_views, FourDSettings, StereoSettings, W_THICKNESS_MAX,
     W_THICKNESS_MIN,
@@ -126,6 +126,7 @@ impl FourDeersApp {
 
                         if drag_distance > DRAG_THRESHOLD {
                             self.is_drag_mode = true;
+                            self.last_drag_pos = Some(pos); // Initialize last_pos!
                             if let Some(vis_rect) = self.visualization_rect {
                                 let center_x = vis_rect.center().x;
                                 let drag_view = if mouse_down_pos.x < center_x {
@@ -155,13 +156,21 @@ impl FourDeersApp {
 
     fn process_drag(&mut self, pos: egui::Pos2) {
         if let Some(last_pos) = self.last_drag_pos {
-            let is_left_view = matches!(self.drag_view, Some(DragView::Left));
-            self.toy_manager.active_toy_mut().handle_drag(
-                is_left_view,
-                last_pos,
-                pos,
-                &mut self.settings.four_d.w_thickness,
-            );
+            let delta = pos - last_pos;
+
+            let analysis = PointerAnalysis {
+                is_left_view: matches!(self.drag_view, Some(DragView::Left)),
+                norm_pos: egui::vec2(0.0, 0.0),
+                zone: None,
+                drag_delta: delta,
+                drag_view: self.drag_view,
+                is_hold: false,
+                is_drag: true,
+            };
+
+            self.toy_manager
+                .active_toy_mut()
+                .handle_drag(analysis, &mut self.settings.four_d.w_thickness);
         }
         self.last_drag_pos = Some(pos);
     }
@@ -173,7 +182,15 @@ impl FourDeersApp {
         if !vis_rect.contains(pos) {
             return;
         }
-        self.toy_manager.active_toy_mut().handle_hold(pos, vis_rect);
+
+        let left_zone_mode = self.toy_manager.active_toy().zone_mode_for_view(true);
+        let right_zone_mode = self.toy_manager.active_toy().zone_mode_for_view(false);
+        if let Some(mut analysis) =
+            analyze_pointer_initial(vis_rect, pos, left_zone_mode, right_zone_mode)
+        {
+            analysis.is_hold = true;
+            self.toy_manager.active_toy_mut().handle_pointer(analysis);
+        }
     }
 
     fn clear_drag_state(&mut self) {
@@ -390,18 +407,25 @@ impl FourDeersApp {
             return;
         }
 
-        let (left_rect, _) = split_stereo_views(visualization_rect);
-        let left_zone = crate::input::zone_from_rect(left_rect, pos, ZoneMode::NineZones);
-
-        if left_zone == Some(crate::input::Zone::NorthWest) {
-            self.menu_open = !self.menu_open;
+        let left_zone_mode = self.toy_manager.active_toy().zone_mode_for_view(true);
+        let right_zone_mode = self.toy_manager.active_toy().zone_mode_for_view(false);
+        let Some(analysis) =
+            analyze_pointer_initial(visualization_rect, pos, left_zone_mode, right_zone_mode)
+        else {
             return;
+        };
+
+        // Check for menu toggle
+        if analysis.is_left_view {
+            if let Some(zone) = analysis.zone {
+                if zone == crate::input::Zone::NorthWest {
+                    self.menu_open = !self.menu_open;
+                    return;
+                }
+            }
         }
 
-        let action = self
-            .toy_manager
-            .active_toy_mut()
-            .handle_tap(pos, visualization_rect);
+        let action = self.toy_manager.active_toy_mut().handle_pointer(analysis);
         if let ViewAction::ToggleMenu = action {
             self.menu_open = !self.menu_open;
         }
