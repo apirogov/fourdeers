@@ -17,12 +17,13 @@ const POSITION_SLIDER_RANGE: std::ops::RangeInclusive<f32> = -10.0..=10.0;
 const W_SLIDER_RANGE: std::ops::RangeInclusive<f32> = -3.0..=3.0;
 const JUMP_DISTANCE: f32 = 5.0;
 
-const POSITION_RADIUS: f32 = 8.0;
-const TESSERACT_Z_OFFSET: f32 = 3.0;
-const JITTER_RANGE: f32 = 2.0;
-const TESSERACT_JITTER: f32 = 1.0;
+const BOX_BOUND: f32 = 10.0;
+const MIN_PAIR_DIST: f32 = 10.0;
+const MIN_ORIGIN_DIST: f32 = 5.0;
+const REPULSION_ITERS: usize = 50;
 
 const ORIGIN_WAYPOINT_TITLE: &str = "Origin";
+const INITIAL_WAYPOINT_INDEX: usize = 1;
 
 struct XorShift64 {
     state: u64,
@@ -112,8 +113,21 @@ impl PolytopesToy {
     pub fn new() -> Self {
         let polytopes = Self::build_scene();
         let (merged_vertices, merged_indices) = Self::merge_geometry(&polytopes);
+
+        let mut camera = Camera::new();
+        if let Some(first) = polytopes.first() {
+            camera.position = first.position + Vector4::new(0.0, 0.0, -JUMP_DISTANCE, 0.0);
+            camera.set_yaw_l(0.0);
+            camera.set_pitch_l(0.0);
+            camera.set_yaw_r(0.0);
+            camera.set_pitch_r(0.0);
+        }
+
+        let mut compass = CompassView::new();
+        compass.set_waypoint_index(INITIAL_WAYPOINT_INDEX);
+
         Self {
-            camera: Camera::new(),
+            camera,
             polytopes,
             merged_vertices,
             merged_indices,
@@ -121,49 +135,47 @@ impl PolytopesToy {
             four_d: FourDSettings::default(),
             scene_view: SceneView::new(),
             map: MapView::new(),
-            compass: CompassView::new(),
+            compass,
             active_view: ActiveViewId::default(),
         }
     }
 
     fn generate_positions(rng: &mut XorShift64) -> Vec<(PolytopeType, Vector4<f32>)> {
-        let base_directions: [Vector4<f32>; 6] = [
-            Vector4::new(0.0, 0.0, TESSERACT_Z_OFFSET, 0.0),
-            Vector4::new(POSITION_RADIUS, 0.0, 0.0, 0.0),
-            Vector4::new(-POSITION_RADIUS, 0.0, 0.0, 0.0),
-            Vector4::new(0.0, POSITION_RADIUS, 0.0, 0.0),
-            Vector4::new(0.0, -POSITION_RADIUS, 0.0, 0.0),
-            Vector4::new(0.0, 0.0, -POSITION_RADIUS, 0.0),
-        ];
-
-        let positions: Vec<Vector4<f32>> = base_directions
-            .iter()
-            .enumerate()
-            .map(|(i, &base)| {
-                let jitter = if i == 0 {
-                    TESSERACT_JITTER
-                } else {
-                    JITTER_RANGE
-                };
+        let mut positions: Vec<Vector4<f32>> = (0..6)
+            .map(|_| {
                 Vector4::new(
-                    base.x + rng.next_f32(-jitter, jitter),
-                    base.y + rng.next_f32(-jitter, jitter),
-                    base.z + rng.next_f32(-jitter, jitter),
-                    base.w + rng.next_f32(-jitter, jitter),
+                    rng.next_f32(-BOX_BOUND, BOX_BOUND),
+                    rng.next_f32(-BOX_BOUND, BOX_BOUND),
+                    rng.next_f32(-BOX_BOUND, BOX_BOUND),
+                    rng.next_f32(-BOX_BOUND, BOX_BOUND),
                 )
             })
             .collect();
 
+        for _ in 0..REPULSION_ITERS {
+            for i in 0..positions.len() {
+                for j in (i + 1)..positions.len() {
+                    let diff = positions[i] - positions[j];
+                    let dist = diff.norm();
+                    if dist < MIN_PAIR_DIST && dist > 1e-6 {
+                        let push = diff * ((MIN_PAIR_DIST - dist) * 0.5 / dist);
+                        positions[i] += push;
+                        positions[j] -= push;
+                    }
+                }
+                let dist_origin = positions[i].norm();
+                if dist_origin < MIN_ORIGIN_DIST && dist_origin > 1e-6 {
+                    let push = positions[i] * ((MIN_ORIGIN_DIST - dist_origin) / dist_origin);
+                    positions[i] += push;
+                }
+                positions[i] = positions[i].map(|c| c.clamp(-BOX_BOUND, BOX_BOUND));
+            }
+        }
+
         let mut types: Vec<PolytopeType> = PolytopeType::all().to_vec();
-        let tesseract = types.remove(1);
         rng.shuffle(&mut types);
 
-        let mut result = Vec::with_capacity(6);
-        result.push((tesseract, positions[0]));
-        for (pt, pos) in types.into_iter().zip(positions.iter().skip(1)) {
-            result.push((pt, *pos));
-        }
-        result
+        types.into_iter().zip(positions).collect()
     }
 
     fn build_scene() -> Vec<ScenePolytope> {
