@@ -66,6 +66,7 @@ impl CallbackTrait for GpuCallback {
             0,
             bytemuck::cast_slice(&[super::pipeline::Uniforms {
                 screen_size: self.screen_size,
+                ..Default::default()
             }]),
         );
 

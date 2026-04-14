@@ -10,13 +10,21 @@ pub(crate) struct GpuPipeline {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Clone, Copy, Debug, Default, bytemuck::Pod, bytemuck::Zeroable)]
 pub(crate) struct Uniforms {
     pub screen_size: [f32; 2],
+    pub(crate) _padding: [f32; 2],
 }
 
 impl GpuPipeline {
-    pub fn new(device: &wgpu::Device, target_format: wgpu::TextureFormat) -> Self {
+    pub fn try_new(device: &wgpu::Device, target_format: wgpu::TextureFormat) -> Option<Self> {
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            Self::create(device, target_format)
+        }))
+        .ok()
+    }
+
+    fn create(device: &wgpu::Device, target_format: wgpu::TextureFormat) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("fourdeers_wireframe"),
             source: wgpu::ShaderSource::Wgsl(include_str!("shaders/wireframe.wgsl").into()),
@@ -40,17 +48,9 @@ impl GpuPipeline {
             label: Some("fourdeers_uniforms"),
             contents: bytemuck::cast_slice(&[Uniforms {
                 screen_size: [1.0, 1.0],
+                ..Default::default()
             }]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-
-        let _bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("fourdeers_bind_group"),
-            layout: &bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: uniform_buffer.as_entire_binding(),
-            }],
         });
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {

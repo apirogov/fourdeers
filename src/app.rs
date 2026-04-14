@@ -45,7 +45,7 @@ pub struct FourDeersApp {
 impl FourDeersApp {
     #[must_use]
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        let gpu_renderer = cc.wgpu_render_state.as_ref().map(GpuRenderer::new);
+        let gpu_renderer = cc.wgpu_render_state.as_ref().and_then(GpuRenderer::try_new);
         Self {
             toy_manager: ToyManager::new(),
             gpu_renderer,

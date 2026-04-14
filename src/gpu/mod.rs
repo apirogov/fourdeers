@@ -13,13 +13,13 @@ use self::pipeline::GpuPipeline;
 pub(crate) struct GpuRenderer;
 
 impl GpuRenderer {
-    pub fn new(rs: &RenderState) -> Self {
+    pub fn try_new(rs: &RenderState) -> Option<Self> {
         let target_format = rs.target_format;
 
-        let pipeline = GpuPipeline::new(&rs.device, target_format);
+        let pipeline = GpuPipeline::try_new(&rs.device, target_format)?;
         rs.renderer.write().callback_resources.insert(pipeline);
 
-        Self
+        Some(Self)
     }
 
     pub fn submit(
