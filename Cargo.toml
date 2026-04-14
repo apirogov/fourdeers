@@ -11,6 +11,7 @@ name = "fourdeers"
 path = "src/main.rs"
 
 [dependencies]
+bytemuck = "1"
 egui = "0.33"
 nalgebra = "0.33"
 

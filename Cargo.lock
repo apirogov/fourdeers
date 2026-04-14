@@ -1099,6 +1099,7 @@ dependencies = [
 name = "fourdeers"
 version = "0.1.0"
 dependencies = [
+ "bytemuck",
  "chrono",
  "console_error_panic_hook",
  "eframe",

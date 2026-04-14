@@ -4,6 +4,7 @@ pub mod app;
 pub mod camera;
 pub mod colors;
 pub mod geometry;
+pub(crate) mod gpu;
 pub mod input;
 pub mod map;
 pub mod polytopes;
