@@ -22,6 +22,8 @@ impl GpuFrameMap {
 struct GpuFrameResources {
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
+    #[allow(dead_code)]
+    uniform_buffer: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
     index_count: u32,
 }
@@ -55,7 +57,7 @@ impl CallbackTrait for GpuCallback {
     fn prepare(
         &self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        _queue: &wgpu::Queue,
         _screen_descriptor: &ScreenDescriptor,
         _egui_encoder: &mut wgpu::CommandEncoder,
         callback_resources: &mut CallbackResources,
@@ -68,14 +70,14 @@ impl CallbackTrait for GpuCallback {
             .get::<GpuPipeline>()
             .expect("GpuPipeline not found");
 
-        queue.write_buffer(
-            &pipeline.uniform_buffer,
-            0,
-            bytemuck::cast_slice(&[super::pipeline::Uniforms {
+        let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("fourdeers_uniforms"),
+            contents: bytemuck::cast_slice(&[super::pipeline::Uniforms {
                 rect_origin: self.rect_origin,
                 rect_size: self.rect_size,
             }]),
-        );
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
 
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("fourdeers_vertices"),
@@ -89,7 +91,14 @@ impl CallbackTrait for GpuCallback {
             usage: wgpu::BufferUsages::INDEX,
         });
 
-        let bind_group = pipeline.create_bind_group(device);
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("fourdeers_bind_group"),
+            layout: &pipeline.bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: uniform_buffer.as_entire_binding(),
+            }],
+        });
 
         let frame_map = callback_resources
             .entry::<GpuFrameMap>()
@@ -100,6 +109,7 @@ impl CallbackTrait for GpuCallback {
             GpuFrameResources {
                 vertex_buffer,
                 index_buffer,
+                uniform_buffer,
                 bind_group,
                 index_count: self.indices.len() as u32,
             },

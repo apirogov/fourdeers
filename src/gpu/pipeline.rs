@@ -1,12 +1,10 @@
 use eframe::wgpu;
-use wgpu::util::DeviceExt;
 
 use super::vertex::GpuVertex;
 
 pub(crate) struct GpuPipeline {
     pub pipeline: wgpu::RenderPipeline,
     pub bind_group_layout: wgpu::BindGroupLayout,
-    pub uniform_buffer: wgpu::Buffer,
 }
 
 #[repr(C)]
@@ -51,12 +49,6 @@ impl GpuPipeline {
                 },
                 count: None,
             }],
-        });
-
-        let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("fourdeers_uniforms"),
-            contents: bytemuck::cast_slice(&[Uniforms::default()]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -117,18 +109,6 @@ impl GpuPipeline {
         Self {
             pipeline,
             bind_group_layout,
-            uniform_buffer,
         }
-    }
-
-    pub fn create_bind_group(&self, device: &wgpu::Device) -> wgpu::BindGroup {
-        device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("fourdeers_bind_group"),
-            layout: &self.bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: self.uniform_buffer.as_entire_binding(),
-            }],
-        })
     }
 }
