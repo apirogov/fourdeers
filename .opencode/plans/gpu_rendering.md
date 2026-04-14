@@ -148,77 +148,50 @@ Bypass egui's shape pipeline entirely for the wireframe. Upload vertex data to G
 buffers and render with custom vertex/fragment shaders. The vertex shader does the
 4D→3D→2D projection; the fragment shader handles coloring.
 
-### Challenge: Dual Backend
+### Challenge: ~~Dual Backend~~ Single wgpu Backend
 
-The project uses **wgpu on native** and **glow/WebGL on web** (eframe defaults).
-`PaintCallback` is backend-specific:
-- Native: `egui_wgpu::Callback` (implements `CallbackTrait`)
-- Web: `egui_glow::CallbackFn`
-
-We need a cross-backend abstraction.
+The project uses **wgpu on both native and web** (WebGPU primary, WebGL fallback).
+`PaintCallback` uses `egui_wgpu::Callback` on both platforms — no backend abstraction needed.
 
 ### Architecture
 
 ```
 src/gpu/
-├── mod.rs              — public API: GpuRenderer trait
-├── vertex.rs           — vertex data types (shared)
-├── wgpu_backend.rs     — native rendering via wgpu
-├── glow_backend.rs     — web rendering via glow/WebGL
+├── mod.rs              — public API: GpuRenderer
+├── vertex.rs           — vertex data types
 └── shaders/
-    ├── wireframe.vert   — GLSL vertex shader (shared logic)
-    ├── wireframe.frag   — GLSL fragment shader (shared logic)
-    └── wireframe_wgsl.wgsl — WGSL equivalent for wgpu
+    └── wireframe.wgsl  — WGSL vertex/fragment shaders
 ```
 
-### Core abstraction
+### Core types
 
 ```rust
-pub(crate) trait GpuRenderer: Send + Sync + 'static {
-    fn upload_vertices(&mut self, vertices: &[GpuVertex]);
-    fn upload_indices(&mut self, indices: &[u32]);
-    fn render(&self, info: PaintCallbackInfo);
-}
-
 pub(crate) struct GpuVertex {
     pub pos: [f32; 4],    // 4D position
     pub color: [f32; 4],  // RGBA
 }
 ```
 
-The `GpuRenderer` is created once (during `App::new` via `CreationContext`) and stored
-in the app. Each frame:
+The renderer is created once (during `App::new` via `CreationContext::wgpu_render_state()`)
+and stored in the app. Each frame:
 1. CPU computes which edges are visible (slice culling, near-plane culling)
 2. GPU vertex buffer is updated with visible edge endpoints
 3. Vertex shader does 4D→3D projection (camera transform) and 3D→2D (perspective)
 4. Fragment shader does w-based coloring
 
-### Phase B1: Glow backend (WebGL)
-
-1. Get `glow::Context` from `CreationContext::gl()` on WASM
-2. Compile GLSL shaders
-3. Create VAO, VBO, EBO
-4. Implement `egui_glow::CallbackFn` that:
-   - Sets viewport/scissor from `PaintCallbackInfo`
-   - Binds shader program + buffers
-   - Issues draw call
-   - Restores GL state
-
-### Phase B2: Wgpu backend (native)
+### Phase B1: Wgpu backend (both native and web)
 
 1. Get `wgpu::Device` + `wgpu::Queue` from `CreationContext::wgpu_render_state()`
-2. Create WGSL shaders (same math as GLSL, different syntax)
+2. Create WGSL shaders
 3. Create render pipeline, vertex/index buffers
 4. Implement `egui_wgpu::CallbackTrait` with `prepare()` (buffer upload) and `paint()` (draw)
 
-### Phase B3: Cross-backend dispatch
+### Phase B2: Renderer initialization
 
 In `App::new()`:
 ```rust
-let gpu_renderer: Option<Box<dyn GpuRenderer>> = if let Some(gl) = cc.gl() {
-    Some(Box::new(GlowRenderer::new(gl)))
-} else if let Some(rs) = cc.wgpu_render_state() {
-    Some(Box::new(WgpuRenderer::new(rs)))
+let gpu_renderer = if let Some(rs) = cc.wgpu_render_state() {
+    Some(GpuRenderer::new(rs))
 } else {
     None
 };
@@ -228,30 +201,46 @@ Store in the app. When rendering, check if GPU renderer is available:
 - Yes → submit `PaintCallback` with the GPU renderer
 - No (fallback) → use the batched Mesh approach from Approach A
 
-### Phase B4: GPU-side vertex transformation
+### Phase B3: GPU-side vertex transformation
 
-Move the 4D→3D projection into the vertex shader:
+Move the 4D→3D projection into the vertex shader (WGSL):
 
-```glsl
-// GLSL vertex shader
-uniform mat4 mat_4d;       // CameraProjection::mat_4d
-uniform vec4 offset_4d;    // CameraProjection::offset_4d
-uniform mat3 mat_3d;       // CameraProjection::mat_3d
-uniform float proj_dist;   // projection_distance
-uniform vec2 viewport;     // viewport size for 2D projection
-uniform float eye_offset;  // stereo eye separation
+```wgsl
+struct Uniforms {
+    mat_4d: mat4x4<f32>,
+    offset_4d: vec4<f32>,
+    mat_3d: mat3x3<f32>,
+    proj_dist: f32,
+    viewport: vec2<f32>,
+    eye_offset: f32,
+};
 
-attribute vec4 pos_4d;     // 4D vertex position
-attribute vec4 color_in;   // RGBA
+@group(0) @binding(0) var<uniform> uniforms: Uniforms;
 
-void main() {
-    vec4 r = mat_4d * pos_4d - offset_4d;
-    vec3 xyz = mat_3d * r.xyz;
-    // Perspective projection to 2D
-    float z_offset = proj_dist + xyz.z;
-    float scale = proj_dist / z_offset;
-    vec2 screen = viewport * 0.5 + vec2(xyz.x * scale + eye_offset, -xyz.y * scale);
-    gl_Position = vec4(screen, 0.0, 1.0);
+struct VertexInput {
+    @location(0) pos_4d: vec4<f32>,
+    @location(1) color_in: vec4<f32>,
+};
+
+struct VertexOutput {
+    @builtin(position) clip_pos: vec4<f32>,
+    @location(0) color: vec4<f32>,
+};
+
+@vertex
+fn vs(input: VertexInput) -> VertexOutput {
+    var out: VertexOutput;
+    let r = uniforms.mat_4d * input.pos_4d - uniforms.offset_4d;
+    let xyz = uniforms.mat_3d * r.xyz;
+    let z_offset = uniforms.proj_dist + xyz.z;
+    let scale = uniforms.proj_dist / z_offset;
+    out.clip_pos = vec4<f32>(
+        uniforms.viewport.x * 0.5 + xyz.x * scale + uniforms.eye_offset,
+        uniforms.viewport.y * 0.5 - xyz.y * scale,
+        0.0, 1.0
+    );
+    out.color = input.color_in;
+    return out;
 }
 ```
 
@@ -266,10 +255,10 @@ and edge indices once (or updates when the polytope changes).
 
 ### Risks and Considerations
 
-1. **WebGL compatibility**: GLSL ES 3.0 required for uniform buffers. GLSL ES 1.0 (WebGL 1)
-   may need workarounds. eframe uses WebGL 2 by default.
-2. **State leakage**: Custom GPU rendering must not corrupt egui's GL state. The backend
-   callbacks must save/restore all state.
+1. **WebGPU fallback**: wgpu's WebGL fallback via `webgl` feature ensures older browsers work.
+   WebGPU is available in Chrome 113+, Edge 113+. Firefox/Safari support is in progress.
+2. **State leakage**: Custom GPU rendering must not corrupt egui's GPU state. The wgpu
+   callback's `paint()` method receives the render pass and must restore state.
 3. **MSAA**: Custom rendering needs to match egui's anti-aliasing settings.
 4. **Stereo**: Each eye needs its own PaintCallback with different `eye_offset` uniform.
    The vertex data is shared (same VBO), only the uniform changes.
@@ -281,6 +270,6 @@ and edge indices once (or updates when the polytope changes).
 ## Execution Order
 
 1. **Phase A1-A5**: Batched Mesh (simpler, immediate benefit, no GPU code)
-2. **Phase B1-B4**: PaintCallback GPU rendering (larger change, maximum speedup)
+2. **Phase B1-B3**: PaintCallback GPU rendering via wgpu (single backend, WGSL only)
 
 Each phase: implement → cargo fmt/clippy/test → just wasm → commit.

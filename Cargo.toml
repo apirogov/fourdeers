@@ -27,6 +27,20 @@ chrono = "0.4"
 
 [dependencies.eframe]
 version = "0.33"
+default-features = false
+features = [
+    "wgpu",
+    "default_fonts",
+    "accesskit",
+    "wayland",
+    "x11",
+    "web_screen_reader",
+]
+
+[target.'cfg(target_arch = "wasm32")'.dependencies.wgpu]
+version = "27"
+default-features = false
+features = ["webgpu", "webgl"]
 
 [profile.dev]
 opt-level = 0
