@@ -110,6 +110,7 @@ pub struct PointerAnalysis {
     pub drag_view: Option<DragView>,
     pub is_hold: bool,
     pub is_drag: bool,
+    pub tap_pos: egui::Pos2,
 }
 
 #[must_use]
@@ -159,6 +160,7 @@ pub fn analyze_pointer_initial(
         drag_view: None,
         is_hold: false,
         is_drag: false,
+        tap_pos,
     })
 }
 

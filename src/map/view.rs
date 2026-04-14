@@ -111,6 +111,12 @@ impl MapView {
                 return ViewAction::None;
             }
 
+            if !analysis.is_hold {
+                if let Some(idx) = self.renderer.find_tapped_waypoint(analysis.tap_pos) {
+                    return ViewAction::SelectWaypoint(idx);
+                }
+            }
+
             if let Some(zone) = analysis.zone {
                 if let Some(action) = zone_to_movement_action(zone) {
                     let speed = if analysis.is_hold {

@@ -166,6 +166,7 @@ impl FourDeersApp {
                 drag_view: self.drag_view,
                 is_hold: false,
                 is_drag: true,
+                tap_pos: egui::Pos2::ZERO,
             };
 
             self.toy_manager

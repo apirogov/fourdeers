@@ -139,6 +139,10 @@ impl CompassView {
         self.waypoint_index = 0;
     }
 
+    pub fn set_waypoint_index(&mut self, index: usize) {
+        self.waypoint_index = index;
+    }
+
     pub fn current_waypoint(&mut self, waypoints: &[CompassWaypoint]) -> Option<CompassWaypoint> {
         if waypoints.is_empty() {
             return None;

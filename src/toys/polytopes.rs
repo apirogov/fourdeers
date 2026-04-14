@@ -17,14 +17,52 @@ const POSITION_SLIDER_RANGE: std::ops::RangeInclusive<f32> = -10.0..=10.0;
 const W_SLIDER_RANGE: std::ops::RangeInclusive<f32> = -3.0..=3.0;
 const JUMP_DISTANCE: f32 = 5.0;
 
-const POLYTOPE_POSITIONS: [(PolytopeType, [f32; 4]); 6] = [
-    (PolytopeType::FiveCell, [-8.0, 4.0, 6.0, 3.0]),
-    (PolytopeType::EightCell, [2.0, 0.0, 0.0, 0.0]),
-    (PolytopeType::SixteenCell, [-4.0, -8.0, 8.0, -4.0]),
-    (PolytopeType::TwentyFourCell, [10.0, 5.0, -4.0, 5.0]),
-    (PolytopeType::SixHundredCell, [-6.0, -6.0, 12.0, -2.0]),
-    (PolytopeType::HundredTwentyCell, [6.0, 10.0, 4.0, -7.0]),
-];
+const POSITION_RADIUS: f32 = 8.0;
+const TESSERACT_Z_OFFSET: f32 = 3.0;
+const JITTER_RANGE: f32 = 2.0;
+const TESSERACT_JITTER: f32 = 1.0;
+
+const ORIGIN_WAYPOINT_TITLE: &str = "Origin";
+
+struct XorShift64 {
+    state: u64,
+}
+
+impl XorShift64 {
+    fn from_seed() -> Self {
+        let mut seed = [0u8; 8];
+        getrandom::getrandom(&mut seed).expect("getrandom failed");
+        let state = u64::from_ne_bytes(seed);
+        assert!(state != 0, "PRNG seed must not be zero");
+        Self { state }
+    }
+
+    fn next_u64(&mut self) -> u64 {
+        let mut x = self.state;
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        self.state = x;
+        x
+    }
+
+    fn next_f32(&mut self, min: f32, max: f32) -> f32 {
+        let bits = self.next_u64();
+        let t = (bits as f64) / (u64::MAX as f64);
+        min + (max - min) * t as f32
+    }
+
+    fn shuffle<T>(&mut self, slice: &mut [T]) {
+        let len = slice.len();
+        if len < 2 {
+            return;
+        }
+        for i in (1..len).rev() {
+            let j = (self.next_u64() % (i as u64 + 1)) as usize;
+            slice.swap(i, j);
+        }
+    }
+}
 
 struct ScenePolytope {
     polytope_type: PolytopeType,
@@ -88,10 +126,51 @@ impl PolytopesToy {
         }
     }
 
-    fn build_scene() -> Vec<ScenePolytope> {
-        POLYTOPE_POSITIONS
+    fn generate_positions(rng: &mut XorShift64) -> Vec<(PolytopeType, Vector4<f32>)> {
+        let base_directions: [Vector4<f32>; 6] = [
+            Vector4::new(0.0, 0.0, TESSERACT_Z_OFFSET, 0.0),
+            Vector4::new(POSITION_RADIUS, 0.0, 0.0, 0.0),
+            Vector4::new(-POSITION_RADIUS, 0.0, 0.0, 0.0),
+            Vector4::new(0.0, POSITION_RADIUS, 0.0, 0.0),
+            Vector4::new(0.0, -POSITION_RADIUS, 0.0, 0.0),
+            Vector4::new(0.0, 0.0, -POSITION_RADIUS, 0.0),
+        ];
+
+        let positions: Vec<Vector4<f32>> = base_directions
             .iter()
-            .map(|&(pt, pos)| ScenePolytope::new(pt, Vector4::from(pos)))
+            .enumerate()
+            .map(|(i, &base)| {
+                let jitter = if i == 0 {
+                    TESSERACT_JITTER
+                } else {
+                    JITTER_RANGE
+                };
+                Vector4::new(
+                    base.x + rng.next_f32(-jitter, jitter),
+                    base.y + rng.next_f32(-jitter, jitter),
+                    base.z + rng.next_f32(-jitter, jitter),
+                    base.w + rng.next_f32(-jitter, jitter),
+                )
+            })
+            .collect();
+
+        let mut types: Vec<PolytopeType> = PolytopeType::all().to_vec();
+        let tesseract = types.remove(1);
+        rng.shuffle(&mut types);
+
+        let mut result = Vec::with_capacity(6);
+        result.push((tesseract, positions[0]));
+        for (pt, pos) in types.into_iter().zip(positions.iter().skip(1)) {
+            result.push((pt, *pos));
+        }
+        result
+    }
+
+    fn build_scene() -> Vec<ScenePolytope> {
+        let mut rng = XorShift64::from_seed();
+        Self::generate_positions(&mut rng)
+            .into_iter()
+            .map(|(pt, pos)| ScenePolytope::new(pt, pos))
             .collect()
     }
 
@@ -132,6 +211,14 @@ impl PolytopesToy {
             self.camera.set_yaw_r(0.0);
             self.camera.set_pitch_r(0.0);
             self.active_view = ActiveViewId::Scene;
+        }
+    }
+
+    fn select_waypoint(&mut self, waypoint_index: usize) {
+        let waypoints_len = self.compass_waypoints().len();
+        if waypoint_index < waypoints_len {
+            self.compass.set_waypoint_index(waypoint_index);
+            self.active_view = ActiveViewId::Compass;
         }
     }
 
@@ -242,13 +329,17 @@ impl PolytopesToy {
     }
 
     fn compass_waypoints(&self) -> Vec<CompassWaypoint> {
-        self.polytopes
-            .iter()
-            .map(|p| CompassWaypoint {
+        let mut waypoints = vec![CompassWaypoint {
+            title: ORIGIN_WAYPOINT_TITLE,
+            position: Vector4::zeros(),
+        }];
+        for p in &self.polytopes {
+            waypoints.push(CompassWaypoint {
                 title: p.polytope_type.short_name(),
                 position: p.position,
-            })
-            .collect()
+            });
+        }
+        waypoints
     }
 
     fn scene_geometry_bounds(&self) -> Option<Bounds4D> {
@@ -435,7 +526,7 @@ impl Toy for PolytopesToy {
             }
         }
 
-        match self.active_view {
+        let action = match self.active_view {
             ActiveViewId::Scene => self.scene_view.handle_pointer(&analysis, &mut self.camera),
             ActiveViewId::Map => {
                 let waypoints = self.compass_waypoints();
@@ -447,7 +538,14 @@ impl Toy for PolytopesToy {
                 let waypoints_len = self.compass_waypoints().len();
                 self.compass.handle_pointer(&analysis, waypoints_len)
             }
+        };
+
+        if let ViewAction::SelectWaypoint(waypoint_idx) = action {
+            self.select_waypoint(waypoint_idx);
+            return ViewAction::None;
         }
+
+        action
     }
 
     fn handle_drag(&mut self, analysis: PointerAnalysis, w_thickness: &mut f32) -> ViewAction {

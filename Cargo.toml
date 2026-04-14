@@ -13,6 +13,7 @@ path = "src/main.rs"
 [dependencies]
 bytemuck = "1"
 egui = "0.33"
+getrandom = "0.2"
 nalgebra = "0.33"
 
 # Platform-specific dependencies
