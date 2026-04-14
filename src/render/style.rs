@@ -1,7 +1,6 @@
 use eframe::egui;
 
 pub const DEFAULT_W_THICKNESS: f32 = 2.5;
-pub const DEFAULT_W_COLOR_INTENSITY: f32 = 0.35;
 pub const DEFAULT_PROJECTION_DISTANCE: f32 = 3.0;
 pub const DEFAULT_EYE_SEPARATION: f32 = 0.12;
 pub const W_THICKNESS_DRAG_SENSITIVITY: f32 = 0.02;
@@ -136,20 +135,18 @@ impl CompassFrameMode {
 #[derive(Debug, Clone, Copy)]
 pub struct FourDSettings {
     pub w_thickness: f32,
-    pub w_color_intensity: f32,
 }
 
 impl Default for FourDSettings {
     fn default() -> Self {
         Self {
             w_thickness: DEFAULT_W_THICKNESS,
-            w_color_intensity: DEFAULT_W_COLOR_INTENSITY,
         }
     }
 }
 
 #[must_use]
-pub fn w_to_color(normalized_w: f32, alpha: u8, _intensity: f32) -> egui::Color32 {
+pub fn w_to_color(normalized_w: f32, alpha: u8) -> egui::Color32 {
     let t = ((normalized_w + 1.0) / 2.0).clamp(0.0, 1.0);
     let idx = (t * (W_COLOR_LUT_SIZE - 1) as f32) as usize;
     let packed = W_COLOR_LUT[idx];
@@ -168,7 +165,7 @@ mod tests {
 
     #[test]
     fn test_w_to_color_zero_w() {
-        let c = w_to_color(0.0, 255, 0.35);
+        let c = w_to_color(0.0, 255);
         assert_eq!(c.a(), 255);
         assert!(c.r() > 200);
         assert!(c.g() > 200);
@@ -177,43 +174,34 @@ mod tests {
 
     #[test]
     fn test_w_to_color_positive_w_full() {
-        let c = w_to_color(1.0, 255, 0.35);
+        let c = w_to_color(1.0, 255);
         assert_eq!(c.a(), 255);
         assert!(c.r() > c.b(), "positive w should have more red than blue");
     }
 
     #[test]
     fn test_w_to_color_negative_w_full() {
-        let c = w_to_color(-1.0, 255, 0.35);
+        let c = w_to_color(-1.0, 255);
         assert_eq!(c.a(), 255);
         assert!(c.b() > c.r(), "negative w should have more blue than red");
     }
 
     #[test]
     fn test_w_to_color_alpha_passthrough() {
-        let c = w_to_color(0.0, 128, 0.35);
+        let c = w_to_color(0.0, 128);
         assert_eq!(c.a(), 128);
     }
 
     #[test]
     fn test_w_to_color_mid_positive_w() {
-        let c_half = w_to_color(0.5, 255, 0.35);
+        let c_half = w_to_color(0.5, 255);
         assert!(c_half.r() > c_half.b(), "mid positive should be reddish");
     }
 
     #[test]
     fn test_w_to_color_mid_negative_w() {
-        let c_half = w_to_color(-0.5, 255, 0.35);
+        let c_half = w_to_color(-0.5, 255);
         assert!(c_half.b() > c_half.r(), "mid negative should be bluish");
-    }
-
-    #[test]
-    fn test_w_to_color_intensity_ignored() {
-        let c_low = w_to_color(0.5, 255, 0.1);
-        let c_high = w_to_color(0.5, 255, 0.9);
-        assert_eq!(c_low.r(), c_high.r());
-        assert_eq!(c_low.g(), c_high.g());
-        assert_eq!(c_low.b(), c_high.b());
     }
 
     #[test]

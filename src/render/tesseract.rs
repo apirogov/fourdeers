@@ -28,7 +28,6 @@ pub struct TesseractRenderContext<'a> {
     projection: CameraProjection,
     pub w_half: f32,
     pub camera: &'a Camera,
-    pub w_color_intensity: f32,
     pub projection_distance: f32,
 }
 
@@ -75,7 +74,6 @@ impl<'a> TesseractRenderContext<'a> {
             projection,
             w_half,
             camera,
-            w_color_intensity: config.four_d.w_color_intensity,
             projection_distance: config.stereo.projection_distance,
         }
     }
@@ -158,8 +156,8 @@ impl<'a> TesseractRenderContext<'a> {
 
             let normalized_w0 = (truncated[0][3] / self.w_half).clamp(-1.0, 1.0);
             let normalized_w1 = (truncated[1][3] / self.w_half).clamp(-1.0, 1.0);
-            let color_a = w_to_color(normalized_w0, alpha_a, self.w_color_intensity);
-            let color_b = w_to_color(normalized_w1, alpha_b, self.w_color_intensity);
+            let color_a = w_to_color(normalized_w0, alpha_a);
+            let color_b = w_to_color(normalized_w1, alpha_b);
 
             batch.add_segment_with_gradient(s0, s1, color_a, color_b);
         }
@@ -230,8 +228,8 @@ impl<'a> TesseractRenderContext<'a> {
 
             let normalized_w0 = (truncated[0][3] / self.w_half).clamp(-1.0, 1.0);
             let normalized_w1 = (truncated[1][3] / self.w_half).clamp(-1.0, 1.0);
-            let color_a = w_to_color(normalized_w0, alpha_a, self.w_color_intensity);
-            let color_b = w_to_color(normalized_w1, alpha_b, self.w_color_intensity);
+            let color_a = w_to_color(normalized_w0, alpha_a);
+            let color_b = w_to_color(normalized_w1, alpha_b);
 
             let dir = s1 - s0;
             let len = dir.length();

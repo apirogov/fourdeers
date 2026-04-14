@@ -428,10 +428,8 @@ impl MapRenderer {
                 let alpha_b = compute_vertex_alpha(p1.w, w_half);
                 let normalized_w0 = (p0.w / w_half).clamp(-1.0, 1.0);
                 let normalized_w1 = (p1.w / w_half).clamp(-1.0, 1.0);
-                let color_a =
-                    crate::render::w_to_color(normalized_w0, alpha_a, four_d.w_color_intensity);
-                let color_b =
-                    crate::render::w_to_color(normalized_w1, alpha_b, four_d.w_color_intensity);
+                let color_a = crate::render::w_to_color(normalized_w0, alpha_a);
+                let color_b = crate::render::w_to_color(normalized_w1, alpha_b);
                 batch.add_segment_with_gradient(screen_seg.0, screen_seg.1, color_a, color_b);
             }
         }
@@ -573,8 +571,7 @@ impl MapRenderer {
                 );
             }
             let normalized_w = (tv.w / w_half).clamp(-1.0, 1.0);
-            let dot_color =
-                crate::render::w_to_color(normalized_w, 180, params.four_d.w_color_intensity);
+            let dot_color = crate::render::w_to_color(normalized_w, 180);
             painter.circle_filled(p.screen_pos, MAP_WAYPOINT_DOT_RADIUS, dot_color);
         }
     }

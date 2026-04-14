@@ -5,10 +5,7 @@ use eframe::egui;
 use crate::colors::PANEL_FILL;
 use crate::input::render_zone_debug_overlay;
 use crate::input::{analyze_pointer_initial, DragView, PointerAnalysis, ZoneDebugOptions};
-use crate::render::{
-    render_common_menu_half, split_stereo_views, FourDSettings, StereoSettings, W_THICKNESS_MAX,
-    W_THICKNESS_MIN,
-};
+use crate::render::{render_common_menu_half, split_stereo_views, FourDSettings, StereoSettings};
 use crate::toy::{ToyManager, ViewAction};
 
 const DRAG_THRESHOLD: f32 = 10.0;
@@ -330,23 +327,6 @@ impl FourDeersApp {
 
         ui.collapsing("Debug Settings", |ui| {
             ui.checkbox(&mut self.settings.show_debug, "Show Debug Overlay");
-        });
-
-        ui.collapsing("4D Settings", |ui| {
-            ui.add(
-                egui::Slider::new(
-                    &mut self.settings.four_d.w_thickness,
-                    W_THICKNESS_MIN..=W_THICKNESS_MAX,
-                )
-                .text("W Thickness"),
-            );
-            ui.label("Controls the range of W dimension visible in the slice");
-
-            ui.add(
-                egui::Slider::new(&mut self.settings.four_d.w_color_intensity, 0.0..=1.0)
-                    .text("W Color Intensity"),
-            );
-            ui.label("Controls how strongly the W dimension affects edge coloring");
         });
 
         ui.collapsing("Stereoscopic Settings", |ui| {
