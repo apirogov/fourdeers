@@ -11,8 +11,8 @@ pub const W_EYE_OFFSET_MAX: f32 = 1.0;
 pub const W_EYE_SPREAD: f32 = 0.45;
 pub const DICHOPTIC_DRAG_SENSITIVITY: f32 = 0.01;
 pub const DICHOPTIC_INTENSITY_MAX: f32 = 1.0;
-pub const DICHOPTIC_CHROMA_STRENGTH: f32 = 0.35;
-pub const DICHOPTIC_LUMINANCE_STRENGTH: f32 = 0.08;
+pub const DICHOPTIC_CHROMA_STRENGTH: f32 = 0.8;
+pub const DICHOPTIC_LUMINANCE_STRENGTH: f32 = 0.2;
 pub const W_SLICE_EXTENT_SIGMA: f32 = 3.0;
 
 pub const W_COLOR_NEGATIVE: (f32, f32, f32) = (0.5, 0.0, 1.0);
@@ -501,21 +501,21 @@ mod tests {
             let avg_g = (left.g() as f32 + right.g() as f32) / 2.0;
             let avg_b = (left.b() as f32 + right.b() as f32) / 2.0;
             assert!(
-                (avg_r - unified.r() as f32).abs() <= 40.0,
+                (avg_r - unified.r() as f32).abs() <= 80.0,
                 "avg R ({}) ≈ unified R ({}) at nw={}",
                 avg_r,
                 unified.r(),
                 nw
             );
             assert!(
-                (avg_g - unified.g() as f32).abs() <= 40.0,
+                (avg_g - unified.g() as f32).abs() <= 80.0,
                 "avg G ({}) ≈ unified G ({}) at nw={}",
                 avg_g,
                 unified.g(),
                 nw
             );
             assert!(
-                (avg_b - unified.b() as f32).abs() <= 40.0,
+                (avg_b - unified.b() as f32).abs() <= 100.0,
                 "avg B ({}) ≈ unified B ({}) at nw={}",
                 avg_b,
                 unified.b(),
@@ -564,7 +564,7 @@ mod tests {
                 0.299 * right.r() as f32 + 0.587 * right.g() as f32 + 0.114 * right.b() as f32;
             let diff = (lum_left - lum_right).abs();
             assert!(
-                diff > 0.0 && diff < 60.0,
+                diff > 0.0 && diff < 80.0,
                 "luminance diff should be nonzero but bounded: diff={} at nw={}",
                 diff,
                 nw
