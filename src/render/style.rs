@@ -11,9 +11,8 @@ pub const W_EYE_OFFSET_MAX: f32 = 1.0;
 pub const W_EYE_SPREAD: f32 = 0.45;
 pub const DICHOPTIC_DRAG_SENSITIVITY: f32 = 0.01;
 pub const DICHOPTIC_INTENSITY_MAX: f32 = 1.0;
-pub const DICHOPTIC_BLUE: (f32, f32, f32) = (0.0, 0.1, 1.0);
-pub const DICHOPTIC_RED: (f32, f32, f32) = (1.0, 0.0, 0.0);
-pub const DICHOPTIC_YELLOW: (f32, f32, f32) = (1.0, 1.0, 0.0);
+pub const DICHOPTIC_CHROMA_STRENGTH: f32 = 0.35;
+pub const DICHOPTIC_LUMINANCE_STRENGTH: f32 = 0.08;
 pub const W_SLICE_EXTENT_SIGMA: f32 = 3.0;
 
 pub const W_COLOR_NEGATIVE: (f32, f32, f32) = (0.5, 0.0, 1.0);
@@ -199,32 +198,40 @@ pub fn w_to_color_dichoptic(
         return unified;
     }
 
-    let t = normalized_w.abs();
-    let (dr, dg, db) = if normalized_w < 0.0 {
-        if eye_sign < 0.0 {
-            DICHOPTIC_BLUE
-        } else {
-            DICHOPTIC_RED
-        }
-    } else if eye_sign < 0.0 {
-        DICHOPTIC_RED
+    let r = unified.r() as f32 / 255.0;
+    let g = unified.g() as f32 / 255.0;
+    let b = unified.b() as f32 / 255.0;
+
+    let y = 0.299 * r + 0.587 * g + 0.114 * b;
+    let rg = r - g;
+    let by = b - (r + g) * 0.5;
+
+    let chroma = (rg * rg + by * by).sqrt();
+    let s = dichoptic_intensity.clamp(0.0, 1.0);
+
+    let (new_y, new_rg, new_by) = if chroma > 1e-6 {
+        let perp_rg = -by / chroma;
+        let perp_by = rg / chroma;
+        let chroma_delta = s * chroma * DICHOPTIC_CHROMA_STRENGTH;
+        let lum_delta = s * DICHOPTIC_LUMINANCE_STRENGTH;
+        (
+            y + eye_sign * lum_delta,
+            rg + eye_sign * chroma_delta * perp_rg,
+            by + eye_sign * chroma_delta * perp_by,
+        )
     } else {
-        DICHOPTIC_YELLOW
+        let lum_delta = s * DICHOPTIC_LUMINANCE_STRENGTH;
+        (y + eye_sign * lum_delta, rg, by)
     };
 
-    let target_r = lerp(W_COLOR_MIDPOINT.0, dr, t);
-    let target_g = lerp(W_COLOR_MIDPOINT.1, dg, t);
-    let target_b = lerp(W_COLOR_MIDPOINT.2, db, t);
-
-    let s = dichoptic_intensity.clamp(0.0, 1.0);
-    let fr = lerp(unified.r() as f32 / 255.0, target_r, s);
-    let fg = lerp(unified.g() as f32 / 255.0, target_g, s);
-    let fb = lerp(unified.b() as f32 / 255.0, target_b, s);
+    let nr = new_y + 0.644 * new_rg - 0.114 * new_by;
+    let ng = new_y - 0.356 * new_rg - 0.114 * new_by;
+    let nb = new_y + 0.144 * new_rg + 0.886 * new_by;
 
     egui::Color32::from_rgba_unmultiplied(
-        (fr.clamp(0.0, 1.0) * 255.0) as u8,
-        (fg.clamp(0.0, 1.0) * 255.0) as u8,
-        (fb.clamp(0.0, 1.0) * 255.0) as u8,
+        (nr.clamp(0.0, 1.0) * 255.0) as u8,
+        (ng.clamp(0.0, 1.0) * 255.0) as u8,
+        (nb.clamp(0.0, 1.0) * 255.0) as u8,
         alpha,
     )
 }
@@ -451,77 +458,118 @@ mod tests {
     }
 
     #[test]
-    fn test_dichoptic_midpoint_always_white() {
+    fn test_dichoptic_midpoint_near_white() {
         for intensity in [0.0, 0.5, 1.0] {
             for eye_sign in [-1.0, 1.0] {
                 let c = w_to_color_dichoptic(0.0, 255, eye_sign, intensity);
-                assert!(c.r() > 240, "r at eye={} intensity={}", eye_sign, intensity);
-                assert!(c.g() > 240, "g at eye={} intensity={}", eye_sign, intensity);
-                assert!(c.b() > 240, "b at eye={} intensity={}", eye_sign, intensity);
+                assert!(
+                    (c.r() as i32 - c.g() as i32).abs() < 10,
+                    "at W=0 R≈G: r={} g={} eye={} int={}",
+                    c.r(),
+                    c.g(),
+                    eye_sign,
+                    intensity
+                );
+                assert!(
+                    (c.r() as i32 - c.b() as i32).abs() < 10,
+                    "at W=0 R≈B: r={} b={} eye={} int={}",
+                    c.r(),
+                    c.b(),
+                    eye_sign,
+                    intensity
+                );
             }
         }
     }
 
     #[test]
-    fn test_dichoptic_full_negative_w_left_eye_is_blue() {
-        let c = w_to_color_dichoptic(-1.0, 255, -1.0, 1.0);
+    fn test_dichoptic_eyes_differ_at_nonzero_w() {
+        for nw in [-1.0, -0.5, 0.5, 1.0] {
+            let left = w_to_color_dichoptic(nw, 255, -1.0, 1.0);
+            let right = w_to_color_dichoptic(nw, 255, 1.0, 1.0);
+            assert_ne!(left, right, "eyes should differ at nw={}", nw);
+        }
+    }
+
+    #[test]
+    fn test_dichoptic_eyes_average_near_unified() {
+        for nw in [-1.0, -0.5, 0.5, 1.0] {
+            let unified = w_to_color(nw, 255);
+            let left = w_to_color_dichoptic(nw, 255, -1.0, 1.0);
+            let right = w_to_color_dichoptic(nw, 255, 1.0, 1.0);
+            let avg_r = (left.r() as f32 + right.r() as f32) / 2.0;
+            let avg_g = (left.g() as f32 + right.g() as f32) / 2.0;
+            let avg_b = (left.b() as f32 + right.b() as f32) / 2.0;
+            assert!(
+                (avg_r - unified.r() as f32).abs() <= 40.0,
+                "avg R ({}) ≈ unified R ({}) at nw={}",
+                avg_r,
+                unified.r(),
+                nw
+            );
+            assert!(
+                (avg_g - unified.g() as f32).abs() <= 40.0,
+                "avg G ({}) ≈ unified G ({}) at nw={}",
+                avg_g,
+                unified.g(),
+                nw
+            );
+            assert!(
+                (avg_b - unified.b() as f32).abs() <= 40.0,
+                "avg B ({}) ≈ unified B ({}) at nw={}",
+                avg_b,
+                unified.b(),
+                nw
+            );
+        }
+    }
+
+    #[test]
+    fn test_dichoptic_divergence_increases_with_intensity() {
+        let nw = -1.0;
+        let c0 = w_to_color_dichoptic(nw, 255, -1.0, 0.0);
+        let c_half = w_to_color_dichoptic(nw, 255, -1.0, 0.5);
+        let c_full = w_to_color_dichoptic(nw, 255, -1.0, 1.0);
+        let left_right_diff = |c: egui::Color32, eye: f32| -> f32 {
+            let other = w_to_color_dichoptic(nw, 255, -eye, 1.0);
+            (c.r() as f32 - other.r() as f32).abs()
+                + (c.g() as f32 - other.g() as f32).abs()
+                + (c.b() as f32 - other.b() as f32).abs()
+        };
+        let d0 = left_right_diff(c0, -1.0);
+        let d_half = left_right_diff(c_half, -1.0);
+        let d_full = left_right_diff(c_full, -1.0);
         assert!(
-            c.b() > c.r() && c.b() > c.g(),
-            "left eye negative W should be blue-dominant, got r={} g={} b={}",
-            c.r(),
-            c.g(),
-            c.b()
+            d_half > d0,
+            "half intensity divergence ({}) > zero ({})",
+            d_half,
+            d0
+        );
+        assert!(
+            d_full > d_half,
+            "full intensity divergence ({}) > half ({})",
+            d_full,
+            d_half
         );
     }
 
     #[test]
-    fn test_dichoptic_full_negative_w_right_eye_is_red() {
-        let c = w_to_color_dichoptic(-1.0, 255, 1.0, 1.0);
-        assert!(
-            c.r() > c.g() && c.r() > c.b(),
-            "right eye negative W should be red-dominant, got r={} g={} b={}",
-            c.r(),
-            c.g(),
-            c.b()
-        );
-    }
-
-    #[test]
-    fn test_dichoptic_full_positive_w_left_eye_is_red() {
-        let c = w_to_color_dichoptic(1.0, 255, -1.0, 1.0);
-        assert!(
-            c.r() > c.g() && c.r() > c.b(),
-            "left eye positive W should be red-dominant, got r={} g={} b={}",
-            c.r(),
-            c.g(),
-            c.b()
-        );
-    }
-
-    #[test]
-    fn test_dichoptic_full_positive_w_right_eye_is_yellow() {
-        let c = w_to_color_dichoptic(1.0, 255, 1.0, 1.0);
-        assert!(
-            c.r() > 200 && c.g() > 150,
-            "right eye positive W should be yellow (high R+G), got r={} g={} b={}",
-            c.r(),
-            c.g(),
-            c.b()
-        );
-    }
-
-    #[test]
-    fn test_dichoptic_half_intensity_is_midpoint() {
-        let unified = w_to_color(-1.0, 255);
-        let full = w_to_color_dichoptic(-1.0, 255, -1.0, 1.0);
-        let half = w_to_color_dichoptic(-1.0, 255, -1.0, 0.5);
-        let expected_r = (unified.r() as f32 + full.r() as f32) / 2.0;
-        assert!(
-            (half.r() as f32 - expected_r).abs() <= 1.5,
-            "half intensity R should be midpoint: got {} expected ~{}",
-            half.r(),
-            expected_r
-        );
+    fn test_dichoptic_luminance_imbalance_is_bounded() {
+        for nw in [-1.0, 0.5, 1.0] {
+            let left = w_to_color_dichoptic(nw, 255, -1.0, 1.0);
+            let right = w_to_color_dichoptic(nw, 255, 1.0, 1.0);
+            let lum_left =
+                0.299 * left.r() as f32 + 0.587 * left.g() as f32 + 0.114 * left.b() as f32;
+            let lum_right =
+                0.299 * right.r() as f32 + 0.587 * right.g() as f32 + 0.114 * right.b() as f32;
+            let diff = (lum_left - lum_right).abs();
+            assert!(
+                diff > 0.0 && diff < 60.0,
+                "luminance diff should be nonzero but bounded: diff={} at nw={}",
+                diff,
+                nw
+            );
+        }
     }
 
     #[test]
