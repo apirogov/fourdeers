@@ -14,7 +14,7 @@ pub const DICHOPTIC_INTENSITY_MAX: f32 = 1.0;
 pub const DICHOPTIC_BLUE: (f32, f32, f32) = (0.0, 0.1, 1.0);
 pub const DICHOPTIC_RED: (f32, f32, f32) = (1.0, 0.0, 0.0);
 pub const DICHOPTIC_YELLOW: (f32, f32, f32) = (1.0, 1.0, 0.0);
-pub const MIN_VERTEX_ALPHA: u8 = 128;
+pub const W_SLICE_EXTENT_SIGMA: f32 = 3.0;
 
 pub const W_COLOR_NEGATIVE: (f32, f32, f32) = (0.5, 0.0, 1.0);
 pub const W_COLOR_MIDPOINT: (f32, f32, f32) = (1.0, 1.0, 1.0);
@@ -22,20 +22,20 @@ pub const W_COLOR_POSITIVE: (f32, f32, f32) = (1.0, 0.45, 0.0);
 pub const W_COLOR_LUT_SIZE: usize = 1024;
 
 #[must_use]
-pub fn compute_vertex_alpha(w: f32, w_half: f32) -> u8 {
-    let normalized = (w / w_half).clamp(-1.0, 1.0);
-    let t = normalized.abs();
-    let alpha = 255.0 * (1.0 - t) + MIN_VERTEX_ALPHA as f32 * t;
+pub fn compute_vertex_alpha(w: f32, sigma: f32) -> u8 {
+    let ratio = w / sigma;
+    let alpha = 255.0 * (-0.5 * ratio * ratio).exp();
     alpha as u8
 }
 
 pub fn truncate_segment_to_slice(
     p0: nalgebra::Vector4<f32>,
     p1: nalgebra::Vector4<f32>,
-    w_half: f32,
+    sigma: f32,
 ) -> Option<[nalgebra::Vector4<f32>; 2]> {
-    let in_a = p0[3] >= -w_half && p0[3] <= w_half;
-    let in_b = p1[3] >= -w_half && p1[3] <= w_half;
+    let extent = W_SLICE_EXTENT_SIGMA * sigma;
+    let in_a = p0[3] >= -extent && p0[3] <= extent;
+    let in_b = p1[3] >= -extent && p1[3] <= extent;
 
     if in_a && in_b {
         return Some([p0, p1]);
@@ -44,7 +44,7 @@ pub fn truncate_segment_to_slice(
     if !in_a && !in_b {
         let w_min = p0[3].min(p1[3]);
         let w_max = p0[3].max(p1[3]);
-        if w_max < -w_half || w_min > w_half {
+        if w_max < -extent || w_min > extent {
             return None;
         }
     }
@@ -55,15 +55,15 @@ pub fn truncate_segment_to_slice(
     }
 
     let t = if !in_a {
-        if p0[3] < -w_half {
-            (-w_half - p0[3]) / w_diff
+        if p0[3] < -extent {
+            (-extent - p0[3]) / w_diff
         } else {
-            (w_half - p0[3]) / w_diff
+            (extent - p0[3]) / w_diff
         }
-    } else if p1[3] < -w_half {
-        (-w_half - p0[3]) / w_diff
+    } else if p1[3] < -extent {
+        (-extent - p0[3]) / w_diff
     } else {
-        (w_half - p0[3]) / w_diff
+        (extent - p0[3]) / w_diff
     };
     let t = t.clamp(0.0, 1.0);
 
@@ -323,12 +323,18 @@ mod tests {
     #[test]
     fn test_truncate_one_inside_one_outside() {
         let p0 = Vector4::new(0.0, 0.0, 0.0, 0.0);
-        let p1 = Vector4::new(1.0, 0.0, 0.0, 3.0);
+        let p1 = Vector4::new(1.0, 0.0, 0.0, 5.0);
         let w_half = 1.25;
         let result = truncate_segment_to_slice(p0, p1, w_half);
         assert!(result.is_some());
         let truncated = result.unwrap();
-        assert!(truncated[0][3] >= -w_half && truncated[0][3] <= w_half);
+        let extent = W_SLICE_EXTENT_SIGMA * w_half;
+        assert!(
+            truncated[0][3] >= -extent && truncated[0][3] <= extent,
+            "truncated[0].w={} should be within ±{}",
+            truncated[0][3],
+            extent
+        );
     }
 
     #[test]
@@ -342,12 +348,17 @@ mod tests {
     }
 
     #[test]
-    fn test_sub_slice_edge_alpha_is_min() {
+    fn test_sub_slice_edge_alpha_is_gaussian() {
         let w_half = 2.5;
         for p in [0.0, 0.5, 1.0] {
             let (_, sub_half) = eye_w_params(w_half, p, -1.0);
             let alpha = compute_vertex_alpha(sub_half, sub_half);
-            assert_eq!(alpha, MIN_VERTEX_ALPHA, "edge alpha at p={}", p);
+            let expected = compute_vertex_alpha(w_half, w_half);
+            assert_eq!(
+                alpha, expected,
+                "edge alpha at p={} should match Gaussian at sigma",
+                p
+            );
         }
     }
 
@@ -388,8 +399,9 @@ mod tests {
         let shifted_w = 0.0 - shift;
         let alpha = compute_vertex_alpha(shifted_w, sub_half);
         assert!(
-            alpha > MIN_VERTEX_ALPHA,
-            "overlap should be above min alpha"
+            alpha > 128,
+            "overlap should be above half alpha, got {}",
+            alpha
         );
         assert!(alpha < 255, "overlap should be below max alpha");
     }
@@ -519,6 +531,74 @@ mod tests {
         assert!(
             doubled > base,
             "doubled dt_scale should produce larger change"
+        );
+    }
+
+    #[test]
+    fn test_gaussian_alpha_center_is_full() {
+        assert_eq!(compute_vertex_alpha(0.0, 2.5), 255);
+        assert_eq!(compute_vertex_alpha(0.0, 1.0), 255);
+    }
+
+    #[test]
+    fn test_gaussian_alpha_sigma_is_60_percent() {
+        let alpha = compute_vertex_alpha(2.5, 2.5);
+        assert!(
+            (alpha as f32 - 255.0 * (-0.5f32).exp()).abs() <= 1.5,
+            "alpha at w=sigma should be ~155, got {}",
+            alpha
+        );
+    }
+
+    #[test]
+    fn test_gaussian_alpha_near_center_higher_than_linear() {
+        let sigma = 2.5;
+        let gaussian = compute_vertex_alpha(sigma * 0.5, sigma);
+        let linear_approx = 255 - (255 - 128) / 2;
+        assert!(
+            gaussian > linear_approx as u8,
+            "Gaussian at 0.5σ ({}) should be higher than old linear ({})",
+            gaussian,
+            linear_approx
+        );
+    }
+
+    #[test]
+    fn test_gaussian_alpha_decreases_with_distance() {
+        let sigma = 2.5;
+        let a0 = compute_vertex_alpha(0.0, sigma);
+        let a1 = compute_vertex_alpha(1.0, sigma);
+        let a2 = compute_vertex_alpha(2.0, sigma);
+        let a3 = compute_vertex_alpha(3.0, sigma);
+        assert!(a0 > a1, "0 > 1: {} > {}", a0, a1);
+        assert!(a1 > a2, "1 > 2: {} > {}", a1, a2);
+        assert!(a2 > a3, "2 > 3: {} > {}", a2, a3);
+    }
+
+    #[test]
+    fn test_truncate_at_three_sigma() {
+        let sigma = 1.0;
+        let extent = W_SLICE_EXTENT_SIGMA * sigma;
+        let inside = Vector4::new(0.0, 0.0, 0.0, extent - 0.01);
+        let outside = Vector4::new(0.0, 0.0, 0.0, extent + 0.01);
+        assert!(
+            truncate_segment_to_slice(inside, outside, sigma).is_some(),
+            "edge crossing boundary should be truncated, not dropped"
+        );
+        assert!(
+            truncate_segment_to_slice(outside, outside, sigma).is_none(),
+            "edge entirely beyond 3σ should be filtered"
+        );
+    }
+
+    #[test]
+    fn test_gaussian_alpha_tail_visible_beyond_sigma() {
+        let sigma = 2.5;
+        let alpha_2s = compute_vertex_alpha(2.0 * sigma, sigma);
+        assert!(
+            alpha_2s > 0,
+            "alpha at 2σ should still be visible, got {}",
+            alpha_2s
         );
     }
 }
