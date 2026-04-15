@@ -11,14 +11,14 @@ pub const W_EYE_OFFSET_MAX: f32 = 1.0;
 pub const W_EYE_SPREAD: f32 = 0.45;
 pub const DICHOPTIC_DRAG_SENSITIVITY: f32 = 0.01;
 pub const DICHOPTIC_INTENSITY_MAX: f32 = 1.0;
-pub const DICHOPTIC_BLUE: (f32, f32, f32) = (0.1, 0.3, 1.0);
-pub const DICHOPTIC_RED: (f32, f32, f32) = (1.0, 0.15, 0.0);
-pub const DICHOPTIC_YELLOW: (f32, f32, f32) = (1.0, 0.85, 0.0);
+pub const DICHOPTIC_BLUE: (f32, f32, f32) = (0.0, 0.1, 1.0);
+pub const DICHOPTIC_RED: (f32, f32, f32) = (1.0, 0.0, 0.0);
+pub const DICHOPTIC_YELLOW: (f32, f32, f32) = (1.0, 1.0, 0.0);
 pub const MIN_VERTEX_ALPHA: u8 = 128;
 
-pub const W_COLOR_NEGATIVE: (f32, f32, f32) = (0.6, 0.2, 0.8);
+pub const W_COLOR_NEGATIVE: (f32, f32, f32) = (0.5, 0.0, 1.0);
 pub const W_COLOR_MIDPOINT: (f32, f32, f32) = (1.0, 1.0, 1.0);
-pub const W_COLOR_POSITIVE: (f32, f32, f32) = (1.0, 0.7, 0.0);
+pub const W_COLOR_POSITIVE: (f32, f32, f32) = (1.0, 0.45, 0.0);
 pub const W_COLOR_LUT_SIZE: usize = 1024;
 
 #[must_use]
