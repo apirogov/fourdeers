@@ -80,9 +80,14 @@ impl MapView {
         waypoints: &[crate::toy::CompassWaypoint],
         geometry_bounds: Option<Bounds4D>,
     ) -> ViewAction {
+        if !analysis.is_hold {
+            if let Some(idx) = self.renderer.find_tapped_waypoint(analysis.tap_pos) {
+                return ViewAction::SelectWaypoint(idx);
+            }
+        }
+
         if analysis.is_left_view {
             if let Some(zone) = analysis.zone {
-                // Only allow toggle actions on tap (not hold)
                 if !analysis.is_hold {
                     match zone {
                         Zone::South => {
@@ -105,16 +110,9 @@ impl MapView {
                 }
             }
         } else {
-            // Rotation toggle only on tap (not hold)
             if !analysis.is_hold && analysis.zone == Some(Zone::Center) {
                 self.rotation_3d = !self.rotation_3d;
                 return ViewAction::None;
-            }
-
-            if !analysis.is_hold {
-                if let Some(idx) = self.renderer.find_tapped_waypoint(analysis.tap_pos) {
-                    return ViewAction::SelectWaypoint(idx);
-                }
             }
 
             if let Some(zone) = analysis.zone {

@@ -44,9 +44,9 @@ pub(super) const MAP_TETRA_ORIGIN_DOT_RADIUS: f32 = 2.0;
 pub(super) const MAP_TETRA_TIP_DOT_RADIUS: f32 = 0.0;
 pub(super) const MAP_TETRA_LABEL_NORMAL_OFFSET: f32 = 0.12;
 pub(super) use crate::render::TESSERACT_EDGE_STROKE_WIDTH as EDGE_STROKE_WIDTH;
-pub(super) const TAP_RADIUS_MULTIPLIER: f32 = 5.0;
-pub(super) const TAP_RADIUS_MIN: f32 = 15.0;
-pub(super) const TAP_RADIUS_MAX: f32 = 50.0;
+pub(super) const TAP_RADIUS_MULTIPLIER: f32 = 6.0;
+pub(super) const TAP_RADIUS_MIN: f32 = 25.0;
+pub(super) const TAP_RADIUS_MAX: f32 = 60.0;
 
 pub(super) const MAP_ARROW_HEAD_SCALE: f32 = 15.0;
 pub(super) const MAP_WAYPOINT_DOT_RADIUS: f32 = 3.0;
