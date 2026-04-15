@@ -2,6 +2,7 @@ use eframe::egui;
 use nalgebra::Vector4;
 
 use crate::camera::Camera;
+use crate::render::W_SLICE_EXTENT_SIGMA;
 
 use super::helpers::lerp_color;
 use super::{DIM_GRAY, SLICE_GREEN};
@@ -28,8 +29,9 @@ impl SliceInfo {
         let abs_d = d.abs();
         if abs_d <= self.w_half {
             (SLICE_GREEN, 1.0)
-        } else if abs_d < 2.0 * self.w_half {
-            let t = ((abs_d - self.w_half) / self.w_half).clamp(0.0, 1.0);
+        } else if abs_d < W_SLICE_EXTENT_SIGMA * self.w_half {
+            let t = ((abs_d - self.w_half) / ((W_SLICE_EXTENT_SIGMA - 1.0) * self.w_half))
+                .clamp(0.0, 1.0);
             let alpha = 1.0 - t * 0.7;
             let edge_color = lerp_color(SLICE_GREEN, DIM_GRAY, t);
             (edge_color, alpha)
@@ -554,6 +556,26 @@ mod tests {
         let w_half = w_thickness * 0.5;
         let pos_boundary = cam.position + Vector4::new(0.0, 0.0, 0.0, 2.0 * w_half);
         let (color, alpha) = info.style_for_point(pos_boundary);
+        assert!(
+            color != SLICE_GREEN,
+            "at 2σ should be faded, not full green"
+        );
+        assert!(
+            alpha < 1.0 && alpha > 0.3,
+            "at 2σ alpha should be in fade zone, got {}",
+            alpha
+        );
+    }
+
+    #[test]
+    fn test_style_for_point_boundary_at_3sigma_is_dim() {
+        let cam = Camera::new();
+        let w_thickness = 2.5;
+        let info = SliceInfo::new(&cam, w_thickness);
+        let w_half = w_thickness * 0.5;
+        let pos_3sigma =
+            cam.position + Vector4::new(0.0, 0.0, 0.0, W_SLICE_EXTENT_SIGMA * w_half + 0.1);
+        let (color, alpha) = info.style_for_point(pos_3sigma);
         assert_eq!(color, DIM_GRAY);
         assert_approx_eq(alpha, 0.3, 1e-6);
     }
