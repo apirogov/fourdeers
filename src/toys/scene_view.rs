@@ -10,9 +10,9 @@ use crate::input::{
 };
 use crate::input::{KEYBOARD_MOVE_SPEED, TAP_MOVE_SPEED};
 use crate::render::{
-    adjust_w_thickness, draw_background, draw_center_divider, render_stereo_views,
-    render_tap_zone_label, split_stereo_views, FourDSettings, StereoSettings,
-    TesseractRenderConfig, TesseractRenderContext,
+    adjust_w_eye_offset, adjust_w_thickness, create_stereo_projectors, draw_background,
+    draw_center_divider, eye_w_params, render_tap_zone_label, split_stereo_views, FourDSettings,
+    StereoSettings, TesseractRenderConfig, TesseractRenderContext,
 };
 use crate::toy::ViewAction;
 
@@ -74,16 +74,35 @@ impl SceneView {
 
         let transformed = ctx.transform_vertices();
 
-        render_stereo_views(
-            ui,
+        let views = create_stereo_projectors(
             rect,
             params.stereo.eye_separation,
             params.stereo.projection_distance,
             params.stereo.projection_mode,
-            |painter, projector, view_rect| {
-                ctx.render_edges(painter, projector, &transformed, view_rect);
-            },
         );
+
+        let w_half = params.four_d.w_thickness * 0.5;
+        let w_eye_offset = params.four_d.w_eye_offset;
+
+        for (eye_idx, (projector, view_rect)) in [
+            (&views.left_projector, views.left_rect),
+            (&views.right_projector, views.right_rect),
+        ]
+        .iter()
+        .enumerate()
+        {
+            let eye_sign = if eye_idx == 0 { -1.0 } else { 1.0 };
+            let (w_shift, sub_w_half) = eye_w_params(w_half, w_eye_offset, eye_sign);
+            let painter = ui.painter().with_clip_rect(*view_rect);
+            ctx.render_edges(
+                &painter,
+                projector,
+                &transformed,
+                painter.clip_rect(),
+                w_shift,
+                sub_w_half,
+            );
+        }
 
         if params.show_debug {
             let right_rect = split_stereo_views(rect).1;
@@ -174,12 +193,14 @@ impl SceneView {
         analysis: &PointerAnalysis,
         camera: &mut Camera,
         w_thickness: &mut f32,
+        w_eye_offset: &mut f32,
     ) -> ViewAction {
         let delta = analysis.drag_delta;
 
         match analysis.drag_view {
             Some(DragView::Left) => {
                 *w_thickness = adjust_w_thickness(*w_thickness, delta.x);
+                *w_eye_offset = adjust_w_eye_offset(*w_eye_offset, delta.y);
             }
             Some(DragView::Right) => {
                 if self.right_view_4d_rotation {

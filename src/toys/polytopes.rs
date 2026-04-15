@@ -336,6 +336,7 @@ impl PolytopesToy {
             frame_mode: self.map.frame_mode,
             geometry_bounds,
             four_d: self.four_d,
+            w_eye_offset: self.four_d.w_eye_offset,
         };
         self.map.render(ui, rect, &params);
     }
@@ -561,13 +562,18 @@ impl Toy for PolytopesToy {
         action
     }
 
-    fn handle_drag(&mut self, analysis: PointerAnalysis, w_thickness: &mut f32) -> ViewAction {
+    fn handle_drag(
+        &mut self,
+        analysis: PointerAnalysis,
+        w_thickness: &mut f32,
+        w_eye_offset: &mut f32,
+    ) -> ViewAction {
         match self.active_view {
             ActiveViewId::Scene => {
                 self.scene_view
-                    .handle_drag(&analysis, &mut self.camera, w_thickness)
+                    .handle_drag(&analysis, &mut self.camera, w_thickness, w_eye_offset)
             }
-            ActiveViewId::Map => self.map.handle_drag(&analysis, w_thickness),
+            ActiveViewId::Map => self.map.handle_drag(&analysis, w_thickness, w_eye_offset),
             ActiveViewId::Compass => self.compass.handle_drag(&analysis),
         }
     }

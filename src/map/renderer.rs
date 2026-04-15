@@ -41,6 +41,7 @@ pub struct MapRenderParams<'a> {
     pub frame_mode: CompassFrameMode,
     pub geometry_bounds: Option<Bounds4D>,
     pub four_d: FourDSettings,
+    pub w_eye_offset: f32,
 }
 
 struct PreparedWaypoint {
@@ -151,15 +152,24 @@ impl MapRenderer {
         );
         let left_painter = ui.painter().with_clip_rect(views.left_rect);
         let right_painter = ui.painter().with_clip_rect(views.right_rect);
-        for (painter, projector, view_rect) in [
+        let w_half = params.four_d.w_thickness * 0.5;
+        for (eye_idx, (painter, projector, view_rect)) in [
             (&left_painter, &views.left_projector, views.left_rect),
             (&right_painter, &views.right_projector, views.right_rect),
-        ] {
+        ]
+        .iter()
+        .enumerate()
+        {
+            let eye_sign = if eye_idx == 0 { -1.0 } else { 1.0 };
+            let (w_shift, sub_w_half) =
+                crate::render::eye_w_params(w_half, params.w_eye_offset, eye_sign);
             frame_data.tesseract_ctx.render_edges(
                 painter,
                 projector,
                 &frame_data.transformed,
                 painter.clip_rect(),
+                w_shift,
+                sub_w_half,
             );
             if self.labels_visible {
                 self.render_vertex_labels(painter, projector, &frame_data.transformed, params);
@@ -176,7 +186,7 @@ impl MapRenderer {
                 projector,
                 &map_transform,
                 &frame_data.slice,
-                view_rect,
+                *view_rect,
                 params.stereo,
                 params.scene_camera,
                 &bounds,

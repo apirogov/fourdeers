@@ -6,6 +6,9 @@ pub const DEFAULT_EYE_SEPARATION: f32 = 0.12;
 pub const W_THICKNESS_DRAG_SENSITIVITY: f32 = 0.02;
 pub const W_THICKNESS_MIN: f32 = 0.1;
 pub const W_THICKNESS_MAX: f32 = 5.0;
+pub const W_EYE_OFFSET_DRAG_SENSITIVITY: f32 = 0.01;
+pub const W_EYE_OFFSET_MAX: f32 = 1.0;
+pub const W_EYE_SPREAD: f32 = 0.45;
 pub const MIN_VERTEX_ALPHA: u8 = 128;
 
 pub const W_COLOR_NEGATIVE: (f32, f32, f32) = (0.6, 0.2, 0.8);
@@ -107,6 +110,17 @@ pub fn adjust_w_thickness(w_thickness: f32, delta_x: f32) -> f32 {
     (w_thickness + delta_x * W_THICKNESS_DRAG_SENSITIVITY).clamp(W_THICKNESS_MIN, W_THICKNESS_MAX)
 }
 
+pub fn adjust_w_eye_offset(w_eye_offset: f32, delta_y: f32) -> f32 {
+    (w_eye_offset - delta_y * W_EYE_OFFSET_DRAG_SENSITIVITY).clamp(0.0, W_EYE_OFFSET_MAX)
+}
+
+#[must_use]
+pub fn eye_w_params(w_half: f32, w_eye_offset: f32, eye_sign: f32) -> (f32, f32) {
+    let shift = w_eye_offset * w_half * W_EYE_SPREAD * eye_sign;
+    let sub_half = w_half * (1.0 - w_eye_offset * W_EYE_SPREAD);
+    (shift, sub_half)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CompassFrameMode {
     #[default]
@@ -135,12 +149,14 @@ impl CompassFrameMode {
 #[derive(Debug, Clone, Copy)]
 pub struct FourDSettings {
     pub w_thickness: f32,
+    pub w_eye_offset: f32,
 }
 
 impl Default for FourDSettings {
     fn default() -> Self {
         Self {
             w_thickness: DEFAULT_W_THICKNESS,
+            w_eye_offset: 0.0,
         }
     }
 }
@@ -258,5 +274,68 @@ mod tests {
         assert!(result.is_some());
         let truncated = result.unwrap();
         assert!(truncated[0][3] >= -w_half && truncated[0][3] <= w_half);
+    }
+
+    #[test]
+    fn test_sub_slice_center_alpha_constant_across_panning() {
+        let w_half = 2.5;
+        for p in [0.0, 0.25, 0.5, 0.75, 1.0] {
+            let (_, sub_half) = eye_w_params(w_half, p, -1.0);
+            let alpha = compute_vertex_alpha(0.0, sub_half);
+            assert_eq!(alpha, 255, "alpha at sub-slice center with p={}", p);
+        }
+    }
+
+    #[test]
+    fn test_sub_slice_edge_alpha_is_min() {
+        let w_half = 2.5;
+        for p in [0.0, 0.5, 1.0] {
+            let (_, sub_half) = eye_w_params(w_half, p, -1.0);
+            let alpha = compute_vertex_alpha(sub_half, sub_half);
+            assert_eq!(alpha, MIN_VERTEX_ALPHA, "edge alpha at p={}", p);
+        }
+    }
+
+    #[test]
+    fn test_zero_panning_matches_current_behavior() {
+        let w_half = 2.5;
+        let (shift, sub_half) = eye_w_params(w_half, 0.0, -1.0);
+        assert_eq!(shift, 0.0);
+        assert_eq!(sub_half, w_half);
+        for w in [0.0, 0.5, 1.0, 2.0, 2.5] {
+            let shifted = w - shift;
+            let alpha = compute_vertex_alpha(shifted, sub_half);
+            let expected = compute_vertex_alpha(w, w_half);
+            assert_eq!(alpha, expected, "at w={}", w);
+        }
+    }
+
+    #[test]
+    fn test_max_panning_left_eye_fades_positive_w() {
+        let w_half = 2.5;
+        let (shift, sub_half) = eye_w_params(w_half, 1.0, -1.0);
+        let neg_shifted = -1.0 - shift;
+        let pos_shifted = 1.0 - shift;
+        let alpha_neg = compute_vertex_alpha(neg_shifted, sub_half);
+        let alpha_pos = compute_vertex_alpha(pos_shifted, sub_half);
+        assert!(
+            alpha_neg > alpha_pos,
+            "neg_alpha ({}) should > pos_alpha ({})",
+            alpha_neg,
+            alpha_pos
+        );
+    }
+
+    #[test]
+    fn test_panning_overlap_region_soft_fade() {
+        let w_half = 2.5;
+        let (shift, sub_half) = eye_w_params(w_half, 1.0, -1.0);
+        let shifted_w = 0.0 - shift;
+        let alpha = compute_vertex_alpha(shifted_w, sub_half);
+        assert!(
+            alpha > MIN_VERTEX_ALPHA,
+            "overlap should be above min alpha"
+        );
+        assert!(alpha < 255, "overlap should be below max alpha");
     }
 }

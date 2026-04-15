@@ -102,6 +102,8 @@ impl<'a> TesseractRenderContext<'a> {
         projector: &StereoProjector,
         transformed: &[TransformedVertex],
         clip_rect: egui::Rect,
+        w_shift: f32,
+        sub_w_half: f32,
     ) {
         let stroke_width = TESSERACT_EDGE_STROKE_WIDTH;
         let near_plane = self.projection_distance;
@@ -121,9 +123,9 @@ impl<'a> TesseractRenderContext<'a> {
             let t1 = &transformed[chunk[1] as usize];
 
             let Some(truncated) = truncate_segment_to_slice(
-                Vector4::new(t0.x, t0.y, t0.z, t0.w),
-                Vector4::new(t1.x, t1.y, t1.z, t1.w),
-                self.w_half,
+                Vector4::new(t0.x, t0.y, t0.z, t0.w - w_shift),
+                Vector4::new(t1.x, t1.y, t1.z, t1.w - w_shift),
+                sub_w_half,
             ) else {
                 continue;
             };
@@ -151,11 +153,13 @@ impl<'a> TesseractRenderContext<'a> {
                 continue;
             }
 
-            let alpha_a = compute_vertex_alpha(truncated[0][3], self.w_half);
-            let alpha_b = compute_vertex_alpha(truncated[1][3], self.w_half);
+            let alpha_a = compute_vertex_alpha(truncated[0][3], sub_w_half);
+            let alpha_b = compute_vertex_alpha(truncated[1][3], sub_w_half);
 
-            let normalized_w0 = (truncated[0][3] / self.w_half).clamp(-1.0, 1.0);
-            let normalized_w1 = (truncated[1][3] / self.w_half).clamp(-1.0, 1.0);
+            let original_w0 = truncated[0][3] + w_shift;
+            let original_w1 = truncated[1][3] + w_shift;
+            let normalized_w0 = (original_w0 / self.w_half).clamp(-1.0, 1.0);
+            let normalized_w1 = (original_w1 / self.w_half).clamp(-1.0, 1.0);
             let color_a = w_to_color(normalized_w0, alpha_a);
             let color_b = w_to_color(normalized_w1, alpha_b);
 
@@ -171,6 +175,8 @@ impl<'a> TesseractRenderContext<'a> {
         projector: &StereoProjector,
         transformed: &[TransformedVertex],
         clip_rect: egui::Rect,
+        w_shift: f32,
+        sub_w_half: f32,
     ) -> (Vec<GpuVertex>, Vec<u32>) {
         let stroke_width = TESSERACT_EDGE_STROKE_WIDTH;
         let half_w = stroke_width * 0.5;
@@ -193,9 +199,9 @@ impl<'a> TesseractRenderContext<'a> {
             let t1 = &transformed[chunk[1] as usize];
 
             let Some(truncated) = truncate_segment_to_slice(
-                Vector4::new(t0.x, t0.y, t0.z, t0.w),
-                Vector4::new(t1.x, t1.y, t1.z, t1.w),
-                self.w_half,
+                Vector4::new(t0.x, t0.y, t0.z, t0.w - w_shift),
+                Vector4::new(t1.x, t1.y, t1.z, t1.w - w_shift),
+                sub_w_half,
             ) else {
                 continue;
             };
@@ -223,11 +229,13 @@ impl<'a> TesseractRenderContext<'a> {
                 continue;
             }
 
-            let alpha_a = compute_vertex_alpha(truncated[0][3], self.w_half);
-            let alpha_b = compute_vertex_alpha(truncated[1][3], self.w_half);
+            let alpha_a = compute_vertex_alpha(truncated[0][3], sub_w_half);
+            let alpha_b = compute_vertex_alpha(truncated[1][3], sub_w_half);
 
-            let normalized_w0 = (truncated[0][3] / self.w_half).clamp(-1.0, 1.0);
-            let normalized_w1 = (truncated[1][3] / self.w_half).clamp(-1.0, 1.0);
+            let original_w0 = truncated[0][3] + w_shift;
+            let original_w1 = truncated[1][3] + w_shift;
+            let normalized_w0 = (original_w0 / self.w_half).clamp(-1.0, 1.0);
+            let normalized_w1 = (original_w1 / self.w_half).clamp(-1.0, 1.0);
             let color_a = w_to_color(normalized_w0, alpha_a);
             let color_b = w_to_color(normalized_w1, alpha_b);
 

@@ -166,9 +166,11 @@ impl FourDeersApp {
                 tap_pos: egui::Pos2::ZERO,
             };
 
-            self.toy_manager
-                .active_toy_mut()
-                .handle_drag(analysis, &mut self.settings.four_d.w_thickness);
+            self.toy_manager.active_toy_mut().handle_drag(
+                analysis,
+                &mut self.settings.four_d.w_thickness,
+                &mut self.settings.four_d.w_eye_offset,
+            );
         }
         self.last_drag_pos = Some(pos);
     }

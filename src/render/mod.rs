@@ -23,8 +23,9 @@ pub use ui::{
 
 pub(crate) use projection::NEAR_PLANE_THRESHOLD;
 pub use style::{
-    adjust_w_thickness, compute_vertex_alpha, truncate_segment_to_slice, DEFAULT_EYE_SEPARATION,
-    DEFAULT_PROJECTION_DISTANCE, DEFAULT_W_THICKNESS, MIN_VERTEX_ALPHA,
+    adjust_w_eye_offset, adjust_w_thickness, compute_vertex_alpha, eye_w_params,
+    truncate_segment_to_slice, DEFAULT_EYE_SEPARATION, DEFAULT_PROJECTION_DISTANCE,
+    DEFAULT_W_THICKNESS, MIN_VERTEX_ALPHA, W_EYE_OFFSET_DRAG_SENSITIVITY, W_EYE_OFFSET_MAX,
     W_THICKNESS_DRAG_SENSITIVITY, W_THICKNESS_MAX, W_THICKNESS_MIN,
 };
 
