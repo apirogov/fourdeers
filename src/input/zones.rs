@@ -111,6 +111,7 @@ pub struct PointerAnalysis {
     pub is_hold: bool,
     pub is_drag: bool,
     pub tap_pos: egui::Pos2,
+    pub dt_scale: f32,
 }
 
 #[must_use]
@@ -161,6 +162,7 @@ pub fn analyze_pointer_initial(
         is_hold: false,
         is_drag: false,
         tap_pos,
+        dt_scale: 1.0,
     })
 }
 

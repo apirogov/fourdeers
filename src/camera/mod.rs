@@ -141,43 +141,32 @@ impl Camera {
     /// Standard FPS controls:
     /// - Drag right -> look right (world appears to move left)
     /// - Drag down -> look down (world appears to move up)
-    pub fn rotate(&mut self, delta_x: f32, delta_y: f32) {
-        // Negative yaw for drag right to look right
-        let yaw_rot =
-            UnitQuaternion::from_axis_angle(&Vector3::y_axis(), delta_x * ROTATION_SENSITIVITY);
-        // Positive pitch for drag down to look down
-        let pitch_rot =
-            UnitQuaternion::from_axis_angle(&Vector3::x_axis(), delta_y * ROTATION_SENSITIVITY);
+    pub fn rotate(&mut self, delta_x: f32, delta_y: f32, dt_scale: f32) {
+        let s = ROTATION_SENSITIVITY * dt_scale;
+        let yaw_rot = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), delta_x * s);
+        let pitch_rot = UnitQuaternion::from_axis_angle(&Vector3::x_axis(), delta_y * s);
 
-        // Apply rotations: yaw (around world Y) then pitch (around local X)
-        // Modify look quaternion (the 3D-like rotation)
         let new_q_left = yaw_rot * *self.rotation_4d.q_left() * pitch_rot;
         self.rotation_4d = Rotation4D::new(new_q_left, *self.rotation_4d.q_right());
 
-        // Update cached values
-        self.yaw_l += delta_x * ROTATION_SENSITIVITY;
-        self.pitch_l += delta_y * ROTATION_SENSITIVITY;
+        self.yaw_l += delta_x * s;
+        self.pitch_l += delta_y * s;
     }
 
     /// Rotate 4D camera slice orientation (affects **tilt** quaternion only).
     ///
     /// This tilts the 3D slice in 4D. It should not change in-slice look frame.
     #[allow(clippy::similar_names)]
-    pub fn rotate_4d(&mut self, delta_x: f32, delta_y: f32) {
-        // XW plane for horizontal (like XZ in 3D), YW plane for vertical (like YZ in 3D)
-        // Match 3D pattern: yaw * old * pitch
-        let tilt_xw =
-            Rotation4D::from_plane_angle(RotationPlane::XW, -delta_x * ROTATION_SENSITIVITY);
-        let tilt_yw =
-            Rotation4D::from_plane_angle(RotationPlane::YW, delta_y * ROTATION_SENSITIVITY);
+    pub fn rotate_4d(&mut self, delta_x: f32, delta_y: f32, dt_scale: f32) {
+        let s = ROTATION_SENSITIVITY * dt_scale;
+        let tilt_xw = Rotation4D::from_plane_angle(RotationPlane::XW, -delta_x * s);
+        let tilt_yw = Rotation4D::from_plane_angle(RotationPlane::YW, delta_y * s);
 
-        // Apply in same order as 3D: new_xw * old * new_yw
         let new_q_right = *tilt_xw.q_left() * *self.rotation_4d.q_right() * *tilt_yw.q_left();
         self.rotation_4d = Rotation4D::new(*self.rotation_4d.q_left(), new_q_right);
 
-        // Update cached values
-        self.yaw_r += -delta_x * ROTATION_SENSITIVITY;
-        self.pitch_r += delta_y * ROTATION_SENSITIVITY;
+        self.yaw_r += -delta_x * s;
+        self.pitch_r += delta_y * s;
     }
 
     /// Get look yaw angle (rotation around Y axis) in radians

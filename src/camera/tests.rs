@@ -110,7 +110,7 @@ fn test_rotate() {
         ..Camera::new()
     };
 
-    camera.rotate(1.0, 0.0);
+    camera.rotate(1.0, 0.0, 1.0);
     let forward = camera.forward_vector();
 
     assert!(forward.x.abs() > 1e-6 || forward.z.abs() < 0.99);
@@ -255,7 +255,7 @@ fn test_rotate_affects_look_only() {
 
     let initial_tilt = *camera.rotation_4d.q_right();
 
-    camera.rotate(1.0, 0.5);
+    camera.rotate(1.0, 0.5, 1.0);
 
     let new_tilt = *camera.rotation_4d.q_right();
     assert_eq!(initial_tilt, new_tilt, "rotate() should not affect tilt");
@@ -273,7 +273,7 @@ fn test_rotate_4d_affects_tilt_only() {
 
     let initial_look = *camera.rotation_4d.q_left();
 
-    camera.rotate_4d(1.0, 0.5);
+    camera.rotate_4d(1.0, 0.5, 1.0);
 
     let new_look = *camera.rotation_4d.q_left();
     assert_eq!(initial_look, new_look, "rotate_4d() should not affect look");
@@ -489,7 +489,7 @@ fn test_rotate_4d_changes_basis_w() {
     let initial_basis_w = camera.rotation_4d.basis_w();
     assert_approx_eq(initial_basis_w[3], 1.0, 1e-6);
 
-    camera.rotate_4d(1.0, 0.5);
+    camera.rotate_4d(1.0, 0.5, 1.0);
 
     let new_basis_w = camera.rotation_4d.basis_w();
     assert!(
@@ -502,11 +502,11 @@ fn test_rotate_4d_changes_basis_w() {
 fn test_rotate_and_rotate_4d_independent() {
     let mut camera = Camera::new();
 
-    camera.rotate(1.0, 0.5);
+    camera.rotate(1.0, 0.5, 1.0);
     let look_after_rotate = *camera.rotation_4d.q_left();
     let tilt_after_rotate = *camera.rotation_4d.q_right();
 
-    camera.rotate_4d(0.5, 1.0);
+    camera.rotate_4d(0.5, 1.0, 1.0);
 
     let look_after_both = *camera.rotation_4d.q_left();
     let tilt_after_both = *camera.rotation_4d.q_right();
@@ -538,10 +538,10 @@ fn test_yaw_pitch_preservation() {
 fn test_rotate_4d_circular_drag_returns_to_start() {
     let mut camera = Camera::new();
 
-    camera.rotate_4d(100.0, 0.0);
-    camera.rotate_4d(0.0, 100.0);
-    camera.rotate_4d(-100.0, 0.0);
-    camera.rotate_4d(0.0, -100.0);
+    camera.rotate_4d(100.0, 0.0, 1.0);
+    camera.rotate_4d(0.0, 100.0, 1.0);
+    camera.rotate_4d(-100.0, 0.0, 1.0);
+    camera.rotate_4d(0.0, -100.0, 1.0);
 
     let final_tilt = *camera.rotation_4d.q_right();
 
@@ -558,8 +558,8 @@ fn test_rotate_4d_horizontal_then_back_returns_to_start() {
 
     let initial_tilt = *camera.rotation_4d.q_right();
 
-    camera.rotate_4d(100.0, 0.0);
-    camera.rotate_4d(-100.0, 0.0);
+    camera.rotate_4d(100.0, 0.0, 1.0);
+    camera.rotate_4d(-100.0, 0.0, 1.0);
 
     let final_tilt = *camera.rotation_4d.q_right();
 
@@ -575,8 +575,8 @@ fn test_rotate_4d_vertical_then_back_returns_to_start() {
 
     let initial_tilt = *camera.rotation_4d.q_right();
 
-    camera.rotate_4d(0.0, 100.0);
-    camera.rotate_4d(0.0, -100.0);
+    camera.rotate_4d(0.0, 100.0, 1.0);
+    camera.rotate_4d(0.0, -100.0, 1.0);
 
     let final_tilt = *camera.rotation_4d.q_right();
 
@@ -599,7 +599,7 @@ fn test_slice_w_axis_identity() {
 #[test]
 fn test_slice_w_axis_after_4d_rotation() {
     let mut camera = Camera::new();
-    camera.rotate_4d(1.0, 0.0);
+    camera.rotate_4d(1.0, 0.0, 1.0);
     let w_axis = camera.slice_w_axis();
     let norm = (w_axis[0] * w_axis[0]
         + w_axis[1] * w_axis[1]
@@ -623,7 +623,7 @@ fn test_project_3d_to_4d_identity() {
 #[test]
 fn test_project_3d_to_4d_after_4d_rotation() {
     let mut camera = Camera::new();
-    camera.rotate_4d(200.0, 0.0);
+    camera.rotate_4d(200.0, 0.0, 1.0);
     let v3 = Vector3::new(1.0, 0.0, 0.0);
     let v4 = camera.project_3d_to_4d(v3);
     let norm = (v4.x * v4.x + v4.y * v4.y + v4.z * v4.z + v4.w * v4.w).sqrt();
@@ -644,7 +644,7 @@ fn test_is_slice_tilted_identity() {
 #[test]
 fn test_is_slice_tilted_after_4d_rotation() {
     let mut camera = Camera::new();
-    camera.rotate_4d(1.0, 0.0);
+    camera.rotate_4d(1.0, 0.0, 1.0);
     assert!(camera.is_slice_tilted());
 }
 

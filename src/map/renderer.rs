@@ -111,12 +111,12 @@ impl MapRenderer {
         self.camera.apply_action(action, speed);
     }
 
-    pub fn rotate_3d(&mut self, delta_x: f32, delta_y: f32) {
-        self.camera.rotate(delta_x, delta_y);
+    pub fn rotate_3d(&mut self, delta_x: f32, delta_y: f32, dt_scale: f32) {
+        self.camera.rotate(delta_x, delta_y, dt_scale);
     }
 
-    pub fn rotate_4d(&mut self, delta_x: f32, delta_y: f32) {
-        self.camera.rotate_4d(delta_x, delta_y);
+    pub fn rotate_4d(&mut self, delta_x: f32, delta_y: f32, dt_scale: f32) {
+        self.camera.rotate_4d(delta_x, delta_y, dt_scale);
     }
 
     pub fn reset_to_fit(&mut self, scene_camera: &Camera, bounds: &Bounds4D) {

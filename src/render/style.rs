@@ -106,12 +106,13 @@ const fn compute_w_color_lut() -> [u32; W_COLOR_LUT_SIZE] {
 
 const W_COLOR_LUT: [u32; W_COLOR_LUT_SIZE] = compute_w_color_lut();
 
-pub fn adjust_w_thickness(w_thickness: f32, delta_x: f32) -> f32 {
-    (w_thickness + delta_x * W_THICKNESS_DRAG_SENSITIVITY).clamp(W_THICKNESS_MIN, W_THICKNESS_MAX)
+pub fn adjust_w_thickness(w_thickness: f32, delta_x: f32, dt_scale: f32) -> f32 {
+    (w_thickness + delta_x * W_THICKNESS_DRAG_SENSITIVITY * dt_scale)
+        .clamp(W_THICKNESS_MIN, W_THICKNESS_MAX)
 }
 
-pub fn adjust_w_eye_offset(w_eye_offset: f32, delta_y: f32) -> f32 {
-    (w_eye_offset - delta_y * W_EYE_OFFSET_DRAG_SENSITIVITY).clamp(0.0, W_EYE_OFFSET_MAX)
+pub fn adjust_w_eye_offset(w_eye_offset: f32, delta_y: f32, dt_scale: f32) -> f32 {
+    (w_eye_offset - delta_y * W_EYE_OFFSET_DRAG_SENSITIVITY * dt_scale).clamp(0.0, W_EYE_OFFSET_MAX)
 }
 
 #[must_use]
@@ -337,5 +338,38 @@ mod tests {
             "overlap should be above min alpha"
         );
         assert!(alpha < 255, "overlap should be below max alpha");
+    }
+
+    #[test]
+    fn test_adjust_w_thickness_scales_with_dt() {
+        let base = adjust_w_thickness(2.5, 10.0, 1.0);
+        let doubled = adjust_w_thickness(2.5, 10.0, 2.0);
+        let half = adjust_w_thickness(2.5, 10.0, 0.5);
+        assert!(
+            doubled > base,
+            "doubled dt_scale should produce larger change"
+        );
+        assert!(half < base, "half dt_scale should produce smaller change");
+        assert!((base - 2.5).abs() > 0.0, "base should have some change");
+        assert!(
+            ((doubled - 2.5) - 2.0 * (base - 2.5)).abs() < 1e-6,
+            "doubled should be exactly 2x base change"
+        );
+    }
+
+    #[test]
+    fn test_adjust_w_eye_offset_scales_with_dt() {
+        let base = adjust_w_eye_offset(0.0, -10.0, 1.0);
+        let doubled = adjust_w_eye_offset(0.0, -10.0, 2.0);
+        let half = adjust_w_eye_offset(0.0, -10.0, 0.5);
+        assert!(
+            doubled > base,
+            "doubled dt_scale should produce larger offset"
+        );
+        assert!(half < base, "half dt_scale should produce smaller offset");
+        assert!(
+            ((doubled - base) - (base - 0.0)).abs() < 1e-6,
+            "doubled change should be exactly 2x base change"
+        );
     }
 }

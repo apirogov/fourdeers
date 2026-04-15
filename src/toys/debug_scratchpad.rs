@@ -61,7 +61,7 @@ impl Toy for DebugScratchpadToy {
 
     fn handle_drag_start(&mut self, _drag_view: DragView) {}
 
-    fn handle_keyboard(&mut self, _ctx: &egui::Context) {}
+    fn handle_keyboard(&mut self, _ctx: &egui::Context, _dt_scale: f32) {}
 
     fn set_stereo_settings(&mut self, _settings: &StereoSettings) {}
 

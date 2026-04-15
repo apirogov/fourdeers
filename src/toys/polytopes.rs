@@ -584,7 +584,7 @@ impl Toy for PolytopesToy {
         }
     }
 
-    fn handle_keyboard(&mut self, ctx: &egui::Context) {
+    fn handle_keyboard(&mut self, ctx: &egui::Context, dt_scale: f32) {
         ctx.input(|i| {
             if i.key_pressed(egui::Key::C) {
                 self.toggle_view(ActiveViewId::Compass);
@@ -599,10 +599,11 @@ impl Toy for PolytopesToy {
 
         match self.active_view {
             ActiveViewId::Scene => {
-                self.scene_view.handle_keyboard(ctx, &mut self.camera);
+                self.scene_view
+                    .handle_keyboard(ctx, &mut self.camera, dt_scale);
             }
             ActiveViewId::Map => {
-                self.map.handle_keyboard(ctx);
+                self.map.handle_keyboard(ctx, dt_scale);
             }
             ActiveViewId::Compass => {
                 let waypoints_len = self.compass_waypoints().len();

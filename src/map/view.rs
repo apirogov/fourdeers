@@ -120,7 +120,7 @@ impl MapView {
             if let Some(zone) = analysis.zone {
                 if let Some(action) = zone_to_movement_action(zone) {
                     let speed = if analysis.is_hold {
-                        HOLD_MOVE_SPEED
+                        HOLD_MOVE_SPEED * analysis.dt_scale
                     } else {
                         TAP_MOVE_SPEED
                     };
@@ -142,14 +142,14 @@ impl MapView {
 
         match analysis.drag_view {
             Some(DragView::Left) => {
-                *w_thickness = adjust_w_thickness(*w_thickness, delta.x);
-                *w_eye_offset = adjust_w_eye_offset(*w_eye_offset, delta.y);
+                *w_thickness = adjust_w_thickness(*w_thickness, delta.x, analysis.dt_scale);
+                *w_eye_offset = adjust_w_eye_offset(*w_eye_offset, delta.y, analysis.dt_scale);
             }
             Some(DragView::Right) => {
                 if self.rotation_3d {
-                    self.renderer.rotate_3d(delta.x, delta.y);
+                    self.renderer.rotate_3d(delta.x, delta.y, analysis.dt_scale);
                 } else {
-                    self.renderer.rotate_4d(delta.x, delta.y);
+                    self.renderer.rotate_4d(delta.x, delta.y, analysis.dt_scale);
                 }
             }
             None => {}
@@ -157,7 +157,7 @@ impl MapView {
         ViewAction::None
     }
 
-    pub fn handle_keyboard(&mut self, ctx: &egui::Context) {
+    pub fn handle_keyboard(&mut self, ctx: &egui::Context, _dt_scale: f32) {
         ctx.input(|i| {
             if i.key_pressed(egui::Key::F) {
                 self.frame_mode = self.frame_mode.other();

@@ -84,8 +84,8 @@ mod tests {
             (-40.0, 70.0, 15.0, 25.0),
         ] {
             let mut camera = Camera::new();
-            camera.rotate_4d(rot4d_x, rot4d_y);
-            camera.rotate(rot3d_x, rot3d_y);
+            camera.rotate_4d(rot4d_x, rot4d_y, 1.0);
+            camera.rotate(rot3d_x, rot3d_y, 1.0);
 
             let test_verts: Vec<nalgebra::Vector4<f32>> = vec![
                 nalgebra::Vector4::new(1.0, 0.0, 0.0, 0.0),

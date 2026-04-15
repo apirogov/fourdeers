@@ -58,7 +58,7 @@ pub(crate) trait Toy {
     fn handle_drag_start(&mut self, drag_view: DragView);
 
     /// Handle keyboard input (called each frame).
-    fn handle_keyboard(&mut self, ctx: &egui::Context);
+    fn handle_keyboard(&mut self, ctx: &egui::Context, dt_scale: f32);
 
     /// Override the zone mode for a given view half (used for debug overlay).
     fn zone_mode_for_view(&self, _is_left_view: bool) -> ZoneMode {

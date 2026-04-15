@@ -107,10 +107,9 @@ impl CompassView {
 
     pub fn handle_drag(&mut self, analysis: &PointerAnalysis) -> ViewAction {
         let delta = analysis.drag_delta;
-        let yaw_rot =
-            UnitQuaternion::from_axis_angle(&Vector3::y_axis(), delta.x * ROTATION_SENSITIVITY);
-        let pitch_rot =
-            UnitQuaternion::from_axis_angle(&Vector3::x_axis(), delta.y * ROTATION_SENSITIVITY);
+        let s = ROTATION_SENSITIVITY * analysis.dt_scale;
+        let yaw_rot = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), delta.x * s);
+        let pitch_rot = UnitQuaternion::from_axis_angle(&Vector3::x_axis(), delta.y * s);
         let incremental = pitch_rot * yaw_rot;
         self.rotation = incremental * self.rotation;
         ViewAction::None

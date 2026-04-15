@@ -177,7 +177,7 @@ impl SceneView {
             // Movement actions work on both tap and hold
             if let Some(action) = Self::zone_to_action(zone, analysis.is_left_view) {
                 let speed = if analysis.is_hold {
-                    HOLD_MOVE_SPEED
+                    HOLD_MOVE_SPEED * analysis.dt_scale
                 } else {
                     TAP_MOVE_SPEED
                 };
@@ -199,14 +199,14 @@ impl SceneView {
 
         match analysis.drag_view {
             Some(DragView::Left) => {
-                *w_thickness = adjust_w_thickness(*w_thickness, delta.x);
-                *w_eye_offset = adjust_w_eye_offset(*w_eye_offset, delta.y);
+                *w_thickness = adjust_w_thickness(*w_thickness, delta.x, analysis.dt_scale);
+                *w_eye_offset = adjust_w_eye_offset(*w_eye_offset, delta.y, analysis.dt_scale);
             }
             Some(DragView::Right) => {
                 if self.right_view_4d_rotation {
-                    camera.rotate_4d(delta.x, delta.y);
+                    camera.rotate_4d(delta.x, delta.y, analysis.dt_scale);
                 } else {
-                    camera.rotate(delta.x, delta.y);
+                    camera.rotate(delta.x, delta.y, analysis.dt_scale);
                 }
                 self.tetrahedron_rotations.clear();
             }
@@ -223,14 +223,14 @@ impl SceneView {
         self.drag_state.clear();
     }
 
-    pub fn handle_keyboard(&mut self, ctx: &egui::Context, camera: &mut Camera) {
+    pub fn handle_keyboard(&mut self, ctx: &egui::Context, camera: &mut Camera, dt_scale: f32) {
         ctx.input(|i| {
             if i.key_pressed(egui::Key::U) {
                 self.info_level = (self.info_level + 1) % 3;
             }
         });
 
-        crate::input::handle_movement_keys(ctx, KEYBOARD_MOVE_SPEED, |action, speed| {
+        crate::input::handle_movement_keys(ctx, KEYBOARD_MOVE_SPEED, dt_scale, |action, speed| {
             self.apply_camera_action(camera, action, speed);
         });
     }

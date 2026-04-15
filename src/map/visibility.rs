@@ -279,7 +279,7 @@ mod tests {
         let map_camera = Camera::new();
         let map_transform = CameraProjection::new(&map_camera);
         let mut scene_camera = Camera::new();
-        scene_camera.rotate(0.5, 0.3);
+        scene_camera.rotate(0.5, 0.3, 1.0);
         let bounds = Bounds4D::from_corners(
             Vector4::new(-1.0, -1.0, -1.0, -1.0),
             Vector4::new(1.0, 1.0, 1.0, 1.0),

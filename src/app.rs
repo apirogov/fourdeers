@@ -1,5 +1,7 @@
 //! Main application
 
+use std::time::Duration;
+
 use eframe::egui;
 
 use crate::colors::PANEL_FILL;
@@ -16,6 +18,9 @@ const MENU_BAR_HEIGHT: f32 = 30.0;
 const MENU_INNER_MARGIN: i8 = 12;
 const BUILD_INFO_FONT_SIZE: f32 = 12.0;
 const BUILD_INFO_COLOR: egui::Color32 = egui::Color32::GRAY;
+const TARGET_FPS: f32 = 60.0;
+const TARGET_DT: f32 = 1.0 / TARGET_FPS;
+const MAX_DT: f32 = 0.1;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct CommonSettings {
@@ -35,6 +40,7 @@ pub struct FourDeersApp {
     drag_view: Option<DragView>,
     last_drag_pos: Option<egui::Pos2>,
     visualization_rect: Option<egui::Rect>,
+    last_frame_time: Option<f64>,
 }
 
 impl FourDeersApp {
@@ -51,27 +57,38 @@ impl FourDeersApp {
             drag_view: None,
             last_drag_pos: None,
             visualization_rect: None,
+            last_frame_time: None,
         }
     }
 }
 
 impl eframe::App for FourDeersApp {
     fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
+        let now = ctx.input(|i| i.time);
+        let dt = match self.last_frame_time {
+            Some(prev) => (now - prev).min(MAX_DT as f64) as f32,
+            None => TARGET_DT,
+        };
+        self.last_frame_time = Some(now);
+        let dt_scale = dt / TARGET_DT;
+
         ctx.input(|i| {
             if i.key_pressed(egui::Key::M) {
                 self.menu_open = !self.menu_open;
             }
         });
 
-        self.process_pointer_events(ctx);
-        self.toy_manager.active_toy_mut().handle_keyboard(ctx);
+        self.process_pointer_events(ctx, dt_scale);
+        self.toy_manager
+            .active_toy_mut()
+            .handle_keyboard(ctx, dt_scale);
         self.render_ui(ctx);
-        ctx.request_repaint();
+        ctx.request_repaint_after(Duration::from_secs_f32(1.0 / TARGET_FPS));
     }
 }
 
 impl FourDeersApp {
-    fn process_pointer_events(&mut self, ctx: &egui::Context) {
+    fn process_pointer_events(&mut self, ctx: &egui::Context, dt_scale: f32) {
         let mut tap_event = None;
 
         ctx.input(|i| {
@@ -107,10 +124,10 @@ impl FourDeersApp {
             self.handle_pointer_up(ctx, pos, time);
         }
 
-        self.process_drag_or_hold(ctx);
+        self.process_drag_or_hold(ctx, dt_scale);
     }
 
-    fn process_drag_or_hold(&mut self, ctx: &egui::Context) {
+    fn process_drag_or_hold(&mut self, ctx: &egui::Context, dt_scale: f32) {
         let mouse_pos = ctx.input(|i| i.pointer.hover_pos());
         let is_primary_down = ctx.input(|i| i.pointer.primary_down());
         let wants_pointer = ctx.wants_pointer_input();
@@ -140,9 +157,9 @@ impl FourDeersApp {
                     }
 
                     if self.is_drag_mode {
-                        self.process_drag(pos);
+                        self.process_drag(pos, dt_scale);
                     } else {
-                        self.process_hold(pos);
+                        self.process_hold(pos, dt_scale);
                     }
                 }
             }
@@ -151,7 +168,7 @@ impl FourDeersApp {
         }
     }
 
-    fn process_drag(&mut self, pos: egui::Pos2) {
+    fn process_drag(&mut self, pos: egui::Pos2, dt_scale: f32) {
         if let Some(last_pos) = self.last_drag_pos {
             let delta = pos - last_pos;
 
@@ -164,6 +181,7 @@ impl FourDeersApp {
                 is_hold: false,
                 is_drag: true,
                 tap_pos: egui::Pos2::ZERO,
+                dt_scale,
             };
 
             self.toy_manager.active_toy_mut().handle_drag(
@@ -175,7 +193,7 @@ impl FourDeersApp {
         self.last_drag_pos = Some(pos);
     }
 
-    fn process_hold(&mut self, pos: egui::Pos2) {
+    fn process_hold(&mut self, pos: egui::Pos2, dt_scale: f32) {
         let Some(vis_rect) = self.visualization_rect else {
             return;
         };
@@ -189,6 +207,7 @@ impl FourDeersApp {
             analyze_pointer_initial(vis_rect, pos, left_zone_mode, right_zone_mode)
         {
             analysis.is_hold = true;
+            analysis.dt_scale = dt_scale;
             self.toy_manager.active_toy_mut().handle_pointer(analysis);
         }
     }

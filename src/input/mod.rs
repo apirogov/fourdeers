@@ -17,32 +17,34 @@ pub const KEYBOARD_MOVE_SPEED: f32 = 0.15;
 pub fn handle_movement_keys(
     ctx: &egui::Context,
     speed: f32,
+    dt_scale: f32,
     mut apply: impl FnMut(Direction4D, f32),
 ) {
+    let scaled = speed * dt_scale;
     ctx.input(|i| {
         if i.key_down(egui::Key::ArrowUp) {
-            apply(Direction4D::Up, speed);
+            apply(Direction4D::Up, scaled);
         }
         if i.key_down(egui::Key::ArrowDown) {
-            apply(Direction4D::Down, speed);
+            apply(Direction4D::Down, scaled);
         }
         if i.key_down(egui::Key::ArrowLeft) {
-            apply(Direction4D::Left, speed);
+            apply(Direction4D::Left, scaled);
         }
         if i.key_down(egui::Key::ArrowRight) {
-            apply(Direction4D::Right, speed);
+            apply(Direction4D::Right, scaled);
         }
         if i.key_down(egui::Key::PageUp) {
-            apply(Direction4D::Forward, speed);
+            apply(Direction4D::Forward, scaled);
         }
         if i.key_down(egui::Key::PageDown) {
-            apply(Direction4D::Backward, speed);
+            apply(Direction4D::Backward, scaled);
         }
         if i.key_down(egui::Key::Period) {
-            apply(Direction4D::Kata, speed);
+            apply(Direction4D::Kata, scaled);
         }
         if i.key_down(egui::Key::Comma) {
-            apply(Direction4D::Ana, speed);
+            apply(Direction4D::Ana, scaled);
         }
     });
 }
