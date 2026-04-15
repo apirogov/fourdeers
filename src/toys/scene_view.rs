@@ -10,7 +10,7 @@ use crate::input::{
 };
 use crate::input::{KEYBOARD_MOVE_SPEED, TAP_MOVE_SPEED};
 use crate::render::{
-    adjust_w_eye_offset, adjust_w_thickness, create_stereo_projectors, draw_background,
+    adjust_dichoptic_intensity, adjust_w_thickness, create_stereo_projectors, draw_background,
     draw_center_divider, eye_w_params, render_tap_zone_label, split_stereo_views, FourDSettings,
     StereoSettings, TesseractRenderConfig, TesseractRenderContext,
 };
@@ -83,6 +83,7 @@ impl SceneView {
 
         let w_half = params.four_d.w_thickness * 0.5;
         let w_eye_offset = params.four_d.w_eye_offset;
+        let dichoptic_intensity = params.four_d.dichoptic_intensity;
 
         for (eye_idx, (projector, view_rect)) in [
             (&views.left_projector, views.left_rect),
@@ -101,6 +102,8 @@ impl SceneView {
                 painter.clip_rect(),
                 w_shift,
                 sub_w_half,
+                eye_sign,
+                dichoptic_intensity,
             );
         }
 
@@ -193,14 +196,15 @@ impl SceneView {
         analysis: &PointerAnalysis,
         camera: &mut Camera,
         w_thickness: &mut f32,
-        w_eye_offset: &mut f32,
+        dichoptic_intensity: &mut f32,
     ) -> ViewAction {
         let delta = analysis.drag_delta;
 
         match analysis.drag_view {
             Some(DragView::Left) => {
                 *w_thickness = adjust_w_thickness(*w_thickness, delta.x, analysis.dt_scale);
-                *w_eye_offset = adjust_w_eye_offset(*w_eye_offset, delta.y, analysis.dt_scale);
+                *dichoptic_intensity =
+                    adjust_dichoptic_intensity(*dichoptic_intensity, delta.y, analysis.dt_scale);
             }
             Some(DragView::Right) => {
                 if self.right_view_4d_rotation {

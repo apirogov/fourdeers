@@ -8,7 +8,7 @@ use crate::input::{
 };
 use crate::map::{compute_bounds, MapRenderer};
 use crate::render::{
-    adjust_w_eye_offset, adjust_w_thickness, render_tap_zone_label, CompassFrameMode,
+    adjust_dichoptic_intensity, adjust_w_thickness, render_tap_zone_label, CompassFrameMode,
 };
 use crate::toy::ViewAction;
 
@@ -136,14 +136,15 @@ impl MapView {
         &mut self,
         analysis: &PointerAnalysis,
         w_thickness: &mut f32,
-        w_eye_offset: &mut f32,
+        dichoptic_intensity: &mut f32,
     ) -> ViewAction {
         let delta = analysis.drag_delta;
 
         match analysis.drag_view {
             Some(DragView::Left) => {
                 *w_thickness = adjust_w_thickness(*w_thickness, delta.x, analysis.dt_scale);
-                *w_eye_offset = adjust_w_eye_offset(*w_eye_offset, delta.y, analysis.dt_scale);
+                *dichoptic_intensity =
+                    adjust_dichoptic_intensity(*dichoptic_intensity, delta.y, analysis.dt_scale);
             }
             Some(DragView::Right) => {
                 if self.rotation_3d {

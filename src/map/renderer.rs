@@ -41,7 +41,7 @@ pub struct MapRenderParams<'a> {
     pub frame_mode: CompassFrameMode,
     pub geometry_bounds: Option<Bounds4D>,
     pub four_d: FourDSettings,
-    pub w_eye_offset: f32,
+    pub dichoptic_intensity: f32,
 }
 
 struct PreparedWaypoint {
@@ -162,7 +162,7 @@ impl MapRenderer {
         {
             let eye_sign = if eye_idx == 0 { -1.0 } else { 1.0 };
             let (w_shift, sub_w_half) =
-                crate::render::eye_w_params(w_half, params.w_eye_offset, eye_sign);
+                crate::render::eye_w_params(w_half, params.four_d.w_eye_offset, eye_sign);
             frame_data.tesseract_ctx.render_edges(
                 painter,
                 projector,
@@ -170,6 +170,8 @@ impl MapRenderer {
                 painter.clip_rect(),
                 w_shift,
                 sub_w_half,
+                eye_sign,
+                params.dichoptic_intensity,
             );
             if self.labels_visible {
                 self.render_vertex_labels(painter, projector, &frame_data.transformed, params);
@@ -191,6 +193,8 @@ impl MapRenderer {
                 params.scene_camera,
                 &bounds,
                 params.four_d,
+                eye_sign,
+                params.dichoptic_intensity,
             );
             self.draw_waypoints(&mut batch, painter, projector, &frame_data.waypoints);
             if let Some(cam) = frame_data.camera.as_ref() {
@@ -392,6 +396,8 @@ impl MapRenderer {
         scene_camera: &Camera,
         bounds: &Bounds4D,
         four_d: FourDSettings,
+        eye_sign: f32,
+        dichoptic_intensity: f32,
     ) {
         let screen_pts = if data.cross_section_3d.len() >= 3 {
             convex_hull_screen(&data.cross_section_3d, projector)
@@ -438,8 +444,18 @@ impl MapRenderer {
                 let alpha_b = compute_vertex_alpha(p1.w, w_half);
                 let normalized_w0 = (p0.w / w_half).clamp(-1.0, 1.0);
                 let normalized_w1 = (p1.w / w_half).clamp(-1.0, 1.0);
-                let color_a = crate::render::w_to_color(normalized_w0, alpha_a);
-                let color_b = crate::render::w_to_color(normalized_w1, alpha_b);
+                let color_a = crate::render::w_to_color_dichoptic(
+                    normalized_w0,
+                    alpha_a,
+                    eye_sign,
+                    dichoptic_intensity,
+                );
+                let color_b = crate::render::w_to_color_dichoptic(
+                    normalized_w1,
+                    alpha_b,
+                    eye_sign,
+                    dichoptic_intensity,
+                );
                 batch.add_segment_with_gradient(screen_seg.0, screen_seg.1, color_a, color_b);
             }
         }

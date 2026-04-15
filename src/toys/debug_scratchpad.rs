@@ -54,7 +54,7 @@ impl Toy for DebugScratchpadToy {
         &mut self,
         _analysis: PointerAnalysis,
         _w_thickness: &mut f32,
-        _w_eye_offset: &mut f32,
+        _dichoptic_intensity: &mut f32,
     ) -> crate::toy::ViewAction {
         crate::toy::ViewAction::None
     }

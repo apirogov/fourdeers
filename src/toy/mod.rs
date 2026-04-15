@@ -52,7 +52,7 @@ pub(crate) trait Toy {
         &mut self,
         analysis: PointerAnalysis,
         w_thickness: &mut f32,
-        w_eye_offset: &mut f32,
+        dichoptic_intensity: &mut f32,
     ) -> ViewAction;
     /// Called when a drag gesture starts.
     fn handle_drag_start(&mut self, drag_view: DragView);

@@ -13,8 +13,8 @@ use crate::tetrahedron::{tetrahedron_layout, TetrahedronGadget};
 
 use super::ui::render_outlined_text;
 use super::{
-    compute_vertex_alpha, truncate_segment_to_slice, w_to_color, FourDSettings, StereoSettings,
-    TetraStyle, BASE_LABEL_FONT_SIZE, BASE_LABEL_OFFSET_Y, NEAR_PLANE_THRESHOLD,
+    compute_vertex_alpha, truncate_segment_to_slice, w_to_color_dichoptic, FourDSettings,
+    StereoSettings, TetraStyle, BASE_LABEL_FONT_SIZE, BASE_LABEL_OFFSET_Y, NEAR_PLANE_THRESHOLD,
     TESSERACT_EDGE_STROKE_WIDTH,
 };
 
@@ -95,6 +95,7 @@ impl<'a> TesseractRenderContext<'a> {
             .collect()
     }
 
+    #[allow(clippy::too_many_arguments)]
     #[allow(clippy::similar_names)]
     pub fn render_edges(
         &self,
@@ -104,6 +105,8 @@ impl<'a> TesseractRenderContext<'a> {
         clip_rect: egui::Rect,
         w_shift: f32,
         sub_w_half: f32,
+        eye_sign: f32,
+        dichoptic_intensity: f32,
     ) {
         let stroke_width = TESSERACT_EDGE_STROKE_WIDTH;
         let near_plane = self.projection_distance;
@@ -160,8 +163,10 @@ impl<'a> TesseractRenderContext<'a> {
             let original_w1 = truncated[1][3] + w_shift;
             let normalized_w0 = (original_w0 / self.w_half).clamp(-1.0, 1.0);
             let normalized_w1 = (original_w1 / self.w_half).clamp(-1.0, 1.0);
-            let color_a = w_to_color(normalized_w0, alpha_a);
-            let color_b = w_to_color(normalized_w1, alpha_b);
+            let color_a =
+                w_to_color_dichoptic(normalized_w0, alpha_a, eye_sign, dichoptic_intensity);
+            let color_b =
+                w_to_color_dichoptic(normalized_w1, alpha_b, eye_sign, dichoptic_intensity);
 
             batch.add_segment_with_gradient(s0, s1, color_a, color_b);
         }
@@ -169,7 +174,7 @@ impl<'a> TesseractRenderContext<'a> {
         batch.submit(painter);
     }
 
-    #[allow(dead_code)]
+    #[allow(dead_code, clippy::too_many_arguments)]
     pub(crate) fn collect_edge_vertices(
         &self,
         projector: &StereoProjector,
@@ -177,6 +182,8 @@ impl<'a> TesseractRenderContext<'a> {
         clip_rect: egui::Rect,
         w_shift: f32,
         sub_w_half: f32,
+        eye_sign: f32,
+        dichoptic_intensity: f32,
     ) -> (Vec<GpuVertex>, Vec<u32>) {
         let stroke_width = TESSERACT_EDGE_STROKE_WIDTH;
         let half_w = stroke_width * 0.5;
@@ -236,8 +243,10 @@ impl<'a> TesseractRenderContext<'a> {
             let original_w1 = truncated[1][3] + w_shift;
             let normalized_w0 = (original_w0 / self.w_half).clamp(-1.0, 1.0);
             let normalized_w1 = (original_w1 / self.w_half).clamp(-1.0, 1.0);
-            let color_a = w_to_color(normalized_w0, alpha_a);
-            let color_b = w_to_color(normalized_w1, alpha_b);
+            let color_a =
+                w_to_color_dichoptic(normalized_w0, alpha_a, eye_sign, dichoptic_intensity);
+            let color_b =
+                w_to_color_dichoptic(normalized_w1, alpha_b, eye_sign, dichoptic_intensity);
 
             let dir = s1 - s0;
             let len = dir.length();

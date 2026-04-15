@@ -187,7 +187,7 @@ impl FourDeersApp {
             self.toy_manager.active_toy_mut().handle_drag(
                 analysis,
                 &mut self.settings.four_d.w_thickness,
-                &mut self.settings.four_d.w_eye_offset,
+                &mut self.settings.four_d.dichoptic_intensity,
             );
         }
         self.last_drag_pos = Some(pos);
