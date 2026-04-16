@@ -290,7 +290,10 @@ impl FourDeersApp {
                         if ui.button("X").on_hover_text("Close menu").clicked() {
                             close_menu = true;
                         }
-                        ui.hyperlink_to("FourDeers", "https://github.com/apirogov/fourdeers");
+                        ui.hyperlink_to(
+                            egui::RichText::new("FourDeers").heading(),
+                            "https://github.com/apirogov/fourdeers",
+                        );
                     });
                     let commit_hash = env!("GIT_COMMIT_HASH");
                     let build_time = env!("BUILD_TIME");
