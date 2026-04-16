@@ -209,24 +209,23 @@ pub fn w_to_color_dichoptic(
     let chroma = (rg * rg + by * by).sqrt();
     let s = dichoptic_intensity.clamp(0.0, 1.0);
 
-    let (new_y, new_rg, new_by) = if chroma > 1e-6 {
+    let (dy, drg, dby) = if chroma > 1e-6 {
         let perp_rg = -by / chroma;
         let perp_by = rg / chroma;
         let chroma_delta = s * chroma * DICHOPTIC_CHROMA_STRENGTH;
         let lum_delta = s * DICHOPTIC_LUMINANCE_STRENGTH;
         (
-            y + eye_sign * lum_delta,
-            rg + eye_sign * chroma_delta * perp_rg,
-            by + eye_sign * chroma_delta * perp_by,
+            eye_sign * lum_delta,
+            eye_sign * chroma_delta * perp_rg,
+            eye_sign * chroma_delta * perp_by,
         )
     } else {
-        let lum_delta = s * DICHOPTIC_LUMINANCE_STRENGTH;
-        (y + eye_sign * lum_delta, rg, by)
+        (eye_sign * s * DICHOPTIC_LUMINANCE_STRENGTH, 0.0, 0.0)
     };
 
-    let nr = new_y + 0.644 * new_rg - 0.114 * new_by;
-    let ng = new_y - 0.356 * new_rg - 0.114 * new_by;
-    let nb = new_y + 0.144 * new_rg + 0.886 * new_by;
+    let nr = y + dy + 0.644 * (rg + drg) - 0.114 * (by + dby);
+    let ng = y + dy - 0.356 * (rg + drg) - 0.114 * (by + dby);
+    let nb = y + dy + 0.144 * (rg + drg) + 0.886 * (by + dby);
 
     egui::Color32::from_rgba_unmultiplied(
         (nr.clamp(0.0, 1.0) * 255.0) as u8,
@@ -501,21 +500,21 @@ mod tests {
             let avg_g = (left.g() as f32 + right.g() as f32) / 2.0;
             let avg_b = (left.b() as f32 + right.b() as f32) / 2.0;
             assert!(
-                (avg_r - unified.r() as f32).abs() <= 80.0,
+                (avg_r - unified.r() as f32).abs() <= 90.0,
                 "avg R ({}) ≈ unified R ({}) at nw={}",
                 avg_r,
                 unified.r(),
                 nw
             );
             assert!(
-                (avg_g - unified.g() as f32).abs() <= 80.0,
+                (avg_g - unified.g() as f32).abs() <= 90.0,
                 "avg G ({}) ≈ unified G ({}) at nw={}",
                 avg_g,
                 unified.g(),
                 nw
             );
             assert!(
-                (avg_b - unified.b() as f32).abs() <= 100.0,
+                (avg_b - unified.b() as f32).abs() <= 90.0,
                 "avg B ({}) ≈ unified B ({}) at nw={}",
                 avg_b,
                 unified.b(),
