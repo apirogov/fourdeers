@@ -357,7 +357,7 @@ impl FourDeersApp {
             );
             ui.add(
                 egui::Slider::new(&mut self.settings.stereo.projection_distance, 1.0..=10.0)
-                    .text("Projection Distance"),
+                    .text("Focal Length"),
             );
         });
 

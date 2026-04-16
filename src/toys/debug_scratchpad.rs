@@ -2,7 +2,7 @@
 
 use eframe::egui;
 
-use crate::input::PointerAnalysis;
+use crate::input::{PointerAnalysis, ZoneMode};
 use crate::render::{draw_background, FourDSettings, StereoSettings};
 use crate::toy::Toy;
 use crate::DragView;
@@ -66,4 +66,8 @@ impl Toy for DebugScratchpadToy {
     fn set_stereo_settings(&mut self, _settings: &StereoSettings) {}
 
     fn set_four_d_settings(&mut self, _settings: &FourDSettings) {}
+
+    fn zone_mode_for_view(&self, _is_left_view: bool) -> ZoneMode {
+        ZoneMode::NineZones
+    }
 }
