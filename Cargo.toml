@@ -2,6 +2,9 @@
 name = "fourdeers"
 version = "0.1.0"
 edition = "2021"
+description = "Experiments in the fourth dimension."
+repository = "https://github.com/apirogov/fourdeers"
+license = "MIT"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
