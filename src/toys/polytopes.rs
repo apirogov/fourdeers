@@ -396,6 +396,13 @@ impl Toy for PolytopesToy {
         ui.separator();
 
         ui.collapsing("Controls", |ui| {
+            ui.label("Left drag (scene & map):");
+            ui.label("  Horizontal: W-thickness");
+            ui.label("  Vertical: Color split intensity");
+            ui.label("Right drag:");
+            ui.label("  Scene: Rotate camera");
+            ui.label("  Map: Rotate map camera");
+            ui.label("");
             ui.label("Movement (hold):");
             ui.label("  Arrows: Up/Down/Left/Right");
             ui.label("  PgUp/PgDn: Forward/Backward");
