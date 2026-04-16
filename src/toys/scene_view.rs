@@ -2,17 +2,13 @@ use eframe::egui;
 use nalgebra::{UnitQuaternion, Vector4};
 use std::collections::HashMap;
 
-use crate::camera::{Camera, CameraProjection, Direction4D};
+use crate::camera::{Camera, CameraProjection};
 use crate::colors::LABEL_INACTIVE;
-use crate::input::{
-    zone_to_movement_action, DragState, DragView, PointerAnalysis, TetraId, Zone, ZoneMode,
-    HOLD_MOVE_SPEED,
-};
-use crate::input::{KEYBOARD_MOVE_SPEED, TAP_MOVE_SPEED};
+use crate::input::{CameraControls, DragState, DragView, PointerAnalysis, TetraId, Zone, ZoneMode};
 use crate::render::{
-    adjust_dichoptic_intensity, adjust_w_thickness, create_stereo_projectors, draw_background,
-    draw_center_divider, eye_w_params, render_tap_zone_label, split_stereo_views, FourDSettings,
-    StereoSettings, TesseractRenderConfig, TesseractRenderContext,
+    create_stereo_projectors, draw_background, draw_center_divider, eye_w_params,
+    render_tap_zone_label, split_stereo_views, FourDSettings, StereoSettings,
+    TesseractRenderConfig, TesseractRenderContext,
 };
 use crate::toy::ViewAction;
 
@@ -27,7 +23,7 @@ pub struct SceneRenderParams<'a> {
 
 pub struct SceneView {
     pub info_level: u8,
-    pub right_view_4d_rotation: bool,
+    pub controls: CameraControls,
     pub zone_mode: ZoneMode,
     pub visualization_rect: Option<egui::Rect>,
     pub drag_state: DragState,
@@ -39,7 +35,7 @@ impl SceneView {
     pub fn new() -> Self {
         Self {
             info_level: 0,
-            right_view_4d_rotation: false,
+            controls: CameraControls::new(false),
             zone_mode: ZoneMode::NineZones,
             visualization_rect: None,
             drag_state: DragState::new(),
@@ -139,10 +135,10 @@ impl SceneView {
         if self.info_level >= 1 {
             let gray = Some(LABEL_INACTIVE);
 
-            let rot_label = if self.right_view_4d_rotation {
-                "Rot:4D"
-            } else {
+            let rot_label = if self.controls.rotation_3d {
                 "Rot:3D"
+            } else {
+                "Rot:4D"
             };
             render_tap_zone_label(right_painter, right_rect, Zone::NorthEast, rot_label, gray);
 
@@ -164,7 +160,6 @@ impl SceneView {
         camera: &mut Camera,
     ) -> ViewAction {
         if let Some(zone) = analysis.zone {
-            // Only allow toggle actions on tap (not hold)
             if !analysis.is_hold {
                 if analysis.is_left_view && zone == Zone::North {
                     self.info_level = (self.info_level + 1) % 3;
@@ -172,20 +167,13 @@ impl SceneView {
                 }
 
                 if !analysis.is_left_view && zone == Zone::Center {
-                    self.right_view_4d_rotation = !self.right_view_4d_rotation;
+                    self.controls.toggle_rotation_mode();
                     return ViewAction::None;
                 }
             }
 
-            // Movement actions work on both tap and hold
-            if let Some(action) = Self::zone_to_action(zone, analysis.is_left_view) {
-                let speed = if analysis.is_hold {
-                    HOLD_MOVE_SPEED * analysis.dt_scale
-                } else {
-                    TAP_MOVE_SPEED
-                };
-                self.apply_camera_action(camera, action, speed);
-            }
+            CameraControls::handle_zone_movement(camera, analysis);
+            self.tetrahedron_rotations.clear();
         }
 
         ViewAction::None
@@ -198,24 +186,11 @@ impl SceneView {
         w_thickness: &mut f32,
         dichoptic_intensity: &mut f32,
     ) -> ViewAction {
-        let delta = analysis.drag_delta;
-
-        match analysis.drag_view {
-            Some(DragView::Left) => {
-                *w_thickness = adjust_w_thickness(*w_thickness, delta.x, analysis.dt_scale);
-                *dichoptic_intensity =
-                    adjust_dichoptic_intensity(*dichoptic_intensity, delta.y, analysis.dt_scale);
-            }
-            Some(DragView::Right) => {
-                if self.right_view_4d_rotation {
-                    camera.rotate_4d(delta.x, delta.y, analysis.dt_scale);
-                } else {
-                    camera.rotate(delta.x, delta.y, analysis.dt_scale);
-                }
-                self.tetrahedron_rotations.clear();
-            }
-            None => {}
+        if matches!(analysis.drag_view, Some(DragView::Right)) {
+            self.tetrahedron_rotations.clear();
         }
+        self.controls
+            .handle_drag(camera, analysis, w_thickness, dichoptic_intensity);
         ViewAction::None
     }
 
@@ -234,26 +209,23 @@ impl SceneView {
             }
         });
 
-        crate::input::handle_movement_keys(ctx, KEYBOARD_MOVE_SPEED, dt_scale, |action, speed| {
-            self.apply_camera_action(camera, action, speed);
-        });
+        self.controls.handle_movement_keys(ctx, camera, dt_scale);
+        if ctx.input(|i| {
+            i.key_down(egui::Key::ArrowUp)
+                || i.key_down(egui::Key::ArrowDown)
+                || i.key_down(egui::Key::ArrowLeft)
+                || i.key_down(egui::Key::ArrowRight)
+                || i.key_down(egui::Key::PageUp)
+                || i.key_down(egui::Key::PageDown)
+                || i.key_down(egui::Key::Period)
+                || i.key_down(egui::Key::Comma)
+        }) {
+            self.tetrahedron_rotations.clear();
+        }
     }
 
     pub const fn zone_mode(&self) -> ZoneMode {
         self.zone_mode
-    }
-
-    fn apply_camera_action(&mut self, camera: &mut Camera, action: Direction4D, speed: f32) {
-        self.tetrahedron_rotations.clear();
-        camera.apply_action(action, speed);
-    }
-
-    const fn zone_to_action(zone: Zone, is_left_view: bool) -> Option<Direction4D> {
-        if is_left_view {
-            None
-        } else {
-            zone_to_movement_action(zone)
-        }
     }
 }
 impl Default for SceneView {

@@ -111,6 +111,10 @@ impl MapRenderer {
         self.camera.apply_action(action, speed);
     }
 
+    pub fn camera_mut(&mut self) -> &mut Camera {
+        &mut self.camera
+    }
+
     pub fn rotate_3d(&mut self, delta_x: f32, delta_y: f32, dt_scale: f32) {
         self.camera.rotate(delta_x, delta_y, dt_scale);
     }

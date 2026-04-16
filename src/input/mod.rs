@@ -49,9 +49,11 @@ pub fn handle_movement_keys(
     });
 }
 
+pub mod camera_controls;
 pub mod zone_debug;
 pub mod zones;
 
+pub use camera_controls::CameraControls;
 pub use zone_debug::{render_zone_debug_overlay, ZoneDebugOptions};
 pub use zones::{
     analyze_pointer_initial, zone_from_rect, zone_to_movement_action, DragView, PointerAnalysis,

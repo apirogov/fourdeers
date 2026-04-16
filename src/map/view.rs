@@ -3,19 +3,15 @@ use eframe::egui;
 use crate::camera::Camera;
 use crate::colors::LABEL_INACTIVE;
 use crate::geometry::Bounds4D;
-use crate::input::{
-    zone_to_movement_action, DragView, PointerAnalysis, Zone, HOLD_MOVE_SPEED, TAP_MOVE_SPEED,
-};
+use crate::input::{CameraControls, PointerAnalysis, Zone};
 use crate::map::{compute_bounds, MapRenderer};
-use crate::render::{
-    adjust_dichoptic_intensity, adjust_w_thickness, render_tap_zone_label, CompassFrameMode,
-};
+use crate::render::{render_tap_zone_label, CompassFrameMode};
 use crate::toy::ViewAction;
 
 pub struct MapView {
     pub renderer: MapRenderer,
     pub frame_mode: CompassFrameMode,
-    pub rotation_3d: bool,
+    pub controls: CameraControls,
 }
 
 impl MapView {
@@ -24,7 +20,7 @@ impl MapView {
         Self {
             renderer: MapRenderer::new(),
             frame_mode: CompassFrameMode::World,
-            rotation_3d: true,
+            controls: CameraControls::new(true),
         }
     }
 
@@ -56,7 +52,11 @@ impl MapView {
         render_tap_zone_label(left_painter, left_rect, Zone::North, labels_label, None);
         render_tap_zone_label(left_painter, left_rect, Zone::SouthEast, "Reset", None);
 
-        let rot_label = if self.rotation_3d { "Rot:3D" } else { "Rot:4D" };
+        let rot_label = if self.controls.rotation_3d {
+            "Rot:3D"
+        } else {
+            "Rot:4D"
+        };
         render_tap_zone_label(
             right_painter,
             right_rect,
@@ -113,20 +113,11 @@ impl MapView {
             }
         } else {
             if !analysis.is_hold && analysis.zone == Some(Zone::Center) {
-                self.rotation_3d = !self.rotation_3d;
+                self.controls.toggle_rotation_mode();
                 return ViewAction::None;
             }
 
-            if let Some(zone) = analysis.zone {
-                if let Some(action) = zone_to_movement_action(zone) {
-                    let speed = if analysis.is_hold {
-                        HOLD_MOVE_SPEED * analysis.dt_scale
-                    } else {
-                        TAP_MOVE_SPEED
-                    };
-                    self.renderer.apply_action(action, speed);
-                }
-            }
+            CameraControls::handle_zone_movement(self.renderer.camera_mut(), analysis);
         }
 
         ViewAction::None
@@ -138,27 +129,16 @@ impl MapView {
         w_thickness: &mut f32,
         dichoptic_intensity: &mut f32,
     ) -> ViewAction {
-        let delta = analysis.drag_delta;
-
-        match analysis.drag_view {
-            Some(DragView::Left) => {
-                *w_thickness = adjust_w_thickness(*w_thickness, delta.x, analysis.dt_scale);
-                *dichoptic_intensity =
-                    adjust_dichoptic_intensity(*dichoptic_intensity, delta.y, analysis.dt_scale);
-            }
-            Some(DragView::Right) => {
-                if self.rotation_3d {
-                    self.renderer.rotate_3d(delta.x, delta.y, analysis.dt_scale);
-                } else {
-                    self.renderer.rotate_4d(delta.x, delta.y, analysis.dt_scale);
-                }
-            }
-            None => {}
-        }
+        self.controls.handle_drag(
+            self.renderer.camera_mut(),
+            analysis,
+            w_thickness,
+            dichoptic_intensity,
+        );
         ViewAction::None
     }
 
-    pub fn handle_keyboard(&mut self, ctx: &egui::Context, _dt_scale: f32) {
+    pub fn handle_keyboard(&mut self, ctx: &egui::Context, dt_scale: f32) {
         ctx.input(|i| {
             if i.key_pressed(egui::Key::F) {
                 self.frame_mode = self.frame_mode.other();
@@ -167,6 +147,9 @@ impl MapView {
                 self.renderer.toggle_labels();
             }
         });
+
+        self.controls
+            .handle_movement_keys(ctx, self.renderer.camera_mut(), dt_scale);
     }
 }
 
