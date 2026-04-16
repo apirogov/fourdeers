@@ -194,7 +194,8 @@ pub fn w_to_color_dichoptic(
     dichoptic_intensity: f32,
 ) -> egui::Color32 {
     let unified = w_to_color(normalized_w, alpha);
-    if dichoptic_intensity <= 0.0 {
+    let s = dichoptic_intensity.clamp(0.0, 1.0);
+    if s <= 0.0 {
         return unified;
     }
 
@@ -207,12 +208,12 @@ pub fn w_to_color_dichoptic(
     let by = b - (r + g) * 0.5;
 
     let chroma = (rg * rg + by * by).sqrt();
-    let s = dichoptic_intensity.clamp(0.0, 1.0);
+    let chroma_s = s * s;
 
     let (dy, drg, dby) = if chroma > 1e-6 {
         let perp_rg = -by / chroma;
         let perp_by = rg / chroma;
-        let chroma_delta = s * chroma * DICHOPTIC_CHROMA_STRENGTH;
+        let chroma_delta = chroma_s * chroma * DICHOPTIC_CHROMA_STRENGTH;
         let lum_delta = s * DICHOPTIC_LUMINANCE_STRENGTH;
         (
             eye_sign * lum_delta,
