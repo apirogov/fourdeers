@@ -260,14 +260,14 @@ mod tests {
             ZoneMode::NineZones,
         )
         .unwrap();
-        assert_eq!(analysis.is_left_view, true);
+        assert!(analysis.is_left_view);
         assert_eq!(analysis.zone, Some(Zone::North)); // top-middle of left half
         assert_eq!(analysis.norm_pos.x, 0.5);
         assert_eq!(analysis.norm_pos.y, 0.25);
         assert_eq!(analysis.drag_delta, egui::Vec2::ZERO);
         assert_eq!(analysis.drag_view, None);
-        assert_eq!(analysis.is_hold, false);
-        assert_eq!(analysis.is_drag, false);
+        assert!(!analysis.is_hold);
+        assert!(!analysis.is_drag);
     }
 
     #[test]
