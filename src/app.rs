@@ -290,8 +290,21 @@ impl FourDeersApp {
                         if ui.button("X").on_hover_text("Close menu").clicked() {
                             close_menu = true;
                         }
-                        ui.heading("FourDeers");
+                        ui.hyperlink_to("FourDeers", "https://github.com/apirogov/fourdeers");
                     });
+                    let commit_hash = env!("GIT_COMMIT_HASH");
+                    let build_time = env!("BUILD_TIME");
+                    let short_hash = &commit_hash[..commit_hash.len().min(8)];
+                    ui.label(
+                        egui::RichText::new(format!("Commit: {short_hash}"))
+                            .size(BUILD_INFO_FONT_SIZE)
+                            .color(BUILD_INFO_COLOR),
+                    );
+                    ui.label(
+                        egui::RichText::new(format!("Built: {build_time}"))
+                            .size(BUILD_INFO_FONT_SIZE)
+                            .color(BUILD_INFO_COLOR),
+                    );
                     ui.separator();
 
                     egui::ScrollArea::both()
@@ -360,20 +373,6 @@ impl FourDeersApp {
                     .text("Focal Length"),
             );
         });
-
-        let commit_hash = env!("GIT_COMMIT_HASH");
-        let build_time = env!("BUILD_TIME");
-        let short_hash = &commit_hash[..commit_hash.len().min(8)];
-        ui.label(
-            egui::RichText::new(format!("Commit: {short_hash}"))
-                .size(BUILD_INFO_FONT_SIZE)
-                .color(BUILD_INFO_COLOR),
-        );
-        ui.label(
-            egui::RichText::new(format!("Built: {build_time}"))
-                .size(BUILD_INFO_FONT_SIZE)
-                .color(BUILD_INFO_COLOR),
-        );
     }
 
     fn handle_pointer_up(&mut self, ctx: &egui::Context, pos: egui::Pos2, time: f64) {
