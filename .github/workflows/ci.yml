@@ -27,8 +27,11 @@ jobs:
       - name: Check formatting
         run: cargo fmt --check
 
+      - name: Check
+        run: cargo check
+
       - name: Run clippy
-        run: cargo clippy -- -D warnings --allow clippy::too_many_arguments
+        run: cargo clippy -- -D warnings
 
       - name: Run tests
         run: cargo test --locked
