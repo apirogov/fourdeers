@@ -99,21 +99,17 @@ impl FourDeersApp {
                         button,
                         pressed: true,
                         modifiers,
-                    } => {
-                        if *button == egui::PointerButton::Primary && !modifiers.any() {
-                            self.mouse_down_pos = Some(*pos);
-                            self.mouse_down_time = Some(i.time);
-                        }
+                    } if *button == egui::PointerButton::Primary && !modifiers.any() => {
+                        self.mouse_down_pos = Some(*pos);
+                        self.mouse_down_time = Some(i.time);
                     }
                     egui::Event::PointerButton {
                         pos,
                         button,
                         pressed: false,
                         modifiers,
-                    } => {
-                        if *button == egui::PointerButton::Primary && !modifiers.any() {
-                            tap_event = Some((*pos, i.time));
-                        }
+                    } if *button == egui::PointerButton::Primary && !modifiers.any() => {
+                        tap_event = Some((*pos, i.time));
                     }
                     _ => {}
                 }
